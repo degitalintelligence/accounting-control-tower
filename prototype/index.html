@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpsControl — Accounting Operations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    :root{--ink:#18201f;--muted:#6f7a77;--canvas:#f3f5f2;--surface:#fff;--line:#dfe4e1;--soft:#edf0ee;--amber:#f4b63e;--amber-soft:#fff4d8;--green:#20865a;--green-soft:#e8f6ef;--red:#c94040;--red-soft:#fceded;--blue:#4267a9;--blue-soft:#eef3fb}*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font-family:Arial,sans-serif;font-size:14px}.app-shell{display:flex;min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:244px;background:var(--ink);color:#fff;padding:20px 14px;display:flex;flex-direction:column;z-index:20}.brand{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:800;padding:0 8px 18px}.brand-mark{width:31px;height:31px;border-radius:9px;display:grid;place-items:center;background:var(--amber);color:var(--ink)}.workspace-switcher{display:flex;align-items:center;gap:9px;background:#ffffff12;border:1px solid #ffffff17;border-radius:10px;padding:10px;margin-bottom:14px}.workspace-switcher div{min-width:0;flex:1}.workspace-switcher small,.workspace-switcher strong{display:block}.workspace-switcher small{font-size:8px;letter-spacing:.12em;color:#9da6a4}.workspace-switcher strong{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#324542;color:#fff;font-weight:700;font-size:11px;flex:none}.avatar.company{border-radius:8px;background:#c98f29}.nav{display:flex;flex-direction:column;gap:3px}.nav-item{border:0;background:transparent;color:#b6bfbd;border-radius:8px;display:flex;align-items:center;gap:11px;padding:9px 10px;text-align:left;font-size:13px;cursor:pointer}.nav-item span{width:18px;text-align:center}.nav-item b{margin-left:auto;background:#38423f;color:#dce2e0;min-width:20px;text-align:center;padding:2px 6px;border-radius:9px;font-size:10px}.nav-item:hover,.nav-item.active{background:#2d3836;color:#fff}.nav-label{color:#707a78;font-size:9px;font-weight:700;letter-spacing:.14em;padding:18px 10px 5px}.sidebar-health{margin-top:auto;padding:11px;background:#ffffff0e;border-radius:9px}.sidebar-health div{display:flex;align-items:center;gap:7px}.sidebar-health strong{font-size:11px}.sidebar-health small{color:#85908d;font-size:10px;margin-left:14px}.live-dot{width:7px;height:7px;border-radius:50%;background:#4ec88d;box-shadow:0 0 0 3px #4ec88d24}.user-card{display:flex;align-items:center;gap:9px;border-top:1px solid #ffffff14;padding:15px 5px 0;margin-top:14px}.user-card div{flex:1}.user-card strong,.user-card small{display:block}.user-card strong{font-size:11px}.user-card small{font-size:9px;color:#85908d}.main{margin-left:244px;min-width:0;flex:1}.topbar{height:67px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 30px}.period-picker,.top-actions{display:flex;align-items:center;gap:9px}.period-picker{color:var(--muted);font-size:12px}.period-picker button,.icon-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px}.icon-btn{width:36px;height:36px;cursor:pointer}.primary{border:0;background:var(--ink);color:#fff;border-radius:8px;padding:10px 15px;font-weight:700;cursor:pointer}.content{max-width:1440px;margin:auto;padding:30px}.page-heading{display:flex;justify-content:space-between;gap:30px;align-items:center;margin-bottom:24px}.eyebrow{font-size:9px!important;font-weight:800;letter-spacing:.14em;color:#8c9693;margin:0 0 7px!important}.page-heading h1{font-size:28px;letter-spacing:-.03em;margin:0 0 5px}.page-heading p{color:var(--muted);margin:0;font-size:13px}.page-heading p strong{color:var(--red)}.manager-goal{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 15px}.goal-ring{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) 78%,#e9edeb 0);position:relative}.goal-ring:after{content:"";position:absolute;inset:5px;border-radius:50%;background:#fff}.goal-ring span{z-index:1;font-weight:800;font-size:11px}.manager-goal small,.manager-goal strong,.manager-goal em{display:block}.manager-goal small{font-size:8px;color:var(--muted)}.manager-goal strong{font-size:12px;margin:2px 0}.manager-goal em{font-style:normal;color:var(--green);font-size:9px}.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.stat-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px;display:grid;grid-template-columns:36px 1fr auto;gap:11px;box-shadow:0 8px 30px #18201f0b}.stat-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-weight:800}.danger .stat-icon{background:var(--red-soft);color:var(--red)}.warning .stat-icon{background:var(--amber-soft);color:#9a6810}.neutral .stat-icon{background:#eef1f0}.success .stat-icon{background:var(--green-soft);color:var(--green)}.stat-card small{color:var(--muted);font-size:8px;font-weight:700}.stat-card strong{display:block;font-size:24px;margin:2px 0}.stat-card p{font-size:9px;color:var(--muted);margin:0}.stat-card>span{font-size:10px;font-weight:700;align-self:center}.dashboard-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(310px,.85fr);gap:14px;margin-bottom:14px}.dashboard-grid.lower{grid-template-columns:minmax(0,1.4fr) minmax(330px,1fr)}.panel{background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 8px 30px #18201f0b;overflow:hidden}.panel-head{display:flex;align-items:center;justify-content:space-between;padding:17px 18px 14px;border-bottom:1px solid var(--soft)}.panel h2{font-size:15px;margin:0 0 3px}.panel-head p{font-size:10px;color:var(--muted);margin:0}.ghost,.outline,.full-btn{border:0;background:transparent;border-radius:7px;padding:8px 10px;font-weight:700;font-size:10px;cursor:pointer}.outline{border:1px solid var(--line);background:#fff}.full-btn{display:block;width:calc(100% - 32px);margin:13px 16px;border:1px solid var(--line);background:#fafbfa}.exception-row{display:grid;grid-template-columns:4px 1fr 76px 70px;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--soft)}.severity{height:38px;border-radius:4px}.severity.critical{background:var(--red)}.severity.warning{background:var(--amber)}.severity.blocked{background:#9ba3a0}.exception-main div{display:flex;align-items:center;gap:8px;margin-bottom:4px}.exception-main strong{font-size:11px}.exception-main p{font-size:9px;color:var(--muted);margin:3px 0}.tag{font-size:7px;font-weight:800;letter-spacing:.08em;border-radius:5px;padding:4px 6px;white-space:nowrap}.tag.red{background:var(--red-soft);color:var(--red)}.tag.amber-tag{background:var(--amber-soft);color:#926214}.tag.gray{background:#edf0ef;color:#66716e}.tag.blue-tag{background:var(--blue-soft);color:var(--blue)}.tag.green-tag{background:var(--green-soft);color:var(--green)}.muted{color:#98a19f;font-size:8px}.people{display:flex;align-items:center;gap:6px;font-size:9px}.avatar.small{width:26px;height:26px;font-size:8px}.review-item{display:grid;grid-template-columns:33px 1fr auto;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--soft)}.file-icon{width:31px;height:35px;border-radius:5px;background:#e8f4e8;color:#31804a;display:grid;place-items:center;font-weight:800}.review-item strong{font-size:10px}.review-item p{font-size:8px;color:var(--muted);margin:3px 0}.progress-wrap{padding:14px 18px 10px}.progress-top{display:flex;justify-content:space-between;margin-bottom:7px}.progress-top strong{font-size:21px}.progress-top span{font-size:9px;color:var(--muted)}.progress,.mini-progress{height:6px;background:#e9eeeb;border-radius:6px;overflow:hidden}.progress i,.mini-progress i{display:block;height:100%;background:var(--green)}.tree-row{display:grid;align-items:center;border-top:1px solid var(--soft);font-size:10px}.tree-row.parent{grid-template-columns:25px 26px 1fr 90px 75px 35px;padding:11px 18px}.tree-toggle{border:0;background:transparent}.check{width:19px;height:19px;border-radius:6px;display:grid;place-items:center;font-weight:800}.check.partial{background:var(--amber-soft);color:#9c6c19}.check.done{background:var(--green-soft);color:var(--green)}.tree-row p{margin:3px 0;font-size:8px;color:var(--muted)}.tree-row.child{grid-template-columns:25px 26px 1fr 28px 70px;padding:9px 18px 9px 43px;background:#fcfdfc}.line{border-left:1px solid var(--line);border-bottom:1px solid var(--line);height:24px;width:15px;margin-top:-18px}.danger-check{background:var(--red-soft);color:var(--red)}.avatar.tiny{width:22px;height:22px;font-size:7px}.status{font-size:8px;font-weight:700;text-align:right}.approved{color:var(--green)}.overdue{color:var(--red)}.compact{grid-template-columns:25px 26px 1fr 75px 35px!important}.wa-card{margin:14px;border:1px solid var(--line);border-radius:10px;padding:13px;background:#fcfdfc}.wa-meta{display:flex;align-items:center;gap:7px;font-size:9px}.wa-meta span:last-child{margin-left:auto}.wa-icon{color:#28a96c}.wa-card blockquote{margin:12px 0;padding:10px;background:#f1f4f2;border-left:3px solid #44ad76;border-radius:4px;font-size:10px;line-height:1.45}.extract-grid{display:grid;grid-template-columns:52px 1fr;gap:6px;font-size:9px}.extract-grid span{color:var(--muted)}.confidence{display:grid;grid-template-columns:65px 1fr 27px;gap:7px;align-items:center;margin-top:11px;font-size:8px}.confidence div{height:4px;background:#e6ebe8}.confidence i{display:block;height:100%;background:var(--green)}.wa-actions{display:flex;justify-content:flex-end;gap:5px;margin-top:12px}.modal-backdrop{position:fixed;inset:0;background:#0b11107a;display:none;align-items:center;justify-content:center;z-index:50;padding:20px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:#fff;border-radius:15px;padding:20px}.modal-head{display:flex;justify-content:space-between}.modal h2{margin:0 0 18px}.modal label{display:block;font-size:10px;font-weight:700;margin:12px 0}.modal input,.modal select,.modal textarea{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:8px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--soft);padding-top:15px}.toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;border-radius:9px;padding:11px 15px;display:flex;gap:9px;transform:translateY(80px);opacity:0;transition:.25s}.toast.show{transform:none;opacity:1}.toast p{margin:0}.mobile-menu{display:none}@media(max-width:1100px){.stats-grid{grid-template-columns:repeat(2,1fr)}.dashboard-grid,.dashboard-grid.lower{grid-template-columns:1fr}}@media(max-width:760px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:none}.main{margin-left:0}.mobile-menu{display:block}.content{padding:20px 14px}.page-heading{flex-direction:column;align-items:flex-start}.stats-grid{grid-template-columns:1fr}.exception-row{grid-template-columns:4px 1fr 65px}.people{display:none}.form-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-mark">O</span><span>OpsControl</span></div>
+      <div class="workspace-switcher">
+        <span class="avatar company">AI</span>
+        <div><small>WORKSPACE</small><strong>Astronacci International</strong></div>
+        <span class="chevron">⌄</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard"><span>⌂</span>Overview</button>
+        <button class="nav-item" data-view="work"><span>✓</span>My Work <b>7</b></button>
+        <button class="nav-item" data-view="routine"><span>↻</span>Routine Tasks</button>
+        <button class="nav-item" data-view="projects"><span>▦</span>Projects</button>
+        <button class="nav-item" data-view="reports"><span>▤</span>Reports</button>
+        <div class="nav-label">CONTROL</div>
+        <button class="nav-item" data-view="reviews"><span>◎</span>Review Queue <b>4</b></button>
+        <button class="nav-item" data-view="sop"><span>◇</span>SOP Audit</button>
+        <button class="nav-item" data-view="whatsapp"><span>◉</span>WhatsApp Inbox <b class="amber">3</b></button>
+        <div class="nav-label">MANAGE</div>
+        <button class="nav-item" data-view="team"><span>♙</span>Team & Workload</button>
+        <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
+      </nav>
+      <div class="sidebar-health">
+        <div><span class="live-dot"></span><strong>WhatsApp connected</strong></div>
+        <small>Last sync 2 minutes ago</small>
+      </div>
+      <div class="user-card"><span class="avatar">DS</span><div><strong>Dedi Setiadi</strong><small>Accounting Manager</small></div><span>⋮</span></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn mobile-menu" id="mobileMenu">☰</button>
+        <div class="period-picker"><span>Period</span><button>August 2026⌄</button></div>
+        <div class="top-actions">
+          <button class="icon-btn">⌕</button><button class="icon-btn notification">♢<i></i></button>
+          <button class="primary" id="newTask">＋ New Task</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="page-heading">
+          <div><p class="eyebrow">SATURDAY, 1 AUGUST 2026</p><h1>Good morning, Dedi.</h1><p>You only need to look at <strong>6 exceptions</strong> today. The rest is moving normally.</p></div>
+          <div class="manager-goal"><div class="goal-ring"><span>78%</span></div><div><small>AUTONOMOUS COMPLETION</small><strong>Target 85%</strong><em>↑ 9% from July</em></div></div>
+        </section>
+
+        <section class="stats-grid">
+          <article class="stat-card danger"><div class="stat-icon">!</div><div><small>CRITICAL OVERDUE</small><strong>3</strong><p>Requires escalation today</p></div><span>View →</span></article>
+          <article class="stat-card warning"><div class="stat-icon">◷</div><div><small>WAITING REVIEW</small><strong>4</strong><p>Oldest waiting 19 hours</p></div><span>Review →</span></article>
+          <article class="stat-card neutral"><div class="stat-icon">⌁</div><div><small>BLOCKED</small><strong>2</strong><p>Both waiting on client</p></div><span>Inspect →</span></article>
+          <article class="stat-card success"><div class="stat-icon">✓</div><div><small>ON-TIME RATE</small><strong>92%</strong><p>↑ 4% from last period</p></div><span>Details →</span></article>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="panel exceptions">
+            <div class="panel-head"><div><h2>Exception Center</h2><p>Only items that need intervention</p></div><button class="ghost">View all 6</button></div>
+            <div class="exception-row">
+              <div class="severity critical"></div><div class="exception-main"><div><span class="tag red">CRITICAL</span><span class="muted">TASK-1048</span></div><strong>Bank reconciliation — BCA Payroll</strong><p>Overdue 2 days · Parent: August Bank Reconciliation</p></div><div class="people"><span class="avatar small">RN</span><span>Rina</span></div><button class="outline">Escalate</button>
+            </div>
+            <div class="exception-row">
+              <div class="severity warning"></div><div class="exception-main"><div><span class="tag amber-tag">REJECTED ×2</span><span class="muted">TASK-1062</span></div><strong>AP aging schedule — PT Beta</strong><p>Formula mismatch remains after second revision</p></div><div class="people"><span class="avatar small blue">FK</span><span>Fikri</span></div><button class="outline">Inspect</button>
+            </div>
+            <div class="exception-row">
+              <div class="severity blocked"></div><div class="exception-main"><div><span class="tag gray">BLOCKED</span><span class="muted">TASK-1091</span></div><strong>Tax invoice supporting documents</strong><p>Waiting on client · Follow-up due today, 14:00</p></div><div class="people"><span class="avatar small green">AS</span><span>Ayu</span></div><button class="outline">Follow up</button>
+            </div>
+          </article>
+
+          <article class="panel review-panel">
+            <div class="panel-head"><div><h2>Your Review Queue</h2><p>4 submissions waiting</p></div><button class="icon-btn">→</button></div>
+            <div class="review-item"><div class="file-icon">X</div><div><strong>Cash flow projection</strong><p>Submitted by Fikri · 42m ago</p></div><span class="tag red">HIGH RISK</span></div>
+            <div class="review-item"><div class="file-icon sheet">S</div><div><strong>Mandiri bank reconciliation</strong><p>Submitted by Rina · 3h ago</p></div><span class="tag blue-tag">NORMAL</span></div>
+            <div class="review-item"><div class="file-icon pdf">P</div><div><strong>July payroll summary</strong><p>Submitted by Ayu · 19h ago</p></div><span class="tag amber-tag">DUE SOON</span></div>
+            <button class="full-btn" data-toast="Review queue opened">Open review workspace →</button>
+          </article>
+        </section>
+
+        <section class="dashboard-grid lower">
+          <article class="panel closing-panel">
+            <div class="panel-head"><div><h2>August Closing Progress</h2><p>28 of 36 work items approved</p></div><div class="health"><span></span>AT RISK</div></div>
+            <div class="progress-wrap"><div class="progress-top"><strong>78%</strong><span>Client deadline: 7 August</span></div><div class="progress"><i style="width:78%"></i></div></div>
+            <div class="tree-row parent"><button class="tree-toggle">⌄</button><span class="check partial">−</span><div><strong>Bank Reconciliation</strong><p>3 of 4 banks approved</p></div><div class="mini-progress"><i style="width:75%"></i></div><span class="tag red">1 OVERDUE</span><span>75%</span></div>
+            <div class="children" id="bankChildren">
+              <div class="tree-row child"><span class="line"></span><span class="check done">✓</span><div><strong>BCA Operating</strong><p>Approved by Andi</p></div><span class="avatar tiny">RN</span><span class="status approved">Approved</span></div>
+              <div class="tree-row child"><span class="line"></span><span class="check danger-check">!</span><div><strong>BCA Payroll</strong><p>Overdue 2 days</p></div><span class="avatar tiny">RN</span><span class="status overdue">Overdue</span></div>
+              <div class="tree-row child"><span class="line"></span><span class="check done">✓</span><div><strong>Mandiri</strong><p>Approved by Andi</p></div><span class="avatar tiny blue">FK</span><span class="status approved">Approved</span></div>
+              <div class="tree-row child"><span class="line"></span><span class="check done">✓</span><div><strong>OCBC</strong><p>Approved by Sari</p></div><span class="avatar tiny green">AS</span><span class="status approved">Approved</span></div>
+            </div>
+            <div class="tree-row parent compact"><button class="tree-toggle">›</button><span class="check done">✓</span><div><strong>Accounts Receivable</strong><p>8 of 8 approved</p></div><span class="tag green-tag">COMPLETE</span><span>100%</span></div>
+            <div class="tree-row parent compact"><button class="tree-toggle">›</button><span class="check partial">−</span><div><strong>Accounts Payable</strong><p>6 of 9 approved</p></div><span class="tag blue-tag">ON TRACK</span><span>67%</span></div>
+          </article>
+
+          <article class="panel whatsapp-panel">
+            <div class="panel-head"><div><h2>WhatsApp Action Inbox</h2><p>AI-detected actions requiring confirmation</p></div><span class="tag amber-tag">3 NEW</span></div>
+            <div class="wa-card">
+              <div class="wa-meta"><span class="wa-icon">◉</span><strong>Finance Ops — PT Beta</strong><span>09:14</span></div>
+              <blockquote>“Rina, besok tolong cek selisih invoice vendor ABC Rp12 juta. Andi review sebelum Jumat ya.”</blockquote>
+              <div class="extract-grid"><span>Task</span><strong>Investigate vendor ABC invoice variance</strong><span>Maker</span><strong>Rina</strong><span>Checker</span><strong>Andi</strong><span>Due</span><strong>Tomorrow, 17:00</strong></div>
+              <div class="confidence"><span>AI confidence</span><div><i style="width:92%"></i></div><strong>92%</strong></div>
+              <div class="wa-actions"><button class="ghost rejectSuggestion">Dismiss</button><button class="outline editSuggestion">Edit</button><button class="primary confirmSuggestion">✓ Confirm task</button></div>
+            </div>
+            <button class="full-btn" data-toast="Action inbox opened">Review 2 more suggestions →</button>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="taskModal">
+    <div class="modal">
+      <div class="modal-head"><div><p class="eyebrow">CREATE WORK ITEM</p><h2>New ad hoc task</h2></div><button class="icon-btn closeModal">×</button></div>
+      <label>Task title<input id="taskTitle" value="Investigate vendor invoice variance" /></label>
+      <div class="form-grid"><label>Type<select><option>Ad Hoc</option><option>Routine</option><option>Project Task</option></select></label><label>Section<select><option>Ad Hoc Requests</option><option>Treasury & Bank</option><option>Monthly Closing</option></select></label></div>
+      <div class="form-grid"><label>Maker<select><option>Rina</option><option>Fikri</option><option>Ayu</option></select></label><label>Checker<select><option>Andi</option><option>Sari</option></select></label></div>
+      <label>Due date<input type="datetime-local" value="2026-08-03T17:00" /></label>
+      <label>Acceptance criteria<textarea>Variance is traced to source document, impact quantified, and resolution documented.</textarea></label>
+      <div class="modal-actions"><button class="ghost closeModal">Cancel</button><button class="primary createTask">Create & assign task</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"><span>✓</span><p>Task created successfully</p></div>
+  <script>
+    const modal=document.querySelector('#taskModal'),toast=document.querySelector('#toast');
+    const showToast=m=>{toast.querySelector('p').textContent=m;toast.classList.add('show');clearTimeout(window.tt);window.tt=setTimeout(()=>toast.classList.remove('show'),2400)};
+    document.querySelector('#newTask').onclick=()=>modal.classList.add('open');
+    document.querySelectorAll('.closeModal').forEach(b=>b.onclick=()=>modal.classList.remove('open'));
+    document.querySelector('.createTask').onclick=()=>{modal.classList.remove('open');showToast('Task created and assigned')};
+    document.querySelector('.confirmSuggestion').onclick=e=>{e.target.textContent='✓ Task confirmed';e.target.closest('.wa-card').style.opacity='.55';showToast('Suggestion confirmed as ADH-1124')};
+    document.querySelector('.rejectSuggestion').onclick=e=>{e.target.closest('.wa-card').remove();showToast('Suggestion dismissed')};
+    document.querySelector('.editSuggestion').onclick=()=>modal.classList.add('open');
+    document.querySelector('.tree-toggle').onclick=e=>{let c=document.querySelector('#bankChildren');c.style.display=c.style.display==='none'?'block':'none';e.target.textContent=c.style.display==='none'?'›':'⌄'};
+    document.querySelectorAll('[data-toast]').forEach(b=>b.onclick=()=>showToast(b.dataset.toast));
+    document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(b.dataset.view!=='dashboard')showToast('View included in next prototype iteration')});
+    document.querySelector('#mobileMenu').onclick=()=>document.querySelector('#sidebar').classList.toggle('open');
+  </script>
+</body>
+</html>
