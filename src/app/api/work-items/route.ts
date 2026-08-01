@@ -1,38 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import { validationMessage, workItemCreateSchema } from "@/lib/validation/schemas";
-
-/**
- * Helper: ambil organization_id dari membership user.
- * Menggunakan service role client (bypass RLS).
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
+import { canAccessClient, getAuthContext } from "@/lib/authorization";
 
 /**
  * GET /api/work-items
@@ -41,25 +10,9 @@ async function getUserOrganizationId(
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const admin = createServiceRoleClient();
-
-    // Ambil organization_id dari membership
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      console.error("[GET /api/work-items] Gagal ambil org:", { message: orgError });
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const auth = await getAuthContext();
+    if (auth.response) return auth.response;
+    const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
     const { searchParams } = request.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
@@ -114,6 +67,8 @@ export async function GET(request: NextRequest) {
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    if (!isOrgWide) query = query.in("client_id", clientIds);
 
     if (status) {
       query = query.eq("status", status);
@@ -181,31 +136,18 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const admin = createServiceRoleClient();
-
-    // Ambil organization_id dari membership
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      console.error("[POST /api/work-items] Gagal ambil org:", { message: orgError });
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const auth = await getAuthContext();
+    if (auth.response) return auth.response;
+    const { admin, userId, organizationId } = auth.context;
 
     const parsed = workItemCreateSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
     const body = parsed.data;
 
     const { assigneeId, assigneeRole, ...workItemFields } = body;
+    if (!canAccessClient(auth.context, workItemFields.client_id)) {
+      return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });
+    }
 
     const insertData = {
       title: workItemFields.title,
@@ -223,7 +165,7 @@ export async function POST(request: NextRequest) {
       entity_id: workItemFields.entity_id ?? null,
       section_id: workItemFields.section_id ?? null,
       status: "draft" as const,
-      created_by: user.id,
+      created_by: userId,
     };
 
     const insertResult = await admin
@@ -257,7 +199,7 @@ export async function POST(request: NextRequest) {
         work_item_id: workItem.id,
         profile_id: assigneeId,
         role,
-        assigned_by: user.id,
+        assigned_by: userId,
       } as never);
       const { error: assignError } = assignResult as unknown as {
         error: { message: string; code: string; hint: string; details: string } | null;
@@ -276,7 +218,7 @@ export async function POST(request: NextRequest) {
     // Audit log
     await logAudit(admin, {
       organizationId,
-      actorId: user.id,
+      actorId: userId,
       action: "work_item.created",
       entityType: "work_item",
       entityId: workItem!.id,

@@ -125,6 +125,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
+    const clientAccess = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
+    const clientRows = clientAccess as unknown as { data: { client_id: string | null }[] | null };
+    if (!clientRows.data?.some((membership) => membership.client_id === null || membership.client_id === workItem.client_id)) {
+      return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
+    }
 
     // Hitung jumlah comments
     const commentsResult = await admin
@@ -202,6 +207,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         { error: "Work item tidak ditemukan." },
         { status: 404 }
       );
+    }
+    const existingClientId = existing.client_id as string | null | undefined;
+    const clientScope = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
+    const clientScopeData = clientScope as unknown as { data: { client_id: string | null }[] | null };
+    if (!clientScopeData.data?.some((membership) => membership.client_id === null || membership.client_id === existingClientId)) {
+      return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
     }
 
     const parsed = workItemUpdateSchema.safeParse(await request.json());
@@ -315,6 +326,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         { error: "Work item tidak ditemukan." },
         { status: 404 }
       );
+    }
+    const clientScope = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
+    const clientScopeData = clientScope as unknown as { data: { client_id: string | null }[] | null };
+    const itemClient = await admin.from("work_items").select("client_id").eq("id", id).eq("organization_id", organizationId).single();
+    const itemClientData = itemClient as unknown as { data: { client_id: string } | null };
+    if (!itemClientData.data || !clientScopeData.data?.some((membership) => membership.client_id === null || membership.client_id === itemClientData.data?.client_id)) {
+      return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
     }
 
     const deleteResult = await admin

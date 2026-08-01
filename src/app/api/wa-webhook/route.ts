@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { verifyWahaToken } from "@/lib/whatsapp/config";
 import type { WahaMessage, WahaWebhookPayload } from "@/types/whatsapp";
+import { parseExplicitCommand, explicitCommandHelp } from "@/lib/whatsapp/commands";
+import { resolveParticipant } from "@/lib/whatsapp/identity";
+import { sendWahaText } from "@/lib/whatsapp/adapter";
 
 export const runtime = "nodejs";
 
@@ -9,11 +12,16 @@ function providerMessageId(message: WahaMessage): string | null {
   return message.id ?? message._data?.id?._serialized ?? message._data?.id?.id ?? null;
 }
 
-function value(message: WahaMessage, key: "body" | "type" | "from" | "author" | "chatId" | "timestamp") {
+function value(message: WahaMessage, key: "body" | "type" | "from" | "author" | "chatId" | "timestamp"): string | number | null {
   const direct = message[key];
   if (direct !== undefined) return direct;
-  if (key === "timestamp") return message._data?.t;
-  return message._data?.[key];
+  if (key === "timestamp") return message._data?.t ?? null;
+  return message._data?.[key] ?? null;
+}
+
+function stringValue(message: WahaMessage, key: "body" | "type" | "from" | "author" | "chatId"): string | null {
+  const result = value(message, key);
+  return typeof result === "string" ? result : null;
 }
 
 function timestamp(message: WahaMessage): number {
@@ -38,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   const message = payload.payload;
   const providerId = providerMessageId(message);
-  const groupId = value(message, "chatId") ?? value(message, "from");
+  const groupId = stringValue(message, "chatId") ?? stringValue(message, "from");
   if (!providerId || !groupId || !payload.session) {
     return NextResponse.json({ error: "Payload message tidak lengkap." }, { status: 400 });
   }
@@ -64,13 +72,16 @@ export async function POST(request: NextRequest) {
   const group = groupResult as unknown as { data: { id: string; organization_id: string } | null; error: { message: string } | null };
   if (group.error || !group.data) return NextResponse.json({ accepted: true });
 
+  const senderParticipantId = stringValue(message, "author") ?? stringValue(message, "from");
+  const rawContent = stringValue(message, "body");
+
   const insertResult = await admin.from("wa_messages").insert({
     connection_id: connection.data.id,
     wa_group_id: group.data.id,
     provider_message_id: providerId,
-    sender_participant_id: value(message, "author") ?? value(message, "from") ?? null,
-    content: value(message, "body") ?? null,
-    message_type: value(message, "type") ?? "text",
+    sender_participant_id: senderParticipantId,
+    content: rawContent,
+    message_type: stringValue(message, "type") ?? "text",
     media_metadata: message.media ?? {},
     raw_payload: payload,
     received_at: new Date(timestamp(message) * 1000).toISOString(),
@@ -91,6 +102,47 @@ export async function POST(request: NextRequest) {
     const existing = existingResult as unknown as { data: { id: string } | null; error: { message: string } | null };
     if (existing.error || !existing.data) return NextResponse.json({ error: "Pesan tersimpan tetapi tidak dapat dijadwalkan." }, { status: 500 });
     messageId = existing.data.id;
+  }
+
+  const content = rawContent;
+  const command = parseExplicitCommand(content);
+  if (content?.trim().startsWith("/task") && !command) {
+    try { await sendWahaText(groupId, explicitCommandHelp()); } catch {}
+    return NextResponse.json({ accepted: true, command: "invalid" });
+  }
+  if (command) {
+    const sender = await resolveParticipant(admin, group.data.id, senderParticipantId);
+    if (sender.status !== "resolved" || !sender.profileId) {
+      try { await sendWahaText(groupId, sender.status === "ambiguous" ? "Identitas WhatsApp ambigu. Admin perlu memilih mapping yang benar." : "Identitas WhatsApp belum terverifikasi."); } catch {}
+      return NextResponse.json({ accepted: true, command: "identity_required" });
+    }
+    const maker = command.makerParticipantId ? await resolveParticipant(admin, group.data.id, command.makerParticipantId) : sender;
+    const checker = command.checkerParticipantId ? await resolveParticipant(admin, group.data.id, command.checkerParticipantId) : null;
+    if (maker.status !== "resolved" || (checker && checker.status !== "resolved") || maker.profileId === checker?.profileId) {
+      try { await sendWahaText(groupId, "Maker/checker belum dapat di-resolve secara unik atau memiliki konflik."); } catch {}
+      return NextResponse.json({ accepted: true, command: "identity_required" });
+    }
+    const clientResult = await admin.from("clients").select("id").eq("id", command.clientId).eq("organization_id", group.data.organization_id).is("deleted_at", null).maybeSingle();
+    const client = clientResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+    if (client.error || !client.data) {
+      try { await sendWahaText(groupId, "Client tidak ditemukan di organisasi ini."); } catch {}
+      return NextResponse.json({ accepted: true, command: "invalid_client" });
+    }
+    const workItemResult = await admin.rpc("create_whatsapp_command_work_item", {
+      p_organization_id: group.data.organization_id,
+      p_client_id: command.clientId,
+      p_title: command.title,
+      p_due_at: command.dueAt,
+      p_source_reference_id: messageId,
+      p_source_metadata: { provider: "waha", session_id: payload.session, group_id: groupId, message_id: providerId, sender_profile_id: sender.profileId, maker_profile_id: maker.profileId, checker_profile_id: checker?.profileId ?? null, creation_mode: "explicit_command" },
+      p_created_by: sender.profileId,
+      p_maker_id: maker.profileId,
+      p_checker_id: checker?.profileId ?? null,
+    } as never);
+    const workItem = workItemResult as unknown as { data: { id: string; title: string } | null; error: { message: string } | null };
+    if (!workItem.data || workItem.error) return NextResponse.json({ error: "Command diterima tetapi task gagal dibuat." }, { status: 500 });
+    try { await sendWahaText(groupId, `Task dibuat: ${workItem.data.title}`); } catch {}
+    return NextResponse.json({ accepted: true, command: "created", work_item_id: workItem.data.id });
   }
 
   const domainResult = await admin.from("domain_events").insert({

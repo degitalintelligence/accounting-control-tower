@@ -4,6 +4,7 @@ import { renderNotificationEmail } from "./email-templates";
 import { sendEmail, isEmailConfigured } from "./resend-client";
 import type { NotificationEvent } from "@/types/notification";
 import type { Json } from "@/lib/supabase/types";
+import { sendWahaText } from "@/lib/whatsapp/adapter";
 
 type NotificationClient = Pick<SupabaseClient, "from">;
 
@@ -160,6 +161,7 @@ async function processRow(admin: NotificationClient, row: OutboxRow) {
   const event = toNotificationEvent(row, domain.data);
   const notifications = await dispatchNotification(admin, event);
   if (isEmailConfigured()) await deliverEmailNotifications(admin, event, notifications);
+  await deliverWhatsAppNotifications(admin, event, notifications);
 }
 
 function preferenceColumn(eventType: NotificationEvent["eventType"]) {
@@ -230,6 +232,31 @@ async function deliverEmailNotifications(
         status: "failed",
         provider_response: { message: "Pengiriman email gagal." },
       }).eq("id", delivery.data.id);
+      throw error;
+    }
+  }
+}
+
+async function deliverWhatsAppNotifications(admin: NotificationClient, event: NotificationEvent, notifications: { id: string; profile_id: string; title: string; body: string | null }[]) {
+  if (event.channel !== "whatsapp" || !notifications.length) return;
+  const mappingsResult = await admin.from("wa_participant_mappings").select("profile_id, provider_participant_id, wa_group_id").in("profile_id", notifications.map((notification) => notification.profile_id)).eq("is_verified", true);
+  const mappings = mappingsResult as unknown as { data: { profile_id: string; provider_participant_id: string; wa_group_id: string }[] | null; error: { message: string } | null };
+  if (mappings.error) throw new Error(mappings.error.message);
+  for (const notification of notifications) {
+    const mapping = (mappings.data ?? []).find((candidate) => candidate.profile_id === notification.profile_id);
+    if (!mapping) continue;
+    const groupResult = await admin.from("wa_groups").select("provider_group_id").eq("id", mapping.wa_group_id).eq("is_active", true).maybeSingle();
+    const group = groupResult as unknown as { data: { provider_group_id: string } | null; error: { message: string } | null };
+    if (group.error || !group.data) continue;
+    const delivery = await admin.from("notification_deliveries").upsert({ notification_id: notification.id, channel: "whatsapp", status: "processing" }, { onConflict: "notification_id,channel", ignoreDuplicates: false }).select("id, status").maybeSingle();
+    const row = delivery as unknown as { data: { id: string; status: string } | null; error: { message: string } | null };
+    if (row.error) throw new Error(row.error.message);
+    if (!row.data || row.data.status === "delivered") continue;
+    try {
+      await sendWahaText(group.data.provider_group_id, [notification.title, notification.body].filter(Boolean).join("\n"));
+      await admin.from("notification_deliveries").update({ status: "delivered", delivered_at: new Date().toISOString(), provider_response: { channel: "waha" } }).eq("id", row.data.id);
+    } catch (error) {
+      await admin.from("notification_deliveries").update({ status: "failed", provider_response: { message: "Pengiriman WhatsApp gagal." } }).eq("id", row.data.id);
       throw error;
     }
   }

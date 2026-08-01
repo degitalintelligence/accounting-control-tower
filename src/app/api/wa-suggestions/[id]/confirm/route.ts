@@ -94,57 +94,28 @@ export async function POST(_request: Request, context: RouteContext) {
     for (const membership of memberships.data ?? []) validProfileIds.add(membership.profile_id);
   }
 
-  const workItemResult = await admin.from("work_items").insert({
-    organization_id: organizationId,
-    client_id: suggestion.suggested_client_id,
-    section_id: suggestion.suggested_section_id,
-    type: "ad_hoc",
-    title: suggestion.suggested_title,
-    description: suggestion.suggested_description,
-    due_at: suggestion.suggested_due_at,
-    source_type: suggestion.source_type,
-    source_reference_id: suggestion.source_reference_id,
-    source_metadata: suggestion.source_metadata ?? {},
-    status: "draft",
-    created_by: user.id,
-  } as never).select("id, title, status, organization_id, client_id, section_id, type, description, due_at, source_type, source_reference_id, created_by, created_at").single();
-  const workItem = workItemResult as unknown as { data: { id: string; title: string; status: string } | null; error: unknown };
-  if (workItem.error || !workItem.data) {
-    console.error("[POST /api/wa-suggestions/:id/confirm] Supabase error:", suggestionError(workItem.error));
-    return NextResponse.json({ error: "Gagal membuat draft work item." }, { status: 500 });
+  if (suggestion.suggested_maker_id && !validProfileIds.has(suggestion.suggested_maker_id)) {
+    return NextResponse.json({ error: "Maker suggestion tidak valid dalam organisasi." }, { status: 400 });
+  }
+  if (suggestion.suggested_checker_id && !validProfileIds.has(suggestion.suggested_checker_id)) {
+    return NextResponse.json({ error: "Checker suggestion tidak valid dalam organisasi." }, { status: 400 });
+  }
+  if (suggestion.suggested_maker_id && suggestion.suggested_maker_id === suggestion.suggested_checker_id) {
+    return NextResponse.json({ error: "Maker dan checker harus berbeda." }, { status: 400 });
   }
 
-  const assignments = [
-    { profile_id: suggestion.suggested_maker_id, role: "maker" },
-    { profile_id: suggestion.suggested_checker_id, role: "checker" },
-  ].filter((assignment) => Boolean(assignment.profile_id) && validProfileIds.has(assignment.profile_id as string))
-    .filter((assignment) => assignment.profile_id !== suggestion.suggested_maker_id || assignment.role === "maker");
-  if (assignments.length) {
-    const assignmentResult = await admin.from("assignments").insert(assignments.map((assignment) => ({
-      work_item_id: workItem.data!.id,
-      profile_id: assignment.profile_id,
-      role: assignment.role,
-      assigned_by: user.id,
-    })) as never);
-    const assignmentError = assignmentResult as unknown as { error: unknown };
-    if (assignmentError.error) console.error("[POST /api/wa-suggestions/:id/confirm] Assignment gagal:", suggestionError(assignmentError.error));
-  }
-
-  const now = new Date().toISOString();
-  const result = await admin
-    .from("action_suggestions")
-    .update({ status: "confirmed", confirmed_by: user.id, confirmed_at: now, created_work_item_id: workItem.data.id, updated_at: now } as never)
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .eq("status", "pending")
-    .select("id, status, confirmed_by, confirmed_at, created_work_item_id")
-    .maybeSingle();
-  const updated = result as unknown as { data: unknown; error: unknown };
-  if (updated.error) {
-    console.error("[POST /api/wa-suggestions/:id/confirm] Supabase error:", suggestionError(updated.error));
+  const result = await admin.rpc("confirm_action_suggestion", {
+    p_suggestion_id: id,
+    p_organization_id: organizationId,
+    p_confirmed_by: user.id,
+  } as never);
+  const confirmed = result as unknown as { data: { suggestion_id: string; work_item_id: string }[] | null; error: unknown };
+  if (confirmed.error || !confirmed.data?.[0]) {
+    console.error("[POST /api/wa-suggestions/:id/confirm] Supabase error:", suggestionError(confirmed.error));
     return NextResponse.json({ error: "Gagal mengonfirmasi suggestion." }, { status: 500 });
   }
-  if (!updated.data) return NextResponse.json({ error: "Suggestion tidak ditemukan atau sudah diproses." }, { status: 404 });
+  const workItemId = confirmed.data[0].work_item_id;
+  const workItem = { id: workItemId, title: suggestion.suggested_title, status: "draft" };
 
   await logAudit(admin, {
     organizationId,
@@ -152,30 +123,30 @@ export async function POST(_request: Request, context: RouteContext) {
     action: "wa_suggestion.confirmed",
     entityType: "action_suggestion",
     entityId: id,
-    newValue: { status: "confirmed", created_work_item_id: workItem.data.id },
+    newValue: { status: "confirmed", created_work_item_id: workItem.id },
   });
   await logAudit(admin, {
     organizationId,
     actorId: user.id,
     action: "work_item.created",
     entityType: "work_item",
-    entityId: workItem.data.id,
-    newValue: workItem.data,
+    entityId: workItem.id,
+    newValue: workItem,
     metadata: { source: "wa_suggestion", suggestion_id: id },
   });
 
-  const recipients = assignments.map((assignment) => assignment.profile_id).filter((profileId): profileId is string => Boolean(profileId));
+  const recipients = [suggestion.suggested_maker_id, suggestion.suggested_checker_id].filter((profileId): profileId is string => Boolean(profileId));
   if (recipients.length) {
     try {
       await publishNotificationEvent(admin, {
         eventType: "item_assigned",
         organizationId,
         aggregateType: "work_item",
-        aggregateId: workItem.data.id,
+        aggregateId: workItem.id,
         profileIds: recipients,
         title: "Tugas baru dari WhatsApp",
-        body: workItem.data.title,
-        data: { work_item_id: workItem.data.id, suggestion_id: id },
+        body: workItem.title,
+        data: { work_item_id: workItem.id, suggestion_id: id },
         dedupKey: `wa-suggestion:${id}`,
       });
     } catch (error) {
@@ -183,5 +154,5 @@ export async function POST(_request: Request, context: RouteContext) {
     }
   }
 
-  return NextResponse.json({ data: updated.data, work_item: workItem.data });
+  return NextResponse.json({ data: { id, status: "confirmed", created_work_item_id: workItemId }, work_item: workItem });
 }

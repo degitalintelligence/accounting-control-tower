@@ -258,6 +258,34 @@ export interface Database {
           deleted_at?: string | null;
         };
       };
+      recurrence_rules: {
+        Relationships: [];
+        Row: {
+          id: string;
+          template_id: string;
+          rrule: string;
+          timezone: string;
+          generation_lead_days: number;
+          holiday_handling: string;
+          skip_weekends: boolean;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          rrule: string;
+          timezone?: string;
+          generation_lead_days?: number;
+          holiday_handling?: string;
+          skip_weekends?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: Partial<Database["acct_ctrl"]["Tables"]["recurrence_rules"]["Insert"]>;
+      };
       domain_events: {
         Relationships: [];
         Row: {
@@ -405,7 +433,42 @@ export interface Database {
       [key: string]: unknown;
     };
     Views: Record<string, unknown>;
-    Functions: Record<string, unknown>;
+    Functions: {
+      instantiate_template_instance: {
+        Args: {
+          p_template_id: string;
+          p_template_version_id: string;
+          p_instance_key: string;
+          p_occurrence_date: string;
+          p_due_at: string | null;
+          p_start_at: string | null;
+          p_created_by: string | null;
+          p_entity_id?: string | null;
+          p_section_id?: string | null;
+          p_assignee_id?: string | null;
+          p_source_metadata?: Json;
+        };
+        Returns: Json;
+      };
+      confirm_action_suggestion: {
+        Args: { p_suggestion_id: string; p_organization_id: string; p_confirmed_by: string };
+        Returns: { suggestion_id: string; work_item_id: string }[];
+      };
+      create_whatsapp_command_work_item: {
+        Args: {
+          p_organization_id: string;
+          p_client_id: string;
+          p_title: string;
+          p_due_at: string | null;
+          p_source_reference_id: string;
+          p_source_metadata: Json;
+          p_created_by: string;
+          p_maker_id: string;
+          p_checker_id: string | null;
+        };
+        Returns: { id: string; title: string }[];
+      };
+    };
     Enums: Record<string, unknown>;
     CompositeTypes: Record<string, unknown>;
   };

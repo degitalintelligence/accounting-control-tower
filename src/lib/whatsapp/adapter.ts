@@ -10,3 +10,11 @@ export async function wahaRequest<T>(path: string, init?: RequestInit): Promise<
   if (!response.ok) throw new Error(`WAHA request gagal: ${response.status}`);
   return (await response.json()) as T;
 }
+
+export async function sendWahaText(chatId: string, text: string) {
+  const config = getWahaConfig();
+  return wahaRequest<{ id?: string }>("/api/sendText", {
+    method: "POST",
+    body: JSON.stringify({ session: config.session, chatId, text }),
+  });
+}

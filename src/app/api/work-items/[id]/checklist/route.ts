@@ -23,7 +23,10 @@ export async function GET(_request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth.response) return auth.response;
   if (!auth.templateId) return NextResponse.json({ data: { template: null, responses: [], required_total: 0, required_completed: 0 } });
-  const templateResult = await auth.admin!.from("checklist_templates").select("id, organization_id, name, description, target_role, is_active, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)").eq("id", auth.templateId).single();
+  const organizationId = await getUserOrganizationId(auth.admin!, auth.userId);
+  const templateResult = organizationId
+    ? await auth.admin!.from("checklist_templates").select("id, organization_id, name, description, target_role, is_active, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)").eq("id", auth.templateId).eq("organization_id", organizationId).single()
+    : { data: null, error: { message: "Organisasi tidak ditemukan." } };
   const responseResult = await auth.admin!.from("checklist_responses").select("id, work_item_id, checklist_item_id, profile_id, value, file_id, created_at, updated_at").eq("work_item_id", auth.id);
   const templateData = templateResult as unknown as { data: Record<string, unknown> | null; error: { message: string } | null };
   const responsesData = responseResult as unknown as { data: Record<string, unknown>[] | null; error: { message: string } | null };

@@ -183,64 +183,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Bangun update data
-    const updateData: Record<string, unknown> = {
-      status: toStatus,
-      updated_at: new Date().toISOString(),
-    };
-
-    // Auto-set completed_at saat terminal
-    if (toStatus === "completed" || toStatus === "cancelled") {
-      updateData.completed_at = new Date().toISOString();
-    }
-
-    const updateResult = await admin
-      .from("work_items")
-      .update(updateData as never)
-      .eq("id", id)
-      .select()
-      .single();
-
-    const { data: updated, error: updateError } = updateResult as unknown as {
+    const rpcResult = await admin.rpc("transition_work_item" as never, {
+      p_work_item_id: id,
+      p_to_status: toStatus,
+      p_actor_id: user.id,
+      p_reason: reason ?? null,
+    } as never);
+    const { data: updated, error: transitionError } = rpcResult as unknown as {
       data: Record<string, unknown> | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
-
-    if (updateError) {
+    if (transitionError) {
       console.error("[POST /transition] Supabase error:", {
-        message: updateError.message,
-        code: updateError.code,
-        hint: updateError.hint,
-        details: updateError.details,
+        message: transitionError.message,
+        code: transitionError.code,
+        hint: transitionError.hint,
+        details: transitionError.details,
       });
-      return NextResponse.json(
-        { error: "Gagal mengubah status work item." },
-        { status: 500 }
-      );
-    }
-
-    // Catat status history
-    const historyResult = await admin
-      .from("work_item_status_history")
-      .insert({
-        work_item_id: id,
-        from_status: fromStatus,
-        to_status: toStatus,
-        changed_by: user.id,
-        reason: reason ?? null,
-      } as never);
-
-    const { error: historyError } = historyResult as unknown as {
-      error: { message: string; code: string; hint: string; details: string } | null;
-    };
-
-    if (historyError) {
-      console.error("[POST /transition] Gagal mencatat history:", {
-        message: historyError.message,
-        code: historyError.code,
-        hint: historyError.hint,
-        details: historyError.details,
-      });
+      return NextResponse.json({ error: transitionError.message }, { status: 409 });
     }
 
     // Audit log
@@ -251,7 +211,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       entityType: "work_item",
       entityId: id,
       oldValue: { status: fromStatus },
-      newValue: { status: toStatus, reason: reason ?? null },
+      newValue: { status: toStatus, reason: reason ?? null, transaction: "transition_work_item" },
     });
 
     const activeAssignmentsResult = await admin

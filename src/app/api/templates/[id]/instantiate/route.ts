@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
-import type { InstantiateInput, ChildBlueprint } from "@/types/template";
-import type { WorkItemType, WorkItemPriority, RiskLevel } from "@/types/work-item";
+import type { InstantiateInput } from "@/types/template";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -92,7 +91,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Ambil template
     const tplResult = await admin
       .from("task_templates")
-      .select("*")
+    .select("id, client_id, entity_id, section_id, organization_id, is_active")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
@@ -114,7 +113,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Ambil versi terbaru
     const verResult = await admin
       .from("template_versions")
-      .select("*")
+    .select("id, version_number, final_deadline_rule")
       .eq("template_id", id)
       .order("version_number", { ascending: false })
       .limit(1)
@@ -161,139 +160,35 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Siapkan custom_fields override (jika ada)
     const customFields = body.custom_fields ?? {};
 
-    // Buat parent work item
-    const parentInsertData = {
-      organization_id: organizationId,
-      client_id: template.client_id as string,
-      entity_id: entityId,
-      section_id: sectionId,
-      type: (template.type as WorkItemType) ?? "routine",
-      template_id: template.id as string,
-      template_version_id: version.id as string,
-      title: (version.title_template as string) ?? (template.name as string),
-      description: (version.description_template as string) ?? (template.description as string) ?? null,
-      acceptance_criteria: (version.acceptance_criteria_template as string) ?? null,
-      status: "draft" as const,
-      priority: (template.priority as WorkItemPriority) ?? "medium",
-      risk_level: (template.risk_level as RiskLevel) ?? "medium",
-      weight: (version.weight as number) ?? 1.0,
-      is_optional: (version.is_optional as boolean) ?? false,
-      due_at: dueAt,
-      start_at: (customFields.start_at as string) ?? null,
-      source_type: "template" as const,
-      created_by: user.id,
-    };
-
-    const parentInsertResult = await admin
-      .from("work_items")
-      .insert(parentInsertData as never)
-      .select()
-      .single();
-
-    const { data: parentWorkItem, error: parentError } = parentInsertResult as unknown as {
-      data: Record<string, unknown> | null;
+    const instanceKey = (customFields.instance_key as string) ?? `manual:${new Date().toISOString()}`;
+    const rpcResult = await admin.rpc("instantiate_template_instance", {
+      p_template_id: template.id as string,
+      p_template_version_id: version.id as string,
+      p_instance_key: instanceKey,
+      p_occurrence_date: (dueAt ?? new Date().toISOString()).slice(0, 10),
+      p_due_at: dueAt,
+      p_start_at: (customFields.start_at as string) ?? null,
+      p_created_by: user.id,
+      p_entity_id: entityId,
+      p_section_id: sectionId,
+      p_assignee_id: body.assignee_id ?? null,
+      p_source_metadata: customFields,
+    } as never);
+    const instantiated = rpcResult as unknown as {
+      data: { parent: Record<string, unknown>; children: Record<string, unknown>[] } | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
-
-    if (parentError) {
-      console.error("[POST /api/templates/[id]/instantiate] Gagal buat parent work item:", {
-        message: parentError.message,
-        code: parentError.code,
-        hint: parentError.hint,
-        details: parentError.details,
+    if (instantiated.error || !instantiated.data) {
+      console.error("[POST /api/templates/[id]/instantiate] Atomic RPC gagal:", {
+        message: instantiated.error?.message,
+        code: instantiated.error?.code,
+        hint: instantiated.error?.hint,
+        details: instantiated.error?.details,
       });
-      return NextResponse.json(
-        { error: "Gagal membuat work item dari template." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Gagal membuat work item dari template." }, { status: 500 });
     }
-
-    // Auto-assign parent jika assignee_id diberikan
-    if (body.assignee_id) {
-      await admin.from("assignments").insert({
-        work_item_id: (parentWorkItem as Record<string, string>).id,
-        profile_id: body.assignee_id,
-        role: "maker",
-        assigned_by: user.id,
-      } as never);
-
-      // Auto-transition draft → assigned
-      await admin
-        .from("work_items")
-        .update({ status: "assigned", updated_at: new Date().toISOString() } as never)
-        .eq("id", (parentWorkItem as Record<string, string>).id);
-
-      await admin.from("work_item_status_history").insert({
-        work_item_id: (parentWorkItem as Record<string, string>).id,
-        from_status: "draft",
-        to_status: "assigned",
-        changed_by: user.id,
-        reason: "Auto-transition: maker assigned via template instantiation",
-      } as never);
-    }
-
-    const childWorkItems: Record<string, unknown>[] = [];
-
-    // Buat child work items dari child_blueprint
-    const childBlueprint = (version.child_blueprint as ChildBlueprint[]) ?? [];
-    if (Array.isArray(childBlueprint) && childBlueprint.length > 0) {
-      for (const child of childBlueprint) {
-        const childDueOffset = child.due_offset_days ?? 0;
-        let childDueAt: string | null = null;
-        if (dueAt) {
-          const parentDue = new Date(dueAt);
-          parentDue.setDate(parentDue.getDate() + childDueOffset);
-          childDueAt = parentDue.toISOString();
-        }
-
-        const childInsertData = {
-          organization_id: organizationId,
-          client_id: template.client_id as string,
-          entity_id: parentInsertData.entity_id,
-          section_id: parentInsertData.section_id,
-          type: (child.type as WorkItemType) ?? (template.type as WorkItemType) ?? "routine",
-          parent_id: (parentWorkItem as Record<string, string>).id,
-          template_id: template.id as string,
-          template_version_id: version.id as string,
-          title: `${parentInsertData.title} — ${child.title_suffix}`,
-          description: child.description ?? null,
-          acceptance_criteria: child.acceptance_criteria ?? null,
-          status: "draft" as const,
-          priority: (child.priority as WorkItemPriority) ?? (template.priority as WorkItemPriority) ?? "medium",
-          risk_level: (child.risk_level as RiskLevel) ?? (template.risk_level as RiskLevel) ?? "medium",
-          weight: child.weight ?? 1.0,
-          is_optional: child.is_optional ?? false,
-          due_at: childDueAt,
-          source_type: "template" as const,
-          created_by: user.id,
-        };
-
-        const childResult = await admin
-          .from("work_items")
-          .insert(childInsertData as never)
-          .select()
-          .single();
-
-        const { data: childItem, error: childError } = childResult as unknown as {
-          data: Record<string, unknown> | null;
-          error: { message: string; code: string; hint: string; details: string } | null;
-        };
-
-        if (childError) {
-          console.error("[POST /api/templates/[id]/instantiate] Gagal buat child:", {
-            message: childError.message,
-            code: childError.code,
-            hint: childError.hint,
-            details: childError.details,
-          });
-          continue; // Skip child yang gagal, jangan gagalkan seluruh instantiate
-        }
-
-        if (childItem) {
-          childWorkItems.push(childItem);
-        }
-      }
-    }
+    const parentWorkItem = instantiated.data.parent;
+    const childWorkItems = instantiated.data.children;
 
     // Audit log
     await logAudit(admin, {
@@ -303,7 +198,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       entityType: "task_template",
       entityId: template.id as string,
       newValue: {
-        parent_work_item_id: (parentWorkItem as Record<string, string>).id,
+        parent_work_item_id: parentWorkItem.id,
         children_count: childWorkItems.length,
         template_version: version.version_number,
       },

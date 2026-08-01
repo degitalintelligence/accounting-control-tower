@@ -93,16 +93,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Validasi separation of duties
     const validation = await validateAssignment(id, profile_id, assignmentRole);
-    if (!validation.valid) {
-      return NextResponse.json(
-        { error: validation.error },
-        { status: 409 }
-      );
-    }
+    if (!validation.valid) return NextResponse.json({ error: validation.error }, { status: 409 });
 
-    // Insert assignment
     const assignResult = await admin
       .from("assignments")
       .insert({

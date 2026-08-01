@@ -1,18 +1,90 @@
 import "server-only";
-import type { createServiceRoleClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 type AdminClient = ReturnType<typeof createServiceRoleClient>;
+
+export type MembershipAccess = {
+  organization_id: string;
+  client_id: string | null;
+  role: string;
+};
+
+export type AuthContext = {
+  userId: string;
+  admin: AdminClient;
+  organizationId: string;
+  memberships: MembershipAccess[];
+  clientIds: string[];
+  isOrgWide: boolean;
+};
+
+export async function getAuthContext(): Promise<
+  | { context: AuthContext; response?: never }
+  | { context?: never; response: NextResponse }
+> {
+  const client = await createClient();
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+
+  const admin = createServiceRoleClient();
+  const result = await admin
+    .from("memberships")
+    .select("organization_id, client_id, role")
+    .eq("profile_id", user.id)
+    .eq("is_active", true);
+  const memberships = result as unknown as {
+    data: MembershipAccess[] | null;
+    error: { message: string; code?: string; hint?: string; details?: string } | null;
+  };
+  if (memberships.error) {
+    return { response: NextResponse.json({ error: "Gagal memuat authorization context." }, { status: 500 }) };
+  }
+  if (!memberships.data?.length) {
+    return { response: NextResponse.json({ error: "User tidak memiliki membership aktif." }, { status: 403 }) };
+  }
+
+  const organizationIds = [...new Set(memberships.data.map((membership) => membership.organization_id))];
+  if (organizationIds.length !== 1) {
+    return { response: NextResponse.json({ error: "User memiliki lebih dari satu organisasi aktif dan perlu memilih organisasi." }, { status: 409 }) };
+  }
+  const organizationId = organizationIds[0];
+  const organizationMemberships = memberships.data.filter((membership) => membership.organization_id === organizationId);
+  const clientIds = [...new Set(organizationMemberships.flatMap((membership) => membership.client_id ? [membership.client_id] : []))];
+  return {
+    context: {
+      userId: user.id,
+      admin,
+      organizationId,
+      memberships: organizationMemberships,
+      clientIds,
+      isOrgWide: organizationMemberships.some((membership) => membership.client_id === null),
+    },
+  };
+}
+
+export function canAccessClient(context: AuthContext, clientId: string | null | undefined) {
+  return Boolean(clientId && (context.isOrgWide || context.clientIds.includes(clientId)));
+}
+
+export function canAccessOptionalClient(context: AuthContext, clientId: string | null | undefined) {
+  return clientId == null || canAccessClient(context, clientId);
+}
+
+export function hasRole(context: AuthContext, roles: string[]) {
+  return context.memberships.some((membership) => roles.includes(membership.role));
+}
 
 export async function getActiveMembership(admin: AdminClient, userId: string) {
   const result = await admin
     .from("memberships")
-    .select("organization_id, role")
+    .select("organization_id, client_id, role")
     .eq("profile_id", userId)
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
   const data = result as unknown as {
-    data: { organization_id: string; role: string } | null;
+    data: { organization_id: string; client_id: string | null; role: string } | null;
   };
   return data.data;
 }
