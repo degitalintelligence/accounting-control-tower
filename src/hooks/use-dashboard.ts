@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { DashboardKpis } from "@/types/dashboard";
 
 export interface DashboardStats {
   critical_overdue: number;
@@ -9,6 +10,11 @@ export interface DashboardStats {
   on_time_rate: number;
   total_completed: number;
   total_items: number;
+  average_cycle_hours?: number | null;
+  revision_rate?: number | null;
+  high_risk_open?: number | null;
+  overdue_weight?: number | null;
+  audit_coverage_rate?: number | null;
 }
 
 export interface DeadlineItem {
@@ -60,49 +66,38 @@ export function useDashboard() {
   const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [insights, setInsights] = useState<DashboardInsights | null>(null);
+  const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [sections, setSections] = useState<DashboardSections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [partialFailures, setPartialFailures] = useState<string[]>([]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
 
     try {
-      const [statsRes, deadlinesRes, activityRes, insightsRes, sectionsRes] = await Promise.all([
+      const responses = await Promise.allSettled([
         fetch("/api/dashboard/stats"),
+        fetch("/api/dashboard/kpis"),
         fetch("/api/dashboard/upcoming-deadlines"),
         fetch("/api/dashboard/activity-feed"),
         fetch("/api/ai/insights"),
         fetch("/api/dashboard/sections"),
       ]);
+      const names = ["statistik", "KPI", "deadline", "aktivitas", "insight", "bagian dashboard"];
+      const failed = responses.flatMap((result, index) => result.status === "rejected" || (result.value && !result.value.ok) ? [names[index]] : []);
+      setPartialFailures(failed);
+      if (failed.length === responses.length) throw new Error("Data dashboard belum dapat dimuat.");
 
-      const responses: Array<[string, Response]> = [
-        ["statistik", statsRes],
-        ["deadline", deadlinesRes],
-        ["aktivitas", activityRes],
-        ["insight", insightsRes],
-        ["bagian dashboard", sectionsRes],
-      ];
-      const failedResponse = responses.find(([name, response]) => name !== "insight" && !response.ok);
-
-      if (failedResponse) {
-        throw new Error(`Data ${failedResponse[0]} belum dapat dimuat.`);
-      }
-
-      const [statsData, deadlinesData, activityData, insightsData, sectionsData] = await Promise.all([
-        statsRes.json(),
-        deadlinesRes.json(),
-        activityRes.json(),
-        insightsRes.json(),
-        sectionsRes.json(),
-      ]);
-
-      setStats(statsData);
-      setDeadlines(deadlinesData);
-      setActivity(activityData);
-      setInsights(insightsRes.ok ? insightsData.insights ?? null : null);
-      setSections(sectionsData);
+      const data = await Promise.all(responses.map(async (result) => result.status === "fulfilled" && result.value.ok ? result.value.json() as Promise<unknown> : null));
+      setStats(data[0] as DashboardStats | null);
+      setKpis(data[1] as DashboardKpis | null);
+      setDeadlines((data[2] ?? []) as DeadlineItem[]);
+      setActivity((data[3] ?? []) as ActivityItem[]);
+      setInsights((data[4] as { insights?: DashboardInsights } | null)?.insights ?? null);
+      setSections(data[5] as DashboardSections | null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -114,5 +109,5 @@ export function useDashboard() {
     queueMicrotask(() => fetchAll());
   }, [fetchAll]);
 
-  return { stats, deadlines, activity, insights, sections, loading, error, refetch: fetchAll };
+  return { stats, kpis, deadlines, activity, insights, sections, loading, error, partialFailures, refetch: fetchAll };
 }

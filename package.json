@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:api": "vitest run tests/api-routes.test.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
@@ -20,6 +21,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.28.0",
     "next": "16.2.12",
+    "officeparser": "^7.5.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.16.1",

@@ -19,9 +19,10 @@ export async function GET(_request: NextRequest, context: Context) {
   const membership = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
   const memberships = membership as unknown as { data: { client_id: string | null }[] | null };
   if (!memberships.data?.some((entry) => entry.client_id === null || entry.client_id === itemData.data!.client_id)) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
-  const relation = await admin.from("work_item_files").select("file_id, files(storage_path, filename)").eq("work_item_id", id).eq("file_id", fileId).single();
-  const relationData = relation as unknown as { data: { file_id: string; files: { storage_path: string; filename: string } | null } | null; error: { message: string } | null };
+  const relation = await admin.from("work_item_files").select("file_id, files(storage_path, filename, scan_status)").eq("work_item_id", id).eq("file_id", fileId).single();
+  const relationData = relation as unknown as { data: { file_id: string; files: { storage_path: string; filename: string; scan_status: string } | null } | null; error: { message: string } | null };
   if (relationData.error || !relationData.data?.files) return NextResponse.json({ error: "File tidak ditemukan." }, { status: 404 });
+  if (relationData.data.files.scan_status !== "clean") return NextResponse.json({ error: "File belum lolos pemeriksaan keamanan." }, { status: 423 });
   const bucket = getRequiredServerEnv("SUPABASE_STORAGE_BUCKET");
   const signed = await admin.storage.from(bucket).createSignedUrl(relationData.data.files.storage_path, 300, { download: relationData.data.files.filename });
   if (signed.error || !signed.data?.signedUrl) return NextResponse.json({ error: "Gagal membuat signed URL." }, { status: 500 });

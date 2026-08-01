@@ -1,0 +1,72 @@
+# Migration Order
+
+Migration files in this directory are append-only deployment history.
+
+- Do not rename, delete, or edit a migration after it may have been applied.
+- Duplicate numeric prefixes are historical and must not be resolved by renaming old files.
+- New migrations start at `040_` and use one unique numeric prefix per file.
+- Apply migrations by the explicit filename order below when using the Supabase MCP or Management API.
+- Do not run the whole directory blindly against a database with unknown migration history.
+
+## Explicit order
+
+The current repository order is lexical by complete filename. Dependencies that share a numeric prefix are listed in the required order below.
+
+```text
+001_create_acct_ctrl_schema.sql
+002_auth_trigger_and_seed.sql
+003_audit_trigger.sql
+004_escalation_engine.sql
+005_notification_email_preferences.sql
+006_fix_notification_dedup_scope.sql
+007_harden_whatsapp_ingestion.sql
+008_sop_checklist_system.sql
+009_async_ai_extraction.sql
+010_ai_review_assistant.sql
+011_ai_review_notes_rls.sql
+012_phase_7_3_list_indexes.sql
+013_harden_tenant_client_isolation.sql
+014_unified_work_engine.sql
+015_recurring_scheduler.sql
+016_whatsapp_notification_mvp.sql
+017_ai_intake_meetings.sql
+017_seed_memberships_and_grants.sql
+018_confirm_suggestion_client_override.sql
+018_grant_ai_intake_meetings.sql
+019_atomic_work_item_and_whatsapp_idempotency.sql
+019_meeting_action_items_index.sql
+020_structured_meetings.sql
+020_sync_atomic_rpc_security.sql
+021_meeting_projects_attachments.sql
+021_report_evidence_audit_controls.sql
+022_harden_event_integrity.sql
+022_meeting_attachment_storage.sql
+023_meeting_draft_key.sql
+023_supporting_analytics_capacity_checklist_audit.sql
+024_harden_membership_idempotency.sql
+025_harden_evidence_report_audit_scope.sql
+025_report_analytics_rpc.sql
+025_whatsapp_durable_ingestion_retention.sql
+026_finalize_queue_security.sql
+027_governance_controls.sql
+028_prd_control_hardening.sql
+029_dashboard_kpi_analytics.sql
+030_business_task_duplicate_warning.sql
+031_whatsapp_suggestion_duplicate_warning.sql
+032_planned_leave_validation.sql
+033_planned_leave_workflow.sql
+034_approval_policy_materiality_matrix.sql
+035_delegation_authority_controls.sql
+036_approval_policy_evaluation.sql
+037_authority_enforcement_snapshots.sql
+038_enforce_review_approval_authority.sql
+039_fix_file_scan_queue_claim.sql
+040_migration_history_policy.sql
+041_async_ai_intake.sql
+042_atomic_ai_draft_confirmation.sql
+043_scope_soft_delete_hardening.sql
+044_recurrence_rule_integrity.sql
+045_whatsapp_connection_retirement.sql
+```
+
+The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

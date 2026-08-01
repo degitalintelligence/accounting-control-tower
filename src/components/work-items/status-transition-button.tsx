@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -174,16 +175,18 @@ export function StatusTransitionButton({
           )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>Transisi ke:</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {available.map((t) => (
-            <DropdownMenuItem key={t.to} onClick={() => handleSelect(t)}>
-              {t.label}
-              <span className="ml-auto text-[11px] text-slate-400">
-                {STATUS_LABELS[t.to]}
-              </span>
-            </DropdownMenuItem>
-          ))}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Transisi ke:</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {available.map((t) => (
+              <DropdownMenuItem key={t.to} onClick={() => handleSelect(t)}>
+                {t.label}
+                <span className="ml-auto text-[11px] text-slate-400">
+                  {STATUS_LABELS[t.to]}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
 

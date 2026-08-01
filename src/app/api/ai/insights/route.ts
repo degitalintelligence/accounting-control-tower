@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateDashboardInsights, type DashboardInsights } from "@/lib/ai/openrouter-client";
+import { generateDashboardInsights, OpenRouterError, type DashboardInsights } from "@/lib/ai/openrouter-client";
 import { getAuthContext } from "@/lib/authorization";
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
@@ -55,7 +55,12 @@ export async function GET() {
   let insights: DashboardInsights;
   try {
     insights = await generateDashboardInsights(metricsContext(metrics));
-  } catch {
+  } catch (error) {
+    const aiError = error instanceof OpenRouterError ? error : null;
+    console.error("[ai-insights] provider failure", {
+      code: aiError?.code ?? "UNKNOWN",
+      status: aiError?.status ?? null,
+    });
     return NextResponse.json({ error: "Insight tidak tersedia saat ini." }, { status: 503 });
   }
   return NextResponse.json({ period_start: currentStart.toISOString(), period_end: today.toISOString(), metrics, insights, source: "ai" });

@@ -38,6 +38,8 @@ type Payload = {
   dedup_key?: Json;
 };
 
+type ReminderWorkItem = { status: string; due_at: string | null; deleted_at: string | null };
+
 const batchSize = 20;
 
 function isRecord(value: Json | undefined): value is { [key: string]: Json | undefined } {
@@ -132,6 +134,16 @@ async function processRow(admin: NotificationClient, row: OutboxRow) {
 
   if (!isRecord(row.payload) || !Array.isArray(row.payload.profile_ids) || typeof row.payload.title !== "string") {
     throw new Error("Payload notification tidak valid.");
+  }
+
+  if (domain.data.event_type === "deadline_approaching" && domain.data.aggregate_type === "work_item") {
+    const payload = row.payload as Payload;
+    const data = toJsonRecord(payload.data);
+    const expectedDueAt = typeof data.due_at === "string" ? data.due_at : null;
+    const itemResult = await admin.from("work_items").select("status, due_at, deleted_at").eq("id", domain.data.aggregate_id).eq("organization_id", domain.data.organization_id).maybeSingle();
+    const item = itemResult as unknown as { data: ReminderWorkItem | null; error: { message: string } | null };
+    if (item.error) throw new Error(item.error.message);
+    if (!item.data || item.data.deleted_at || ["completed", "cancelled"].includes(item.data.status) || (expectedDueAt && item.data.due_at !== expectedDueAt)) return;
   }
 
   const event = toNotificationEvent(row, domain.data);

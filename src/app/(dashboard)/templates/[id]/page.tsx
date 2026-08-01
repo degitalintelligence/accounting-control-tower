@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { TemplateStepEditor } from "@/components/templates/template-step-editor";
+import { RecurrenceEditor } from "@/components/templates/recurrence-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ import {
   FileText,
   Users,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { TaskTemplate, TemplateVersion, ChildBlueprint } from "@/types/template";
 import type { WorkItemType, WorkItemPriority } from "@/types/work-item";
 
@@ -167,6 +169,16 @@ function InstantiateDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: string } | null>(null);
+  const [members, setMembers] = useState<Array<{ profile_id: string; name: string; email: string | null }>>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/assignment-members").then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Anggota gagal dimuat.");
+      setMembers(data.data ?? []);
+    }).catch((err) => setError(err instanceof Error ? err.message : "Anggota gagal dimuat."));
+  }, [open]);
 
   async function handleInstantiate() {
     setError(null);
@@ -256,13 +268,11 @@ function InstantiateDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="inst-assignee">Assignee ID (opsional)</Label>
-              <Input
-                id="inst-assignee"
-                placeholder="UUID pengguna yang ditugaskan"
-                value={assigneeId}
-                onChange={(e) => setAssigneeId(e.currentTarget.value)}
-              />
+              <Label htmlFor="inst-assignee">Assignee (opsional)</Label>
+              <Select value={assigneeId || null} onValueChange={(value) => setAssigneeId(value ?? "")}>
+                <SelectTrigger id="inst-assignee" aria-label="Pilih assignee" className="w-full"><SelectValue placeholder="Pilih anggota" /></SelectTrigger>
+                <SelectContent>{members.map((member) => <SelectItem key={member.profile_id} value={member.profile_id}>{member.name}{member.email ? ` · ${member.email}` : ""}</SelectItem>)}</SelectContent>
+              </Select>
               <p className="text-[11px] text-slate-400">
                 Kosongkan untuk membuat tanpa penugasan.
               </p>
@@ -384,6 +394,7 @@ export default function TemplateDetailPage({
           <h2 className="text-lg font-semibold text-slate-900 mb-1">
             {error ?? "Template tidak ditemukan."}
           </h2>
+          {error && <Button variant="outline" onClick={() => void fetchData()}>Coba lagi</Button>}
           <Button variant="outline" onClick={() => router.push("/templates")}>
             <ArrowLeft className="size-4" />
             Kembali ke Daftar
@@ -486,6 +497,7 @@ export default function TemplateDetailPage({
               )}
             </TabsTrigger>
             <TabsTrigger value="steps">Langkah</TabsTrigger>
+            <TabsTrigger value="recurrence">Pengulangan</TabsTrigger>
           </TabsList>
 
           {/* ── Detail Tab ────────────────────────────── */}
@@ -604,6 +616,10 @@ export default function TemplateDetailPage({
                 </Card>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="recurrence" className="mt-4">
+            <RecurrenceEditor templateId={id} />
           </TabsContent>
 
           {/* ── Versions Tab ─────────────────────────── */}

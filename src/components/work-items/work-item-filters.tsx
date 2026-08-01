@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, CalendarDays, Kanban, List, Network } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,7 +16,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 interface WorkItemFiltersProps {
   activeTab: string;
+  view: string;
   onTabChange: (tab: string) => void;
+  onViewChange: (view: string) => void;
   onCreateClick: () => void;
 }
 
@@ -59,7 +61,9 @@ const PRIORITY_OPTIONS = [
 
 export function WorkItemFilters({
   activeTab,
+  view,
   onTabChange,
+  onViewChange,
   onCreateClick,
 }: WorkItemFiltersProps) {
   const router = useRouter();
@@ -69,6 +73,13 @@ export function WorkItemFilters({
   const currentStatus = searchParams.get("status") ?? "";
   const currentType = searchParams.get("type") ?? "";
   const currentPriority = searchParams.get("priority") ?? "";
+
+  const views = [
+    { value: "list", label: "List", icon: List },
+    { value: "board", label: "Board", icon: Kanban },
+    { value: "calendar", label: "Kalender", icon: CalendarDays },
+    { value: "outline", label: "Outline", icon: Network },
+  ];
 
   function updateParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -141,7 +152,7 @@ export function WorkItemFilters({
         {/* Status filter */}
         <Select
           value={currentStatus || null}
-          onValueChange={(val) => updateParam("status", (val as string) ?? "")}
+          onValueChange={(val) => updateParam("status", val === "__all__" ? "" : (val as string) ?? "")}
         >
           <SelectTrigger className="h-8 text-sm bg-white min-w-[140px]">
             <SelectValue placeholder="Semua Status" />
@@ -158,7 +169,7 @@ export function WorkItemFilters({
         {/* Type filter */}
         <Select
           value={currentType || null}
-          onValueChange={(val) => updateParam("type", (val as string) ?? "")}
+          onValueChange={(val) => updateParam("type", val === "__all__" ? "" : (val as string) ?? "")}
         >
           <SelectTrigger className="h-8 text-sm bg-white min-w-[130px]">
             <SelectValue placeholder="Semua Jenis" />
@@ -175,7 +186,7 @@ export function WorkItemFilters({
         {/* Priority filter */}
         <Select
           value={currentPriority || null}
-          onValueChange={(val) => updateParam("priority", (val as string) ?? "")}
+          onValueChange={(val) => updateParam("priority", val === "__all__" ? "" : (val as string) ?? "")}
         >
           <SelectTrigger className="h-8 text-sm bg-white min-w-[140px]">
             <SelectValue placeholder="Semua Prioritas" />
@@ -188,6 +199,15 @@ export function WorkItemFilters({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 w-fit">
+        {views.map(({ value, label, icon: Icon }) => (
+          <Button key={value} type="button" aria-pressed={view === value} variant={view === value ? "secondary" : "ghost"} size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onViewChange(value)}>
+            <Icon className="size-3.5" />
+            {label}
+          </Button>
+        ))}
       </div>
     </div>
   );

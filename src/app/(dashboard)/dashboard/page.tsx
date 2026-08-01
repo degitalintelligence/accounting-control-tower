@@ -12,9 +12,11 @@ import { useDashboard } from "@/hooks/use-dashboard";
 import { useAuthStore } from "@/stores/auth-store";
 import { StatCardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { InsightsCard } from "@/components/dashboard/insights-card";
+import { KpiGrid } from "@/components/dashboard/kpi-grid";
+import { OverdueAgingCard } from "@/components/dashboard/overdue-aging-card";
 
 export default function DashboardPage() {
-  const { stats, insights, sections, loading, error, refetch } = useDashboard();
+  const { stats, kpis, insights, sections, loading, error, partialFailures, refetch } = useDashboard();
   const user = useAuthStore((s) => s.user);
 
   return (
@@ -37,6 +39,7 @@ export default function DashboardPage() {
           </Button>
         </div>
       )}
+      {!error && partialFailures.length > 0 && <div role="status" className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between"><span>Sebagian data belum tersedia: {partialFailures.join(", ")}.</span><Button type="button" variant="outline" onClick={refetch} className="w-fit border-amber-200 bg-white text-amber-800 hover:bg-amber-100">Muat ulang</Button></div>}
 
       {/* Stats Grid */}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
@@ -89,6 +92,8 @@ export default function DashboardPage() {
         ) : null}
       </div>
 
+      {!loading && <div className="mb-6 space-y-3"><KpiGrid kpis={kpis} />{kpis && <OverdueAgingCard buckets={kpis.overdue_aging} />}{!kpis && !error && <EmptyDashboard text="KPI belum tersedia." />}</div>}
+
       <div className="mb-6">
         <InsightsCard insights={insights} />
       </div>
@@ -106,4 +111,8 @@ export default function DashboardPage() {
       </div>
     </main>
   );
+}
+
+function EmptyDashboard({ text }: { text: string }) {
+  return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">{text}</div>;
 }

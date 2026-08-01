@@ -135,7 +135,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // Ambil recurrence_rules jika ada
     const recurrenceResult = await admin
       .from("recurrence_rules")
-      .select("id, organization_id, client_id, entity_id, section_id, name, description, type, priority, risk_level, is_active, effective_from, effective_until, parent_template_id, created_by, created_at, updated_at, deleted_at")
+      .select("id, template_id, rrule, timezone, generation_lead_days, holiday_handling, skip_weekends, created_at, updated_at")
       .eq("template_id", id)
       .is("deleted_at", null);
 

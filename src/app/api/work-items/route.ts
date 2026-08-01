@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logAudit } from "@/lib/audit/logger";
 import { validationMessage, workItemCreateSchema } from "@/lib/validation/schemas";
 import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { evaluateApprovalPolicy } from "@/lib/work-engine/approval-policy";
 
 /**
  * GET /api/work-items
@@ -28,6 +29,13 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get("priority");
     const assigneeId = searchParams.get("assignee_id");
     const projectId = searchParams.get("project_id");
+    const clientId = searchParams.get("client_id");
+    const entityId = searchParams.get("entity_id");
+    const sectionId = searchParams.get("section_id");
+    const riskLevel = searchParams.get("risk_level");
+    const periodFrom = searchParams.get("period_from");
+    const periodTo = searchParams.get("period_to");
+    const sourceType = searchParams.get("source_type");
     const search = searchParams.get("search");
     const overdueOnly = searchParams.get("overdue_only") === "true";
     const filter = searchParams.get("filter");
@@ -70,6 +78,13 @@ export async function GET(request: NextRequest) {
       .range(from, to);
 
     if (!isOrgWide) query = query.in("client_id", clientIds);
+    if (clientId && (isOrgWide || clientIds.includes(clientId))) query = query.eq("client_id", clientId);
+    if (entityId) query = query.eq("entity_id", entityId);
+    if (sectionId) query = query.eq("section_id", sectionId);
+    if (riskLevel) query = query.eq("risk_level", riskLevel);
+    if (periodFrom) query = query.gte("due_at", periodFrom);
+    if (periodTo) query = query.lte("due_at", periodTo);
+    if (sourceType) query = query.eq("source_type", sourceType);
 
     if (status) {
       query = query.eq("status", status);
@@ -148,9 +163,31 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
     const body = parsed.data;
 
-    const { assigneeId, assigneeRole, ...workItemFields } = body;
+    const { assigneeId, assigneeRole, duplicate_action: duplicateAction, business_period: businessPeriod, ...workItemFields } = body;
+    const amount = workItemFields.amount ?? null;
+    const currencyCode = workItemFields.currency_code ?? "IDR";
     if (!canAccessClient(auth.context, workItemFields.client_id)) {
       return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });
+    }
+
+    const duplicateResult = await admin.rpc("find_business_task_duplicates", {
+      p_organization_id: organizationId,
+      p_client_id: workItemFields.client_id,
+      p_type: workItemFields.type,
+      p_title: workItemFields.title,
+      p_business_period: businessPeriod ?? null,
+      p_entity_id: workItemFields.entity_id ?? null,
+      p_section_id: workItemFields.section_id ?? null,
+      p_exclude_work_item_id: null,
+    } as never);
+    const duplicateQuery = duplicateResult as unknown as { data: Array<Record<string, unknown>> | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
+    if (duplicateQuery.error) {
+      console.error("[POST /api/work-items] Duplicate check error:", { message: duplicateQuery.error.message, code: duplicateQuery.error.code, hint: duplicateQuery.error.hint, details: duplicateQuery.error.details });
+      return NextResponse.json({ error: "Gagal memeriksa pekerjaan serupa." }, { status: 500 });
+    }
+    const policy = amount === null ? null : await evaluateApprovalPolicy(admin, { organizationId, clientId: workItemFields.client_id, entityId: workItemFields.entity_id ?? null, workItemType: workItemFields.type, riskLevel: workItemFields.risk_level ?? "medium", priority: workItemFields.priority ?? "medium", amount, currencyCode });
+    if (duplicateQuery.data?.length && duplicateAction !== "allow") {
+      return NextResponse.json({ error: { code: "DUPLICATE_BUSINESS_TASK", message: "Ditemukan pekerjaan aktif dengan identitas bisnis yang sama." }, duplicates: duplicateQuery.data }, { status: 409 });
     }
 
     const insertData = {
@@ -170,6 +207,14 @@ export async function POST(request: NextRequest) {
       section_id: workItemFields.section_id ?? null,
       status: "draft" as const,
       created_by: userId,
+      business_period: businessPeriod ?? null,
+      amount,
+      currency_code: currencyCode,
+      approval_requirement: policy?.approval_requirement ?? "none",
+      required_approval_level: policy?.required_approval_level ?? 0,
+      approval_policy_id: policy?.policy_id ?? null,
+      approval_policy_version: policy?.policy_version ?? null,
+      policy_evaluated_at: policy ? new Date().toISOString() : null,
     };
 
     const role = assigneeId ? assigneeRole ?? "maker" : null;
@@ -193,7 +238,7 @@ export async function POST(request: NextRequest) {
           p_assignee_id: assigneeId,
           p_assignee_role: role,
         } as never)
-      : await admin.from("work_items").insert(insertData as never).select().single();
+      : await admin.from("work_items").insert({ ...insertData, duplicate_warning_acknowledged_at: duplicateAction === "allow" ? new Date().toISOString() : null, duplicate_warning_acknowledged_by: duplicateAction === "allow" ? userId : null } as never).select().single();
 
     const { data: rawWorkItem, error } = insertResult as unknown as {
       data: (typeof insertData & { id: string }) | (typeof insertData & { id: string })[] | null;

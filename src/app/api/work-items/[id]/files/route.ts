@@ -72,7 +72,7 @@ export async function GET(_request: NextRequest, context: Context) {
   const [filesResult, requirementsResult] = await Promise.all([
     auth.admin
       .from("work_item_files")
-      .select("id, work_item_id, file_id, evidence_requirement_id, purpose, created_at, files(id, filename, mime_type, size_bytes, storage_path, uploaded_by, created_at), evidence_requirements(id, name, is_required)")
+      .select("id, work_item_id, file_id, evidence_requirement_id, purpose, created_at, files(id, filename, mime_type, size_bytes, storage_path, uploaded_by, scan_status, created_at), evidence_requirements(id, name, is_required)")
       .eq("work_item_id", auth.id)
       .order("created_at", { ascending: false }),
     getRequirements(auth),
@@ -90,7 +90,7 @@ export async function GET(_request: NextRequest, context: Context) {
       files: rows.map((row) => {
         const file = row.files as Record<string, unknown> | null;
         const requirement = row.evidence_requirements as Record<string, unknown> | null;
-        return { ...row, files: file ? { id: file.id, filename: file.filename, mime_type: file.mime_type, size_bytes: file.size_bytes, created_at: file.created_at } : null, evidence_requirement: requirement };
+        return { ...row, files: file ? { id: file.id, filename: file.filename, mime_type: file.mime_type, size_bytes: file.size_bytes, scan_status: file.scan_status, created_at: file.created_at } : null, evidence_requirement: requirement };
       }),
       requirements: requirementsResult.data ?? [],
       required_total: required.length,
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest, context: Context) {
   const existingFile = await auth.admin.from("files").select("is_locked").eq("id", body.get("file_id")?.toString() ?? "").maybeSingle();
   const existingFileData = existingFile as unknown as { data: { is_locked: boolean } | null };
   if (existingFileData.data?.is_locked) return errorResponse("Evidence sudah terkunci.", 409);
-  const fileResult = await auth.admin.from("files").insert({ organization_id: auth.organizationId, storage_path: storagePath, filename, mime_type: mimeType, size_bytes: sizeBytes, checksum, uploaded_by: auth.userId } as never).select("id, filename, mime_type, size_bytes, checksum, created_at").single();
+  const fileResult = await auth.admin.from("files").insert({ organization_id: auth.organizationId, storage_path: storagePath, filename, mime_type: mimeType, size_bytes: sizeBytes, checksum, uploaded_by: auth.userId, scan_status: "pending" } as never).select("id, filename, mime_type, size_bytes, checksum, scan_status, created_at").single();
   const insertedFile = fileResult as unknown as { data: Record<string, unknown> | null; error: { message: string; code: string; hint: string; details: string } | null };
   if (insertedFile.error || !insertedFile.data) {
     if (uploaded) await auth.admin.storage.from(bucket).remove([storagePath]);
@@ -175,5 +175,11 @@ export async function POST(request: NextRequest, context: Context) {
     if (uploaded) await auth.admin.storage.from(bucket).remove([storagePath]);
     return errorResponse("Gagal menautkan file ke work item.");
   }
+  const domainResult = await auth.admin.from("domain_events").insert({ organization_id: auth.organizationId, event_type: "file_scan_requested", aggregate_type: "file", aggregate_id: insertedFile.data.id, payload: { file_id: insertedFile.data.id, work_item_id: auth.id } } as never).select("id").maybeSingle();
+  const domain = domainResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+  if (domain.error || !domain.data) return errorResponse("Gagal menjadwalkan pemeriksaan file.", 500);
+  const outboxResult = await auth.admin.from("outbox_events").insert({ organization_id: auth.organizationId, domain_event_id: domain.data.id, event_type: "file_scan_requested", payload: { file_id: insertedFile.data.id, organization_id: auth.organizationId }, max_retries: 5 } as never);
+  const outbox = outboxResult as unknown as { error: { message: string } | null };
+  if (outbox.error) return errorResponse("Gagal menjadwalkan pemeriksaan file.", 500);
   return NextResponse.json({ data: { ...linked.data, file: insertedFile.data } }, { status: 201 });
 }

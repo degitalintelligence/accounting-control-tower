@@ -19,6 +19,25 @@ export type WorkItemStatus =
 export type AssignmentRole = 'maker' | 'checker' | 'approver';
 export type ReviewDecision = 'approved' | 'rejected' | 'revision_required';
 export type SourceType = 'manual' | 'whatsapp_command' | 'whatsapp_ai' | 'template' | 'api';
+export type DuplicateAction = 'warn' | 'allow';
+
+export interface DuplicateBusinessTaskCandidate {
+  id: string;
+  client_id: string;
+  entity_id: string | null;
+  section_id: string | null;
+  type: WorkItemType;
+  title: string;
+  status: WorkItemStatus;
+  due_at: string | null;
+  business_period: string | null;
+}
+
+export interface DuplicateBusinessTaskWarning {
+  code: 'DUPLICATE_BUSINESS_TASK';
+  message: string;
+  duplicates: DuplicateBusinessTaskCandidate[];
+}
 
 // Status transition rules
 export interface StatusTransition {
@@ -53,6 +72,7 @@ export interface WorkItem {
   title: string;
   description: string | null;
   acceptance_criteria: string | null;
+  business_period?: string | null;
 
   // Status and flags
   status: WorkItemStatus;

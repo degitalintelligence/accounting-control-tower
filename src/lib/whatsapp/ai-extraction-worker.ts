@@ -27,6 +27,8 @@ type MessageContext = {
   sender_participant_id: string | null;
 };
 
+type AiIntake = { id: string; organization_id: string; client_id: string | null; created_by: string; source_text: string; status: string; attempt_count: number };
+
 const batchSize = 10;
 const promptVersion = "task-extraction-v1";
 
@@ -45,13 +47,14 @@ async function claimNext(admin: WorkerClient, workerId: string, eventType: strin
   return claimed.data?.[0] ?? null;
 }
 
-async function markCompleted(admin: WorkerClient, id: string, workerId: string) {
+async function markCompleted(admin: WorkerClient, row: JobRow, workerId: string) {
   const result = await admin
     .from("outbox_events")
     .update({ status: "processed", processed_at: new Date().toISOString(), next_retry_at: null, lease_expires_at: null, claimed_at: null, claimed_by: null, claim_token: null })
-    .eq("id", id)
+    .eq("id", row.id)
     .eq("status", "processing")
-    .eq("claimed_by", workerId);
+    .eq("claimed_by", workerId)
+    .eq("claim_token", row.claim_token);
   const update = result as unknown as { error: { message: string } | null };
   if (update.error) throw new Error(update.error.message);
 }
@@ -162,6 +165,24 @@ async function processJob(admin: WorkerClient, row: JobRow) {
   }
 }
 
+async function processAiIntake(admin: WorkerClient, row: JobRow) {
+  const intakeId = typeof row.payload.intake_id === "string" ? row.payload.intake_id : null;
+  if (!intakeId) throw new Error("Payload AI intake tidak lengkap.");
+  const loaded = await admin.from("ai_intake_items").select("id, organization_id, client_id, created_by, source_text, status, attempt_count").eq("id", intakeId).eq("organization_id", row.organization_id).is("deleted_at", null).maybeSingle();
+  const intake = loaded as unknown as { data: AiIntake | null; error: { message: string } | null };
+  if (intake.error) throw new Error(intake.error.message);
+  if (!intake.data || intake.data.status === "draft") return;
+  const claimed = await admin.from("ai_intake_items").update({ status: "processing", processing_started_at: new Date().toISOString(), attempt_count: (intake.data.attempt_count ?? 0) + 1, updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("organization_id", row.organization_id).eq("status", "queued");
+  const claimedData = claimed as unknown as { error: { message: string } | null };
+  if (claimedData.error) throw new Error(claimedData.error.message);
+  const extraction = await extractTasksFromMessage(intake.data.source_text);
+  const rows = extraction.tasks.map((task) => ({ organization_id: row.organization_id, intake_id: intakeId, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
+  if (rows.length) { const inserted = await admin.from("ai_draft_items").insert(rows as never); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
+  const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
+  const updatedData = updated as unknown as { error: { message: string } | null };
+  if (updatedData.error) throw new Error(updatedData.error.message);
+}
+
 async function enqueueReply(admin: WorkerClient, organizationId: string, messageId: string, chatId: string, text: string) {
   const result = await admin.rpc("enqueue_whatsapp_reply" as never, {
     p_organization_id: organizationId,
@@ -199,7 +220,7 @@ async function processReceivedMessage(admin: WorkerClient, row: JobRow) {
   const content = message.content;
   const command = parseExplicitCommand(content);
   const workItemCommand = parseExplicitWorkItemCommand(content);
-  if (content?.trim().startsWith("/task") && !command) {
+  if (content?.trim().toLowerCase().startsWith("/task") && !command) {
     await enqueueReply(admin, row.organization_id, message.id, chat.data.provider_group_id, explicitCommandHelp());
     return;
   }
@@ -223,12 +244,12 @@ async function processReceivedMessage(admin: WorkerClient, row: JobRow) {
     await enqueueReply(admin, row.organization_id, message.id, chat.data.provider_group_id, `Task dibuat: ${workItem.data.title}`);
     return;
   }
-  if (content?.trim().startsWith("/update") || content?.trim().startsWith("/submit") || content?.trim().startsWith("/status")) {
+  if (["/update", "/submit", "/status"].some((prefix) => content?.trim().toLowerCase().startsWith(prefix))) {
     if (!workItemCommand) {
       await enqueueReply(admin, row.organization_id, message.id, chat.data.provider_group_id, explicitCommandHelp());
       return;
     }
-    const sender = await resolveProfileName(admin, message.wa_group_id, message.sender_participant_id ?? "");
+    const sender = await resolveParticipant(admin, message.wa_group_id, message.sender_participant_id);
     if (sender.status !== "resolved" || !sender.profileId) {
       await enqueueReply(admin, row.organization_id, message.id, chat.data.provider_group_id, "Identitas WhatsApp belum terverifikasi.");
       return;
@@ -272,11 +293,17 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
   let processed = 0;
   let failed = 0;
   for (let index = 0; index < batchSize; index += 1) {
+    const row = await claimNext(admin, workerId, "ai_intake_requested");
+    if (!row) break;
+    try { await processAiIntake(admin, row); await markCompleted(admin, row, workerId); processed += 1; }
+    catch (error) { await markFailed(admin, row, workerId, error); failed += 1; console.error("[ai-extraction-worker] AI intake gagal:", { outboxId: row.id, message: errorMessage(error) }); }
+  }
+  for (let index = 0; index < batchSize; index += 1) {
     const row = await claimNext(admin, workerId, "ai_extraction_requested");
     if (!row) break;
     try {
       await processJob(admin, row);
-      await markCompleted(admin, row.id, workerId);
+      await markCompleted(admin, row, workerId);
       processed += 1;
     } catch (error) {
       await markFailed(admin, row, workerId, error);
@@ -289,7 +316,7 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
     if (!row) break;
     try {
       await processReceivedMessage(admin, row);
-      await markCompleted(admin, row.id, workerId);
+      await markCompleted(admin, row, workerId);
       processed += 1;
     } catch (error) {
       await markFailed(admin, row, workerId, error);
@@ -302,7 +329,7 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
     if (!row) break;
     try {
       await processReply(admin, row);
-      await markCompleted(admin, row.id, workerId);
+      await markCompleted(admin, row, workerId);
       processed += 1;
     } catch (error) {
       await markFailed(admin, row, workerId, error);

@@ -1,19 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  LayoutDashboard,
-  CheckSquare,
-  RotateCcw,
-  Grid3X3,
-  FileText,
-  Eye,
-  Shield,
-  MessageCircle,
-  Users,
-  Building2,
-  Settings,
   ChevronDown,
   LogOut,
 } from "lucide-react";
@@ -21,36 +10,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/actions/auth";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badge?: number;
-  badgeVariant?: "default" | "amber";
-}
-
-const mainNav: NavItem[] = [
-  { label: "Ringkasan", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Pekerjaan saya", href: "/work-items", icon: CheckSquare },
-  { label: "Pekerjaan rutin", href: "/work-items?type=routine", icon: RotateCcw },
-  { label: "Proyek", href: "/projects", icon: Grid3X3 },
-  { label: "Laporan", href: "/reports", icon: FileText },
-];
-
-const controlNav: NavItem[] = [
-  { label: "Antrean review", href: "/work-items?filter=review", icon: Eye },
-  { label: "Audit SOP", href: "/templates", icon: Shield },
-  { label: "Checklist", href: "/checklists", icon: CheckSquare },
-  { label: "Kotak masuk WhatsApp", href: "/wa-inbox", icon: MessageCircle, badgeVariant: "amber" },
-];
-
-const manageNav: NavItem[] = [
-  { label: "Tim & beban kerja", href: "/settings/workload", icon: Users },
-  { label: "Klien", href: "/settings/clients", icon: Building2 },
-  { label: "Pengaturan", href: "/settings", icon: Settings },
-  { label: "Administrasi", href: "/settings/administration", icon: Shield },
-];
+import { isNavigationItemActive, navigationItems } from "@/lib/navigation";
 
 interface AppSidebarProps {
   open: boolean;
@@ -59,6 +19,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
 
   const initials = user?.name
@@ -119,38 +80,17 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
 
         {/* Navigation */}
         <nav className="scrollbar-subtle flex flex-1 flex-col gap-0.5 overflow-y-auto">
-          {mainNav.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(pathname, item.href)}
-              onClick={onClose}
-            />
-          ))}
+          {navigationItems.filter((item) => item.section === "main").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
 
           <div className="px-2.5 pb-1.5 pt-[18px] text-[10px] font-bold tracking-[.14em] text-slate-400">
             KONTROL
           </div>
-          {controlNav.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(pathname, item.href)}
-              onClick={onClose}
-            />
-          ))}
+          {navigationItems.filter((item) => item.section === "control").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
 
           <div className="px-2.5 pb-1.5 pt-[18px] text-[10px] font-bold tracking-[.14em] text-slate-400">
             KELOLA
           </div>
-          {manageNav.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(pathname, item.href)}
-              onClick={onClose}
-            />
-          ))}
+          {navigationItems.filter((item) => item.section === "manage").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
         </nav>
 
         <div className="mt-3.5 flex items-center gap-[9px] border-t border-white/[.08] pt-3.5">
@@ -186,7 +126,7 @@ function NavLink({
   active,
   onClick,
 }: {
-  item: NavItem;
+  item: (typeof navigationItems)[number];
   active: boolean;
   onClick: () => void;
 }) {
@@ -217,7 +157,3 @@ function NavLink({
   );
 }
 
-function isActive(pathname: string, href: string) {
-  const cleanHref = href.split("?")[0];
-  return pathname === cleanHref || pathname.startsWith(cleanHref + "/");
-}

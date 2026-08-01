@@ -12,7 +12,7 @@ import { ClientSelect } from "@/components/shared/client-select";
 interface WaInboxItemProps {
   item: WaInboxItemData;
   busy?: boolean;
-  onConfirm: (id: string, clientId?: string) => void;
+  onConfirm: (id: string, clientId?: string, duplicateAction?: "warn" | "allow") => Promise<{ duplicateWarning: WaInboxItemData["duplicateWarning"] }>;
   onReject: (id: string) => void;
 }
 
@@ -47,6 +47,7 @@ function ConfidenceBar({ value }: { value: number }) {
 export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInboxItemProps) {
   const isSuggestion = item.type === "suggestion";
   const [clientId, setClientId] = useState(item.suggestedClientId);
+  const [duplicateWarning, setDuplicateWarning] = useState(item.duplicateWarning);
 
   return (
     <Card className="border-slate-200 bg-white shadow-sm">
@@ -88,6 +89,7 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               <div><span className="block text-slate-400">Keyakinan AI</span><ConfidenceBar value={item.confidence} /></div>
             </div>
             <ClientSelect id={`wa-client-${item.id}`} value={clientId || item.suggestedClientId} onChange={setClientId} />
+            {duplicateWarning && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="font-semibold">Pekerjaan aktif yang sama ditemukan</p><ul className="mt-2 list-disc pl-5">{duplicateWarning.duplicates.map((duplicate) => <li key={duplicate.id}>{duplicate.title} — {duplicate.status}</li>)}</ul></div>}
           </div>
         ) : (
           <p className="text-sm text-slate-500">Pesan ini belum menghasilkan saran work item.</p>
@@ -98,8 +100,8 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
             <Button variant="outline" size="sm" disabled={busy} onClick={() => onReject(item.id)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
               <X /> Tolak
             </Button>
-              <Button size="sm" disabled={busy || !(clientId || item.suggestedClientId)} onClick={() => onConfirm(item.id, clientId || item.suggestedClientId)} className="bg-emerald-600 text-white hover:bg-emerald-700">
-              <Check /> Konfirmasi & buat tugas
+              <Button size="sm" disabled={busy || !(clientId || item.suggestedClientId)} onClick={async () => { const result = await onConfirm(item.id, clientId || item.suggestedClientId, duplicateWarning ? "allow" : "warn"); setDuplicateWarning(result.duplicateWarning); }} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <Check /> {duplicateWarning ? "Tetap buat pekerjaan" : "Konfirmasi & buat tugas"}
             </Button>
           </div>
         )}

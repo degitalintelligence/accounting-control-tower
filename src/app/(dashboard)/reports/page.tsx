@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, ClipboardList } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -19,39 +20,46 @@ export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  async function loadReports() {
+    setError(null);
+    try {
+      const response = await fetch("/api/reports", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "Gagal memuat laporan.");
+      setData(body);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Gagal memuat laporan.");
+    }
+  }
+
   useEffect(() => {
-    fetch("/api/reports")
-      .then(async (response) => {
-        if (!response.ok) throw new Error((await response.json()).error ?? "Gagal memuat laporan.");
-        return response.json();
-      })
-      .then(setData)
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Gagal memuat laporan."));
+    const timer = window.setTimeout(() => { void loadReports(); }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const summaryCards = data ? [
     [ClipboardList, "Total pekerjaan", data.summary.total, "text-blue-600", "bg-blue-50"],
     [Activity, "Sedang berjalan", data.summary.active, "text-amber-600", "bg-amber-50"],
     [CheckCircle2, "Selesai", data.summary.completed, "text-emerald-600", "bg-emerald-50"],
-    [AlertTriangle, "Overdue", data.summary.overdue, "text-red-600", "bg-red-50"],
-    [CheckCircle2, "Delivered", data.summary.delivered, "text-purple-600", "bg-purple-50"],
+    [AlertTriangle, "Terlambat", data.summary.overdue, "text-red-600", "bg-red-50"],
+    [CheckCircle2, "Terkirim", data.summary.delivered, "text-purple-600", "bg-purple-50"],
   ] as const : [];
 
   return (
     <main className="page-canvas">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-ink">Reports</h1>
+        <h1 className="text-xl font-semibold text-ink">Laporan</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">Ringkasan performa pekerjaan dan kontrol operasional</p>
       </div>
 
-      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="mb-4 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Laporan belum dapat dimuat.</p><p className="mt-1">{error}</p></div><Button type="button" variant="outline" onClick={() => void loadReports()} className="w-fit gap-2 border-red-200 bg-white text-red-700 hover:bg-red-100"><RefreshCw className="size-4" />Coba lagi</Button></div>}
       {!data && !error ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl" />)}</div> : data && (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {summaryCards.map(([Icon, label, value, iconColor, iconBg]) => (
               <Card key={label} className="gap-2 border-0 shadow-sm">
                 <CardContent className="flex items-center gap-3 p-4">
-                  <span className={`grid size-10 place-items-center rounded-lg ${iconBg}`}><Icon className={`size-5 ${iconColor}`} /></span>
+                  <span className={`grid size-10 place-items-center rounded-lg ${iconBg}`}><Icon aria-hidden="true" className={`size-5 ${iconColor}`} /></span>
                   <div><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-semibold text-slate-900">{value}</p></div>
                 </CardContent>
               </Card>
@@ -59,16 +67,16 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Lifecycle report</CardTitle></CardHeader><CardContent className="space-y-3">
-              {data.lifecycle.map((item) => <div key={item.stage} className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm"><span className="text-slate-600">{stageLabels[item.stage] ?? item.stage}</span><span className="font-semibold text-slate-900">{item.total}</span></div>)}
-            </CardContent></Card>
-            <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Versi template</CardTitle></CardHeader><CardContent className="space-y-3">
-              {data.versions.map((item) => <div key={item.version} className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{item.version}</span><span className="font-semibold text-slate-900">{item.completed}/{item.total}</span></div>)}
-            </CardContent></Card>
+            <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Tahap laporan</CardTitle></CardHeader><CardContent className="space-y-3">{data.lifecycle.length ? data.lifecycle.map((item) => <div key={item.stage} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{stageLabels[item.stage] ?? item.stage}</span><span className="font-semibold text-slate-900">{item.total}</span></div>) : <EmptyState text="Belum ada data tahap laporan." />}</CardContent></Card>
+            <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Versi template</CardTitle></CardHeader><CardContent className="space-y-3">{data.versions.length ? data.versions.map((item) => <div key={item.version} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{item.version}</span><span className="shrink-0 font-semibold text-slate-900">{item.completed}/{item.total}</span></div>) : <EmptyState text="Belum ada versi template." />}</CardContent></Card>
           </div>
-          <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Delivery</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-6 text-sm"><span>Delivered: <strong>{data.summary.delivered}</strong></span><span>Menunggu delivery: <strong>{data.summary.pending_delivery}</strong></span><span>On-time rate: <strong>{data.summary.on_time_rate}%</strong></span></CardContent></Card>
+          <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Pengiriman</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span>Terkirim: <strong>{data.summary.delivered}</strong></span><span>Menunggu pengiriman: <strong>{data.summary.pending_delivery}</strong></span><span>Tepat waktu: <strong>{data.summary.on_time_rate}%</strong></span></CardContent></Card>
         </div>
       )}
     </main>
   );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <p className="py-3 text-sm text-slate-500">{text}</p>;
 }

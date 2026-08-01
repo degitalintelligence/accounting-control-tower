@@ -26,9 +26,13 @@ export async function GET(request: NextRequest) {
   const ids = [...grouped.keys()];
   const profileResult = ids.length ? await admin.from("profiles").select("id, display_name, email, capacity_hours_per_week, max_active_work_items, workload_timezone").in("id", ids) : { data: [] };
   const profiles = (profileResult.data ?? []) as unknown as Array<{ id: string; display_name: string; email: string | null; capacity_hours_per_week: number; max_active_work_items: number; workload_timezone: string }>;
+  const leaveResult = ids.length ? await admin.from("planned_leaves").select("id, profile_id, start_date, end_date, status").eq("organization_id", organizationId).in("profile_id", ids).in("status", ["pending", "approved"]).is("deleted_at", null).gte("end_date", new Date().toISOString().slice(0, 10)) : { data: [] };
+  const leaves = (leaveResult.data ?? []) as unknown as Array<{ id: string; profile_id: string; start_date: string; end_date: string; status: string }>;
   return NextResponse.json({ data: [...grouped.values()].map((entry) => {
     const profile = profiles.find((item) => item.id === entry.profile_id) ?? null;
     const capacity = profile?.max_active_work_items ?? 0;
-    return { ...entry, profile, capacity_utilization: capacity ? Math.round((entry.active / capacity) * 100) : null, over_capacity: capacity > 0 && entry.active > capacity };
+    const profileLeaves = leaves.filter((leave) => leave.profile_id === entry.profile_id).sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const today = new Date().toISOString().slice(0, 10);
+    return { ...entry, profile, capacity_utilization: capacity ? Math.round((entry.active / capacity) * 100) : null, over_capacity: capacity > 0 && entry.active > capacity, availability: { is_on_leave_now: profileLeaves.some((leave) => leave.status === "approved" && leave.start_date <= today && leave.end_date >= today), next_leave_start: profileLeaves[0]?.start_date ?? null, next_leave_end: profileLeaves[0]?.end_date ?? null } };
   }) });
 }

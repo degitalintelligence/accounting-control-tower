@@ -7,6 +7,13 @@ interface WorkItemFilter {
   status?: WorkItemStatus;
   type?: WorkItemType;
   priority?: WorkItemPriority;
+  client_id?: string;
+  entity_id?: string;
+  section_id?: string;
+  risk_level?: string;
+  period_from?: string;
+  period_to?: string;
+  source_type?: string;
   search?: string;
   assignee_id?: string;
   overdue_only?: boolean;
@@ -35,6 +42,14 @@ export function useWorkItems(initialFilter: WorkItemFilter = {}): UseWorkItemsRe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilterState] = useState<WorkItemFilter>(initialFilter);
+  const initialFilterKey = JSON.stringify(initialFilter);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setFilterState((current) => (JSON.stringify(current) === initialFilterKey ? current : initialFilter));
+      setPage((current) => (current === (initialFilter.page ?? 1) ? current : initialFilter.page ?? 1));
+    });
+  }, [initialFilterKey, initialFilter]);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -45,6 +60,13 @@ export function useWorkItems(initialFilter: WorkItemFilter = {}): UseWorkItemsRe
       if (filter.status) params.set("status", filter.status);
       if (filter.type) params.set("type", filter.type);
       if (filter.priority) params.set("priority", filter.priority);
+      if (filter.client_id) params.set("client_id", filter.client_id);
+      if (filter.entity_id) params.set("entity_id", filter.entity_id);
+      if (filter.section_id) params.set("section_id", filter.section_id);
+      if (filter.risk_level) params.set("risk_level", filter.risk_level);
+      if (filter.period_from) params.set("period_from", filter.period_from);
+      if (filter.period_to) params.set("period_to", filter.period_to);
+      if (filter.source_type) params.set("source_type", filter.source_type);
       if (filter.search) params.set("search", filter.search);
       if (filter.assignee_id) params.set("assignee_id", filter.assignee_id);
       if (filter.overdue_only) params.set("overdue_only", "true");

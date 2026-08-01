@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { MilestoneList } from "@/components/projects/milestone-list";
 import { LinkWorkItemDialog } from "@/components/projects/link-work-item-dialog";
 import { StatusBadge } from "@/components/work-items/status-badge";
@@ -219,6 +220,9 @@ export default function ProjectDetailPage({
           <Button variant="outline" onClick={() => router.push("/projects")}>
             <ArrowLeft className="size-4" />
             Kembali ke Daftar
+          </Button>
+          <Button variant="outline" onClick={fetchProject}>
+            Coba Lagi
           </Button>
         </div>
       </>
@@ -460,7 +464,8 @@ export default function ProjectDetailPage({
                         item.status === "completed" || item.status === "approved";
 
                       return (
-                        <div
+                        <Link
+                          href={`/work-items/${item.id}`}
                           key={item.id}
                           className={cn(
                             "group flex items-start gap-3 rounded-lg border p-3 transition-colors cursor-pointer hover:border-slate-200",
@@ -468,7 +473,6 @@ export default function ProjectDetailPage({
                               ? "bg-emerald-50/30 border-emerald-100"
                               : "bg-white border-slate-100"
                           )}
-                          onClick={() => router.push(`/work-items/${item.id}`)}
                         >
                           <div className="mt-0.5 shrink-0">
                             {isCompleted ? (
@@ -520,7 +524,7 @@ export default function ProjectDetailPage({
                               )}
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>

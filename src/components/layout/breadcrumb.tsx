@@ -1,27 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-
-const labelMap: Record<string, string> = {
-  dashboard: "Overview",
-  "work-items": "Work Items",
-  projects: "Projects",
-  reports: "Reports",
-  templates: "Templates",
-  settings: "Settings",
-  "wa-inbox": "WhatsApp Inbox",
-};
+import { getNavigationItem } from "@/lib/navigation";
 
 export function Breadcrumb() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const segments = pathname.split("/").filter(Boolean);
 
   if (segments.length === 0) return null;
 
-  const crumbs = segments.map((seg, i) => ({
-    label: labelMap[seg] ?? decodeURIComponent(seg).replace(/-/g, " "),
+  const activeItem = getNavigationItem(pathname, searchParams.toString());
+  const resourceLabels: Record<string, string> = {
+    projects: "Proyek",
+    "work-items": "Pekerjaan",
+    templates: "Template",
+  };
+  const labels = segments.map((seg, i) => ({
+    label:
+      i === segments.length - 1 && i > 0 && resourceLabels[segments[i - 1]]
+        ? resourceLabels[segments[i - 1]]
+        : i === segments.length - 1 && activeItem
+          ? activeItem.label
+          : resourceLabels[seg] ?? decodeURIComponent(seg).replace(/-/g, " "),
     href: "/" + segments.slice(0, i + 1).join("/"),
     isLast: i === segments.length - 1,
   }));
@@ -34,7 +37,7 @@ export function Breadcrumb() {
         Home
       </Link>
       </li>
-      {crumbs.map((crumb) => (
+      {labels.map((crumb) => (
         <li key={crumb.href} className="flex items-center gap-1">
           <ChevronRight aria-hidden="true" className="size-3" />
           {crumb.isLast ? (

@@ -90,6 +90,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .select("id, project_id, name, description, due_date, sort_order, is_completed, completed_at")
       .eq("id", milestoneId)
       .eq("project_id", id)
+      .is("deleted_at", null)
       .single();
 
     const { data: existing, error: fetchError } = fetchResult as unknown as {
@@ -145,6 +146,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .from("milestones")
       .update(updateData as never)
       .eq("id", milestoneId)
+      .eq("project_id", id)
+      .is("deleted_at", null)
       .select()
       .single();
 
@@ -240,6 +243,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .select("id, name")
       .eq("id", milestoneId)
       .eq("project_id", id)
+      .is("deleted_at", null)
+      .is("deleted_at", null)
       .single();
 
     const { data: existing, error: fetchError } = fetchResult as unknown as {
@@ -256,8 +261,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const deleteResult = await admin
       .from("milestones")
-      .delete()
-      .eq("id", milestoneId);
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq("id", milestoneId)
+      .eq("project_id", id)
+      .is("deleted_at", null);
 
     const { error: deleteError } = deleteResult as unknown as {
       error: { message: string; code: string; hint: string; details: string } | null;

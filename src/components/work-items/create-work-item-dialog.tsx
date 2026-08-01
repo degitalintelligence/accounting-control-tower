@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { ClientSelect } from "@/components/shared/client-select";
+import type { DuplicateBusinessTaskCandidate } from "@/types/work-item";
 
 interface CreateWorkItemDialogProps {
   open: boolean;
@@ -54,6 +55,8 @@ export function CreateWorkItemDialog({
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateBusinessTaskCandidate[]>([]);
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
 
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -95,15 +98,25 @@ export function CreateWorkItemDialog({
       const res = await fetch("/api/work-items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, duplicate_action: allowDuplicate ? "allow" : "warn" }),
       });
 
+      if (res.status === 409) {
+        const data = await res.json().catch(() => null);
+        if (data?.error?.code === "DUPLICATE_BUSINESS_TASK") {
+          setDuplicates(data.duplicates ?? []);
+          setError("Pekerjaan aktif yang sama ditemukan. Periksa daftar sebelum melanjutkan.");
+          return;
+        }
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "Gagal membuat work item.");
       }
 
       setForm(INITIAL_FORM);
+      setDuplicates([]);
+      setAllowDuplicate(false);
       onOpenChange(false);
       onSuccess();
     } catch (err) {
@@ -121,6 +134,7 @@ export function CreateWorkItemDialog({
           <DialogDescription>
             Isi informasi dasar untuk membuat pekerjaan baru.
           </DialogDescription>
+          {duplicates.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="font-semibold">Pekerjaan serupa ditemukan</p><ul className="mt-2 list-disc pl-5">{duplicates.map((duplicate) => <li key={duplicate.id}>{duplicate.title} — {duplicate.status}</li>)}</ul><Button type="button" size="sm" className="mt-3" onClick={() => { setAllowDuplicate(true); setDuplicates([]); setError(null); }}>Tetap buat pekerjaan</Button></div>}
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

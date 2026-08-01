@@ -16,6 +16,7 @@ export interface WaInboxItemData {
   suggestedClientId: string;
   confidence: number;
   type: "suggestion" | "message";
+  duplicateWarning?: { code: "DUPLICATE_BUSINESS_TASK"; message: string; duplicates: Array<{ id: string; title: string; status: string; due_at: string | null; business_period: string | null }> };
 }
 
 type SuggestionResponse = {
@@ -66,6 +67,7 @@ async function readError(response: Response, fallback: string) {
   try {
     const body = (await response.json()) as { error?: unknown };
     if (typeof body.error === "string" && body.error.trim()) return body.error;
+    if (body.error && typeof body.error === "object" && "message" in body.error && typeof body.error.message === "string") return body.error.message;
   } catch {}
   return fallback;
 }
@@ -95,14 +97,19 @@ export function useWaInbox() {
     queueMicrotask(() => fetchItems());
   }, [fetchItems]);
 
-  const confirmSuggestion = useCallback(async (id: string, clientId?: string) => {
+  const confirmSuggestion = useCallback(async (id: string, clientId?: string, duplicateAction: "warn" | "allow" = "warn") => {
     const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(clientId ? { client_id: clientId } : {}),
+      body: JSON.stringify({ ...(clientId ? { client_id: clientId } : {}), duplicate_action: duplicateAction }),
     });
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null);
+      if (body?.error?.code === "DUPLICATE_BUSINESS_TASK") return { duplicateWarning: body };
+    }
     if (!response.ok) throw new Error(await readError(response, "Saran tugas belum dapat dikonfirmasi."));
     setItems((current) => current.filter((item) => item.id !== id));
+    return { duplicateWarning: null };
   }, []);
 
   const rejectSuggestion = useCallback(async (id: string) => {

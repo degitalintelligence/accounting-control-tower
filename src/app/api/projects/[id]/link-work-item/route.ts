@@ -63,14 +63,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Validasi project exists dan milik org
     const projResult = await admin
       .from("projects")
-      .select(`id, work_items!inner(organization_id, deleted_at)`)
+      .select("id, organization_id, client_id")
       .eq("id", id)
-      .eq("work_items.organization_id", organizationId)
-      .is("work_items.deleted_at", null)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
       .single();
 
     const { data: project, error: projError } = projResult as unknown as {
-      data: { id: string } | null;
+      data: { id: string; organization_id: string; client_id: string } | null;
       error: { message: string } | null;
     };
 
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Validasi work_item exists dan milik org yang sama
     const wiResult = await admin
       .from("work_items")
-      .select("id, organization_id, project_id, title")
+      .select("id, organization_id, client_id, project_id, title")
       .eq("id", work_item_id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
@@ -104,6 +104,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       data: {
         id: string;
         organization_id: string;
+        client_id: string;
         project_id: string | null;
         title: string;
       } | null;
@@ -114,6 +115,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { error: "Work item tidak ditemukan atau bukan milik organisasi ini." },
         { status: 404 }
+      );
+    }
+
+    if (workItem.client_id !== project.client_id) {
+      return NextResponse.json(
+        { error: "Work item harus berasal dari client yang sama dengan project." },
+        { status: 409 }
       );
     }
 

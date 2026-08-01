@@ -57,6 +57,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = request.nextUrl;
+    if (searchParams.get("options") === "true") {
+      const clientId = searchParams.get("client_id");
+      if (!clientId) return NextResponse.json({ data: [] });
+      if (!isOrgWide && !clientIds.includes(clientId)) return NextResponse.json({ error: "Client tidak berada dalam scope user." }, { status: 403 });
+      const options = await admin.from("projects").select("id, objective, work_item_id, work_items!inner(title, client_id, organization_id, deleted_at)").eq("work_items.organization_id", organizationId).eq("work_items.client_id", clientId).is("work_items.deleted_at", null).order("created_at", { ascending: false }).limit(100);
+      const optionData = options as unknown as { data: Array<{ id: string; objective: string | null; work_item_id: string; work_items: { title: string; client_id: string; organization_id: string; deleted_at: string | null } }> | null; error: { message: string } | null };
+      if (optionData.error) return NextResponse.json({ error: "Gagal memuat project." }, { status: 500 });
+      return NextResponse.json({ data: (optionData.data ?? []).map((project) => ({ id: project.id, name: project.objective || project.work_items.title, client_id: project.work_items.client_id })) });
+    }
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const limit = Math.min(
       100,

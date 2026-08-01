@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthContext, canAccessOptionalClient, canManageOrganization } from "@/lib/authorization";
 import { getWahaQr, getWahaSessionStatus, startWahaSession } from "@/lib/whatsapp/adapter";
+import { logAudit } from "@/lib/audit/logger";
 
 const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
 
@@ -53,9 +54,22 @@ export async function POST(request: Request) {
   const body = await request.json() as { action?: string; id?: string; connection_id?: string; wa_group_id?: string; client_id?: string | null; provider?: string; session_id?: string | null; status?: string; provider_group_id?: string; group_name?: string | null; provider_participant_id?: string; phone?: string | null; display_name?: string | null; profile_id?: string | null; is_verified?: boolean };
   const { admin, organizationId, userId } = auth.context;
   const db = admin as unknown as SupabaseClient;
+  if (body.action === "retire") {
+    if (!body.id) return NextResponse.json({ error: "Connection wajib dipilih." }, { status: 400 });
+    const orgManager = auth.context.memberships.find((item) => item.client_id === null);
+    if (!canManageOrganization(orgManager?.role)) return NextResponse.json({ error: "Retire connection hanya tersedia untuk manager organisasi." }, { status: 403 });
+    const existing = await db.from("integration_connections").select("id, provider, session_id, status, retired_at").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
+    if (existing.error || !existing.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    const result = await db.rpc("retire_whatsapp_connection" as never, { p_connection_id: body.id, p_organization_id: organizationId, p_actor_id: userId } as never);
+    const retired = result as unknown as { data: { id: string; provider: string; session_id: string | null; status: string; retired_at: string | null } | null; error: { message: string; code?: string } | null };
+    if (retired.error || !retired.data) return NextResponse.json({ error: retired.error?.code === "P0002" ? "Connection tidak ditemukan." : retired.error?.message ?? "Connection gagal dinonaktifkan." }, { status: retired.error?.code === "P0002" ? 404 : 400 });
+    await logAudit(admin, { organizationId, actorId: userId, action: "whatsapp_connection.retired", entityType: "integration_connection", entityId: retired.data.id, oldValue: { provider: existing.data.provider, session_id: existing.data.session_id, status: existing.data.status }, newValue: { status: retired.data.status, retired_at: retired.data.retired_at }, metadata: { related_groups_deactivated: true } });
+    return NextResponse.json(retired.data);
+  }
   if (body.action === "start" && body.id) {
-    const connection = await db.from("integration_connections").select("id, provider, session_id").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
+    const connection = await db.from("integration_connections").select("id, provider, session_id, status").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
     if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (connection.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired." }, { status: 409 });
     if (connection.data.provider !== "waha" || !connection.data.session_id) return NextResponse.json({ error: "Connection WAHA belum memiliki session." }, { status: 400 });
     try {
       await startWahaSession(connection.data.session_id);
@@ -68,14 +82,24 @@ export async function POST(request: Request) {
     }
   }
   if (body.action === "connection") {
-    const values = { organization_id: organizationId, provider: body.provider ?? "waha", session_id: body.session_id ?? null, status: body.status ?? "disconnected", config: {}, updated_at: new Date().toISOString() };
+    const provider = body.provider?.trim() || "waha";
+    const sessionId = body.session_id?.trim() || null;
+    const values = { organization_id: organizationId, provider, session_id: sessionId, status: body.status ?? "disconnected", config: {}, updated_at: new Date().toISOString() };
+    if (!body.id && !sessionId) return NextResponse.json({ error: "Session ID wajib diisi." }, { status: 400 });
+    if (body.id) {
+      const current = await db.from("integration_connections").select("status").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
+      if (current.error || !current.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+      if (current.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat diaktifkan kembali." }, { status: 409 });
+    }
     const result = body.id ? await db.from("integration_connections").update(values).eq("id", body.id).eq("organization_id", organizationId).select("id, provider, session_id, status, config, last_health_check_at, created_at, updated_at").single() : await db.from("integration_connections").insert(values).select("id, provider, session_id, status, config, last_health_check_at, created_at, updated_at").single();
-    if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
+    if (result.error) return NextResponse.json({ error: result.error.code === "23505" ? "Provider dan session ID sudah terdaftar di tenant ini." : result.error.message }, { status: result.error.code === "23505" ? 409 : 400 });
     return NextResponse.json(result.data, { status: body.id ? 200 : 201 });
   }
   if (body.action === "group") {
     if (!body.connection_id || !body.provider_group_id) return NextResponse.json({ error: "Connection dan provider group wajib diisi." }, { status: 400 });
     if (!canAccessOptionalClient(auth.context, body.client_id)) return NextResponse.json({ error: "Client tidak dapat diakses." }, { status: 403 });
+    const connection = await db.from("integration_connections").select("id").eq("id", body.connection_id).eq("organization_id", organizationId).maybeSingle();
+    if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak dapat diakses." }, { status: 403 });
     const values = { connection_id: body.connection_id, organization_id: organizationId, client_id: body.client_id ?? null, provider_group_id: body.provider_group_id, group_name: body.group_name ?? null, is_active: body.is_verified === true, activated_by: body.is_verified === true ? userId : null, activated_at: body.is_verified === true ? new Date().toISOString() : null };
     const result = body.id ? await db.from("wa_groups").update(values).eq("id", body.id).eq("organization_id", organizationId).select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").single() : await db.from("wa_groups").insert(values).select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").single();
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
@@ -87,7 +111,7 @@ export async function POST(request: Request) {
     if (group.error || !group.data || !canAccessOptionalClient(auth.context, group.data.client_id)) return NextResponse.json({ error: "Group tidak dapat diakses." }, { status: 403 });
     const member = await db.from("memberships").select("profile_id").eq("organization_id", organizationId).eq("profile_id", body.profile_id).eq("is_active", true).limit(1).maybeSingle();
     if (!member.data) return NextResponse.json({ error: "Profile bukan anggota tenant." }, { status: 400 });
-    const result = body.id ? await db.from("wa_participant_mappings").update({ profile_id: body.profile_id, phone: body.phone ?? null, display_name: body.display_name ?? null, is_verified: body.is_verified ?? false }).eq("id", body.id).eq("wa_group_id", body.wa_group_id).select("id, wa_group_id, provider_participant_id, phone, display_name, profile_id, is_verified, created_at").single() : await db.from("wa_participant_mappings").insert({ wa_group_id: body.wa_group_id, provider_participant_id: body.provider_participant_id, phone: body.phone ?? null, display_name: body.display_name ?? null, is_verified: body.is_verified ?? false }).select("id, wa_group_id, provider_participant_id, phone, display_name, profile_id, is_verified, created_at").single();
+    const result = body.id ? await db.from("wa_participant_mappings").update({ profile_id: body.profile_id, phone: body.phone ?? null, display_name: body.display_name ?? null, is_verified: body.is_verified ?? false }).eq("id", body.id).eq("wa_group_id", body.wa_group_id).select("id, wa_group_id, provider_participant_id, phone, display_name, profile_id, is_verified, created_at").single() : await db.from("wa_participant_mappings").insert({ wa_group_id: body.wa_group_id, provider_participant_id: body.provider_participant_id, phone: body.phone ?? null, display_name: body.display_name ?? null, profile_id: body.profile_id, is_verified: body.is_verified ?? false }).select("id, wa_group_id, provider_participant_id, phone, display_name, profile_id, is_verified, created_at").single();
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
     return NextResponse.json(result.data, { status: body.id ? 200 : 201 });
   }

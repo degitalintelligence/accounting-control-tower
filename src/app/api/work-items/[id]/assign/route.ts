@@ -6,6 +6,7 @@ import { publishNotificationEvent } from "@/lib/notification";
 import { ensureChecklistResponses } from "@/lib/checklists";
 import type { AssignmentRole } from "@/types/work-item";
 import { assignmentSchema, validationMessage } from "@/lib/validation/schemas";
+import { validateAssigneeAvailability } from "@/lib/work-engine/planned-leave";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       profile_id: requestBody.profile_id === "self" ? user.id : requestBody.profile_id,
     });
     if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
-    const { profile_id, role } = parsed.data;
+    const { profile_id, role, leave_warning_acknowledged } = parsed.data;
     const assignmentRole = role as AssignmentRole;
 
     const memberResult = await admin
@@ -88,14 +89,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Verifikasi work item exists dan milik org yang sama
     const wiResult = await admin
       .from("work_items")
-      .select("id, organization_id, status")
+      .select("id, organization_id, client_id, entity_id, type, risk_level, priority, amount, currency_code, required_approval_level, status, start_at, due_at")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .single();
 
     const { data: workItem, error: wiError } = wiResult as unknown as {
-      data: { id: string; organization_id: string; status: string } | null;
+      data: { id: string; organization_id: string; client_id: string | null; entity_id: string | null; type: string; risk_level: string; priority: string; amount: number | null; currency_code: string; required_approval_level: number; status: string; start_at: string | null; due_at: string | null } | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
 
@@ -104,6 +105,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { error: "Work item tidak ditemukan." },
         { status: 404 }
       );
+    }
+
+    const targetMatchesScope = memberData.data?.some((member) => member.client_id === null || member.client_id === workItem.client_id);
+    if (!targetMatchesScope) return NextResponse.json({ error: "Pengguna tidak memiliki akses ke client work item." }, { status: 403 });
+
+    const availability = await validateAssigneeAvailability(admin, organizationId, profile_id, (workItem as unknown as { start_at?: string | null }).start_at ?? null, (workItem as unknown as { due_at?: string | null }).due_at ?? null, leave_warning_acknowledged === true);
+    if (!availability.valid) return NextResponse.json({ error: availability.warning ?? "Assignment bertabrakan dengan planned leave yang disetujui.", code: availability.code, conflicts: availability.conflicts }, { status: 409 });
+
+    let authorization = { authorization_source: "direct", authority_id: null as string | null, delegation_id: null as string | null, principal_id: null as string | null, authorization_limit: null as number | null, authorization_level: null as number | null, snapshot: {} as Record<string, unknown> };
+    if (workItem.amount !== null) {
+      const authorityResult = await admin.rpc("resolve_effective_authority" as never, { p_organization_id: organizationId, p_client_id: workItem.client_id, p_entity_id: workItem.entity_id, p_profile_id: profile_id, p_role: assignmentRole, p_amount: workItem.amount, p_currency_code: workItem.currency_code, p_risk_level: workItem.risk_level, p_approval_level: workItem.required_approval_level } as never);
+      const authority = authorityResult as unknown as { data: Array<{ authorized: boolean; authorization_source: string; authority_id: string | null; delegation_id: string | null; principal_id: string | null; authorization_limit: number | null; authorization_level: number | null; snapshot: Record<string, unknown> }> | null; error: { message: string } | null };
+      const resolved = authority.data?.[0];
+      if (authority.error || !resolved?.authorized) return NextResponse.json({ error: "Assignee tidak memiliki kewenangan untuk nilai materialitas work item.", code: "INSUFFICIENT_APPROVAL_AUTHORITY" }, { status: 403 });
+      authorization = resolved;
     }
 
     const validation = await validateAssignment(id, profile_id, assignmentRole);
@@ -116,6 +132,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
         profile_id,
         role: assignmentRole,
         assigned_by: user.id,
+        authorization_source: authorization.authorization_source,
+        authority_id: authorization.authority_id,
+        delegation_id: authorization.delegation_id,
+        delegation_principal_id: authorization.principal_id,
+        authorization_limit: authorization.authorization_limit,
+        authorization_level: authorization.authorization_level,
+        authorization_snapshot: authorization.snapshot,
       } as never)
       .select()
       .single();

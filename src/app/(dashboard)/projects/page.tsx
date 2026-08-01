@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useCallback, useMemo } from "react";
+import { Suspense, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ProjectCard } from "@/components/projects/project-card";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
@@ -38,6 +38,7 @@ function ProjectsPageContent() {
   const searchParams = useSearchParams();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
 
   const status = searchParams.get("status") ?? undefined;
   const search = searchParams.get("search") ?? undefined;
@@ -128,7 +129,11 @@ function ProjectsPageContent() {
               <Input
                 placeholder="Cari proyek..."
                 defaultValue={search}
-                onChange={(e) => updateParam("search", e.currentTarget.value)}
+                onChange={(e) => {
+                  if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+                  const value = e.currentTarget.value;
+                  searchTimeoutRef.current = window.setTimeout(() => updateParam("search", value), 350);
+                }}
                 className="pl-8 h-8 text-sm bg-white"
               />
             </div>
@@ -155,7 +160,7 @@ function ProjectsPageContent() {
 
         {/* Results count */}
         {!loading && (
-          <p className="text-[12px] text-slate-400">
+          <p className="text-sm text-slate-400">
             {total} proyek ditemukan
           </p>
         )}

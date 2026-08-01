@@ -203,7 +203,7 @@ function HistoryTimeline({ entries }: { entries: AuditLogEntry[] }) {
     <div className="relative pl-6">
       <div className="absolute left-[9px] top-2 bottom-2 w-px bg-slate-200" />
 
-      <div className="space-y-4">
+      <div className="mx-auto w-full max-w-[1600px] space-y-4 px-4 pb-8 sm:px-6 lg:px-8">
         {entries.map((entry, i) => {
           const colorClass = getActionColor(entry.action);
           const dotColor = getActionDotColor(entry.action);
@@ -442,6 +442,9 @@ export default function WorkItemDetailPage({
             <ArrowLeft className="size-4" />
             Kembali ke Daftar
           </Button>
+          <Button variant="outline" onClick={fetchData}>
+            Coba Lagi
+          </Button>
         </div>
       </>
     );
@@ -489,7 +492,7 @@ export default function WorkItemDetailPage({
             currentStatus={workItem.status}
             onTransitionComplete={fetchData}
           />
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit</Button>
+        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Ubah</Button>
         </div>
 
         {/* Content: main + sidebar */}
@@ -498,7 +501,7 @@ export default function WorkItemDetailPage({
           <div>
             <Tabs defaultValue="overview">
               <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="overview">Ringkasan</TabsTrigger>
               <TabsTrigger value="checklist">Checklist SOP</TabsTrigger>
                 <TabsTrigger value="evidence">Evidence</TabsTrigger>
                 <TabsTrigger value="review">Review</TabsTrigger>

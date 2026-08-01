@@ -3,32 +3,29 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Building2, Loader2, Settings, Users } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-const tabs = [
-  { label: "General", href: "/settings", icon: Settings },
-  { label: "Members", href: "/settings/members", icon: Users },
-  { label: "Clients", href: "/settings/clients", icon: Building2 },
-  { label: "Notifikasi", href: "/settings/notifications", icon: Bell },
-];
+import { settingsTabs } from "@/lib/navigation";
 
 export default function SettingsPage() {
   const pathname = usePathname();
   const [form, setForm] = React.useState({ name: "", slug: "", timezone: "Asia/Jakarta", currency: "IDR" });
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => { void fetch("/api/settings/organization").then((response) => response.json()).then((body) => { const settings = body.data?.settings ?? {}; setForm({ name: body.data?.name ?? "", slug: body.data?.slug ?? "", timezone: settings.timezone ?? "Asia/Jakarta", currency: settings.currency ?? "IDR" }); }); }, []);
+  async function loadSettings() { setLoading(true); setError(null); try { const response = await fetch("/api/settings/organization", { cache: "no-store" }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? "Pengaturan gagal dimuat."); const settings = body.data?.settings ?? {}; setForm({ name: body.data?.name ?? "", slug: body.data?.slug ?? "", timezone: settings.timezone ?? "Asia/Jakarta", currency: settings.currency ?? "IDR" }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Pengaturan gagal dimuat."); } finally { setLoading(false); } }
+  React.useEffect(() => { const timer = window.setTimeout(() => { void loadSettings(); }, 0); return () => window.clearTimeout(timer); }, []);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setSaving(true); setMessage(null);
-    const response = await fetch("/api/settings/organization", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-    setMessage(response.ok ? "Pengaturan tersimpan." : "Pengaturan gagal disimpan."); setSaving(false);
+    event.preventDefault(); setSaving(true); setMessage(null); setError(null);
+    try { const response = await fetch("/api/settings/organization", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? "Pengaturan gagal disimpan."); setMessage("Pengaturan tersimpan."); } catch (cause) { setError(cause instanceof Error ? cause.message : "Pengaturan gagal disimpan."); } finally { setSaving(false); }
   }
 
   return (
-    <main className="flex-1 p-6 bg-[#f3f5f2] min-h-screen">
+    <main className="flex-1 min-h-screen bg-[#f3f5f2] p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="text-[20px] font-semibold text-[#18201f]">Settings</h1>
         <p className="text-[13px] text-[#8b9492] mt-0.5">
@@ -37,8 +34,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200 mb-6">
-        {tabs.map((tab) => {
+      <nav aria-label="Navigasi pengaturan" className="mb-6 flex max-w-full gap-1 overflow-x-auto border-b border-slate-200">
+        {settingsTabs.map((tab) => {
           const isActive =
             tab.href === "/settings"
               ? pathname === "/settings"
@@ -55,12 +52,12 @@ export default function SettingsPage() {
                   : "border-transparent text-[#8b9492] hover:text-[#18201f]"
               )}
             >
-              <tab.icon className="size-3.5" />
+              <tab.icon aria-hidden="true" className="size-3.5" />
               {tab.label}
             </Link>
           );
         })}
-      </div>
+      </nav>
 
       {/* General Settings Content */}
       <div className="max-w-2xl">
@@ -69,31 +66,32 @@ export default function SettingsPage() {
             Informasi Organisasi
           </h2>
 
-          <form onSubmit={save} className="space-y-4">
+          {error && <div role="alert" className="mb-4 flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><Button type="button" variant="outline" onClick={() => void loadSettings()} className="w-fit gap-2 border-red-200 bg-white text-red-700"><RefreshCw className="size-4" />Coba lagi</Button></div>}
+          {loading ? <div className="py-8 text-sm text-slate-500">Memuat pengaturan…</div> : <form onSubmit={save} className="space-y-4">
             <div>
-              <label className="block text-[12px] font-medium text-[#8b9492] mb-1">
+              <label htmlFor="organization-name" className="block text-[12px] font-medium text-[#8b9492] mb-1">
                 Nama Organisasi
               </label>
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+              <input id="organization-name" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#8b9492] mb-1">
+              <label htmlFor="organization-slug" className="block text-[12px] font-medium text-[#8b9492] mb-1">
                 Slug
               </label>
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} required />
+              <input id="organization-slug" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} required />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#8b9492] mb-1">
+              <label htmlFor="organization-timezone" className="block text-[12px] font-medium text-[#8b9492] mb-1">
                 Timezone
               </label>
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })} required />
+              <input id="organization-timezone" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })} required />
             </div>
-            <div><label className="block text-[12px] font-medium text-[#8b9492] mb-1">Mata uang</label><input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} required /></div>
+            <div><label htmlFor="organization-currency" className="block text-[12px] font-medium text-[#8b9492] mb-1">Mata uang</label><input id="organization-currency" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} required /></div>
             <button disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600">{saving && <Loader2 className="size-3.5 animate-spin" />}Simpan perubahan</button>
             {message && <p className="text-xs text-emerald-600">{message}</p>}
-          </form>
+          </form>}
 
           <p className="mt-4 text-[11px] text-[#8b9492]">
             Perubahan nama dan konfigurasi berlaku untuk seluruh workspace.

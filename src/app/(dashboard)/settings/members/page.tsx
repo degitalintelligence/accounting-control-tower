@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Settings, Users, UserPlus, Loader2, Power, Pencil } from "lucide-react";
+import { UserPlus, Loader2, Power, Pencil, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { settingsTabs } from "@/lib/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -33,12 +35,6 @@ const roleColors: Record<string, string> = {
   finance_staff: "bg-[#6b7280] text-white",
 };
 
-const tabs = [
-  { label: "General", href: "/settings", icon: Settings },
-  { label: "Members", href: "/settings/members", icon: Users },
-  { label: "Clients", href: "/settings/clients", icon: Building2 },
-];
-
 export default function MembersPage() {
   const pathname = usePathname();
   const [members, setMembers] = useState<Member[]>([]);
@@ -48,22 +44,21 @@ export default function MembersPage() {
   const [form, setForm] = useState({ email: "", display_name: "", role: "finance_staff", client_id: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchMembers() {
+  async function fetchMembers() {
+    setLoading(true); setError(null);
       try {
         const res = await fetch("/api/settings/members");
-        if (res.ok) {
-          const data = await res.json();
-          setMembers(data);
-        }
-      } catch {
-          setError("Daftar anggota gagal dimuat.");
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error ?? "Daftar anggota gagal dimuat.");
+        setMembers(data ?? []);
+      } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Daftar anggota gagal dimuat.");
       } finally {
         setLoading(false);
       }
-    }
-    fetchMembers();
-  }, []);
+  }
+
+  useEffect(() => { const timer = window.setTimeout(() => { void fetchMembers(); }, 0); return () => window.clearTimeout(timer); }, []);
 
   async function saveMember(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,16 +69,16 @@ export default function MembersPage() {
     const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!response.ok) { const result = await response.json().catch(() => null); setError(result?.error ?? "Perubahan gagal disimpan."); setSaving(false); return; }
     setForm({ email: "", display_name: "", role: "finance_staff", client_id: "" }); setEditingId(null);
-    const refreshed = await fetch("/api/settings/members"); setMembers(await refreshed.json()); setSaving(false);
+    await fetchMembers(); setSaving(false);
   }
 
   async function toggleMember(member: Member) {
     const response = await fetch(`/api/settings/members/${member.id}`, { method: member.is_active ? "DELETE" : "PATCH", headers: { "Content-Type": "application/json" }, body: member.is_active ? undefined : JSON.stringify({ is_active: true }) });
-    if (response.ok) { const refreshed = await fetch("/api/settings/members"); setMembers(await refreshed.json()); }
+    if (response.ok) await fetchMembers(); else setError("Status anggota gagal diperbarui.");
   }
 
   return (
-    <main className="flex-1 p-6 bg-[#f3f5f2] min-h-screen">
+    <main className="flex-1 min-h-screen bg-[#f3f5f2] p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="text-[20px] font-semibold text-[#18201f]">Settings</h1>
         <p className="text-[13px] text-[#8b9492] mt-0.5">
@@ -92,8 +87,8 @@ export default function MembersPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200 mb-6">
-        {tabs.map((tab) => {
+      <nav aria-label="Navigasi pengaturan" className="mb-6 flex max-w-full gap-1 overflow-x-auto border-b border-slate-200">
+        {settingsTabs.map((tab) => {
           const isActive =
             tab.href === "/settings"
               ? pathname === "/settings"
@@ -110,12 +105,12 @@ export default function MembersPage() {
                   : "border-transparent text-[#8b9492] hover:text-[#18201f]"
               )}
             >
-              <tab.icon className="size-3.5" />
+              <tab.icon aria-hidden="true" className="size-3.5" />
               {tab.label}
             </Link>
           );
         })}
-      </div>
+      </nav>
 
       {/* Members List */}
       <div className="max-w-3xl">
@@ -132,7 +127,7 @@ export default function MembersPage() {
             </div>
             <button type="button" onClick={() => { setEditingId(null); setForm({ email: "", display_name: "", role: "finance_staff", client_id: "" }); }} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600"><UserPlus className="size-3.5" />Undang anggota</button>
           </div>
-          {error && <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-xs text-red-600">{error}</p>}
+          {error && <div role="alert" className="flex flex-col gap-2 border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-600 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><Button type="button" variant="outline" onClick={() => void fetchMembers()} className="w-fit gap-2 border-red-200 bg-white text-red-700"><RefreshCw className="size-4" />Coba lagi</Button></div>}
 
           {/* List */}
           <div className="divide-y divide-slate-50">
@@ -155,7 +150,7 @@ export default function MembersPage() {
               members.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center gap-3 px-5 py-3.5"
+                  className="flex flex-wrap items-center gap-3 px-5 py-3.5"
                 >
                   {/* Avatar */}
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#e5e7eb] text-[11px] font-bold text-[#374151]">
@@ -174,7 +169,7 @@ export default function MembersPage() {
                     )}
                   </div>
 
-                  <span className={cn("mr-2 rounded-full px-2 py-0.5 text-[10px] font-semibold", member.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>{member.is_active ? "Aktif" : "Nonaktif"}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", member.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>{member.is_active ? "Aktif" : "Nonaktif"}</span>
                   <span
                     className={cn(
                       "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold",
@@ -193,9 +188,9 @@ export default function MembersPage() {
         <form onSubmit={saveMember} className="mt-5 rounded-[14px] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,.06)]">
           <h2 className="mb-4 text-[15px] font-semibold text-[#18201f]">{editingId ? "Edit anggota" : "Undang anggota baru"}</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-slate-700">Nama<input className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} required /></label>
-            {!editingId && <label className="text-xs font-medium text-slate-700">Email<input type="email" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>}
-            <label className="text-xs font-medium text-slate-700">Role<select className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="finance_staff">Finance Staff</option><option value="finance_manager">Finance Manager</option><option value="admin">Admin</option></select></label>
+            <label htmlFor="member-name" className="text-xs font-medium text-slate-700">Nama<input id="member-name" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} required /></label>
+            {!editingId && <label htmlFor="member-email" className="text-xs font-medium text-slate-700">Email<input id="member-email" type="email" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>}
+            <label htmlFor="member-role" className="text-xs font-medium text-slate-700">Peran<select id="member-role" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="finance_staff">Staf keuangan</option><option value="finance_manager">Manajer keuangan</option><option value="admin">Admin</option></select></label>
           </div>
           <div className="mt-4 flex gap-2"><button disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600">{saving && <Loader2 className="size-3.5 animate-spin" />}{editingId ? "Simpan" : "Kirim undangan"}</button>{editingId && <button type="button" onClick={() => setEditingId(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">Batal</button>}</div>
         </form>

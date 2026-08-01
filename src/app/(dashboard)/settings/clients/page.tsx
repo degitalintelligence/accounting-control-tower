@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, Loader2, Pencil, Plus, Settings, Users, Archive } from "lucide-react";
+import { Building2, Loader2, Pencil, Plus, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { notifyClientsUpdated, type ClientOption } from "@/hooks/use-clients";
 import { usePathname } from "next/navigation";
+import { settingsTabs } from "@/lib/navigation";
 
 type Client = ClientOption & {
   timezone: string;
@@ -16,12 +17,6 @@ type Client = ClientOption & {
   updated_at: string;
   deleted_at: string | null;
 };
-
-const tabs = [
-  { label: "General", href: "/settings", icon: Settings },
-  { label: "Members", href: "/settings/members", icon: Users },
-  { label: "Clients", href: "/settings/clients", icon: Building2 },
-];
 
 const emptyForm = { name: "", timezone: "Asia/Jakarta" };
 
@@ -100,7 +95,7 @@ export default function ClientsPage() {
         <p className="mt-0.5 text-[13px] text-[#8b9492]">Kelola pengaturan organisasi Anda</p>
       </div>
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200">
-        {tabs.map((tab) => {
+        {settingsTabs.map((tab) => {
           const active = tab.href === "/settings" ? pathname === tab.href : pathname.startsWith(tab.href);
           return <Link key={tab.href} href={tab.href} className={cn("flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-[13px] font-medium", active ? "border-[#18201f] text-[#18201f]" : "border-transparent text-[#8b9492] hover:text-[#18201f]")}><tab.icon className="size-3.5" />{tab.label}</Link>;
         })}

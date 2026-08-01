@@ -11,6 +11,7 @@ export async function POST(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   const requestBody = await _request.json().catch(() => ({}));
   const requestedClientId = typeof requestBody.client_id === "string" ? requestBody.client_id : null;
+  const duplicateAction = requestBody.duplicate_action === "allow" ? "allow" : "warn";
   const { user, organizationId, role, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
@@ -113,9 +114,16 @@ export async function POST(_request: Request, context: RouteContext) {
     p_organization_id: organizationId,
     p_confirmed_by: user.id,
     p_client_id: clientId,
+    p_duplicate_action: duplicateAction,
   } as never);
   const confirmed = result as unknown as { data: { suggestion_id: string; work_item_id: string }[] | null; error: unknown };
   if (confirmed.error || !confirmed.data?.[0]) {
+    const error = confirmed.error as { message?: string; details?: string } | null;
+    if (error?.message === "DUPLICATE_BUSINESS_TASK") {
+      let duplicates: unknown[] = [];
+      try { duplicates = JSON.parse(error.details ?? "[]") as unknown[]; } catch { duplicates = []; }
+      return NextResponse.json({ error: { code: "DUPLICATE_BUSINESS_TASK", message: "Ditemukan pekerjaan aktif dengan identitas bisnis yang sama." }, duplicates, next_action: "Kirim ulang dengan duplicate_action=allow setelah manager meninjau daftar." }, { status: 409 });
+    }
     console.error("[POST /api/wa-suggestions/:id/confirm] Supabase error:", suggestionError(confirmed.error));
     return NextResponse.json({ error: "Gagal mengonfirmasi suggestion." }, { status: 500 });
   }

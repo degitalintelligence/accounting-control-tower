@@ -13,7 +13,9 @@ export type ServerEnvName =
   | "RESEND_FROM_EMAIL"
   | "WAHA_BASE_URL"
   | "WAHA_SESSION"
-  | "WAHA_WEBHOOK_TOKEN";
+  | "WAHA_WEBHOOK_TOKEN"
+  | "FILE_SCANNER_URL"
+  | "FILE_SCANNER_TOKEN";
 
 export type ServerEnvValidation = {
   ok: boolean;

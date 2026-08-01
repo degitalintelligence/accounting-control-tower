@@ -40,26 +40,27 @@ async function getUserOrganizationId(
 async function validateProjectAccess(
   admin: ReturnType<typeof createServiceRoleClient>,
   projectId: string,
-  organizationId: string
+  organizationId: string,
+  clientIds: string[],
+  isOrgWide: boolean
 ): Promise<{ valid: boolean; error?: string }> {
   const result = await admin
     .from("projects")
-    .select(
-      `id, work_items!inner(organization_id, deleted_at)`
-    )
+    .select(`id, work_items!inner(organization_id, client_id, deleted_at)`)
     .eq("id", projectId)
     .eq("work_items.organization_id", organizationId)
     .is("work_items.deleted_at", null)
     .single();
 
   const { data, error } = result as unknown as {
-    data: { id: string } | null;
+    data: { id: string; work_items: { client_id: string | null } } | null;
     error: { message: string } | null;
   };
 
   if (error || !data) {
     return { valid: false, error: "Project tidak ditemukan." };
   }
+  if (!isOrgWide && data.work_items.client_id && !clientIds.includes(data.work_items.client_id)) return { valid: false, error: "Project tidak berada dalam scope akses user." };
 
   return { valid: true };
 }
@@ -91,7 +92,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     // Validasi project access
-    const access = await validateProjectAccess(admin, id, organizationId);
+    const memberships = await admin.from("memberships").select("client_id").eq("organization_id", organizationId).eq("profile_id", user.id).eq("is_active", true);
+    const clientIds = [...new Set((memberships.data ?? []).map((item: { client_id: string | null }) => item.client_id).filter((value: string | null): value is string => Boolean(value)))];
+    const access = await validateProjectAccess(admin, id, organizationId, clientIds, (memberships.data ?? []).some((item: { client_id: string | null }) => item.client_id === null));
     if (!access.valid) {
       return NextResponse.json({ error: access.error }, { status: 404 });
     }
@@ -102,6 +105,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         "id, project_id, name, description, due_date, sort_order, is_completed, completed_at, created_at"
       )
       .eq("project_id", id)
+      .is("deleted_at", null)
       .order("sort_order", { ascending: true });
 
     const { data, error, count } = milestonesResult as unknown as {
@@ -173,7 +177,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Validasi project access
-    const access = await validateProjectAccess(admin, id, organizationId);
+    const memberships = await admin.from("memberships").select("client_id").eq("organization_id", organizationId).eq("profile_id", user.id).eq("is_active", true);
+    const clientIds = [...new Set((memberships.data ?? []).map((item: { client_id: string | null }) => item.client_id).filter((value: string | null): value is string => Boolean(value)))];
+    const access = await validateProjectAccess(admin, id, organizationId, clientIds, (memberships.data ?? []).some((item: { client_id: string | null }) => item.client_id === null));
     if (!access.valid) {
       return NextResponse.json({ error: access.error }, { status: 404 });
     }

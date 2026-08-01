@@ -80,11 +80,18 @@ function getConfig() {
     ? timeoutValue
     : DEFAULT_TIMEOUT_MS;
 
+  const configuredBaseUrl = process.env.OPENROUTER_BASE_URL?.replace(/\/$/, "");
+  const baseUrl = configuredBaseUrl
+    ? configuredBaseUrl.endsWith("/chat/completions")
+      ? configuredBaseUrl
+      : `${configuredBaseUrl}/chat/completions`
+    : OPENROUTER_URL;
+
   return {
     apiKey,
     model,
     timeoutMs,
-    baseUrl: process.env.OPENROUTER_BASE_URL?.replace(/\/$/, "") || OPENROUTER_URL,
+    baseUrl,
   };
 }
 

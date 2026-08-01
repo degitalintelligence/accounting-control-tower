@@ -3,7 +3,7 @@
 import { Suspense, useState, useCallback, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { WorkItemFilters } from "@/components/work-items/work-item-filters";
-import { WorkItemCard } from "@/components/work-items/work-item-card";
+import { WorkItemView } from "@/components/work-items/work-item-view";
 import { CreateWorkItemDialog } from "@/components/work-items/create-work-item-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ function WorkItemsPageContent() {
   const search = searchParams.get("search") ?? undefined;
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
   const activeTab = searchParams.get("tab") ?? "all";
+  const view = searchParams.get("view") ?? "list";
 
   const assigneeId = activeTab === "mine" ? user?.id : undefined;
   const overdueOnly = activeTab === "overdue";
@@ -77,6 +78,13 @@ function WorkItemsPageContent() {
     [router, searchParams]
   );
 
+  const handleViewChange = useCallback((nextView: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", nextView);
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  }, [router, searchParams]);
+
   const handleCreateSuccess = useCallback(() => {
     refetch();
   }, [refetch]);
@@ -110,7 +118,9 @@ function WorkItemsPageContent() {
         {/* Filters & Header */}
         <WorkItemFilters
           activeTab={activeTab}
+          view={view}
           onTabChange={handleTabChange}
+          onViewChange={handleViewChange}
           onCreateClick={() => setCreateDialogOpen(true)}
         />
 
@@ -158,20 +168,7 @@ function WorkItemsPageContent() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {items.map((item) => (
-              <WorkItemCard
-                key={item.id}
-                id={item.id}
-                title={item.title}
-                type={item.type}
-                status={item.status}
-                priority={item.priority}
-                due_at={item.due_at}
-                assignments={item.assignments}
-              />
-            ))}
-          </div>
+          <WorkItemView view={view} items={items} />
         )}
 
         {/* Pagination */}

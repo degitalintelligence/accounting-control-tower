@@ -2,18 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  CheckSquare,
-  FileText,
-  Grid3X3,
-  LayoutDashboard,
-  MessageCircle,
-  Search,
-  Settings,
-  Shield,
-  Plus,
-} from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { navigationItems, quickActions, type NavigationIcon } from "@/lib/navigation";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -24,33 +15,17 @@ interface CommandItem {
   label: string;
   description: string;
   href: string;
-  icon: typeof LayoutDashboard;
+  icon: NavigationIcon;
   shortcut?: string;
 }
 
-const commands: CommandItem[] = [
-  {
-    label: "Buat work item baru",
-    description: "Buka formulir pekerjaan baru",
-    href: "/work-items?new=1",
-    icon: Plus,
-    shortcut: "N",
-  },
-  {
-    label: "Cari work item",
-    description: "Cari berdasarkan judul atau deskripsi",
-    href: "/work-items?focus=search",
-    icon: Search,
-    shortcut: "/",
-  },
-  { label: "Overview", description: "Lihat ringkasan operasi", href: "/dashboard", icon: LayoutDashboard },
-  { label: "My Work", description: "Kelola semua work item", href: "/work-items", icon: CheckSquare },
-  { label: "Projects", description: "Lihat dan kelola proyek", href: "/projects", icon: Grid3X3 },
-  { label: "Reports", description: "Buka laporan operasi", href: "/reports", icon: FileText },
-  { label: "SOP Audit", description: "Kelola template dan SOP", href: "/templates", icon: Shield },
-  { label: "WhatsApp Inbox", description: "Lihat pesan operasional", href: "/wa-inbox", icon: MessageCircle },
-  { label: "Settings", description: "Kelola konfigurasi workspace", href: "/settings", icon: Settings },
-];
+const commands: CommandItem[] = [...quickActions, ...navigationItems].map((command) => ({
+  label: command.label,
+  description: command.description ?? "Buka halaman ini",
+  href: command.href,
+  icon: command.icon,
+  shortcut: "shortcut" in command ? command.shortcut : undefined,
+}));
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter();

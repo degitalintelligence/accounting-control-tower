@@ -1,9 +1,18 @@
 import { z } from "zod";
+import { holidayHandlingValues, validateRRule } from "@/lib/recurrence/rules";
 
 const uuid = z.string().uuid();
 const nullableUuid = uuid.nullable().optional();
 const nullableText = z.string().trim().max(10000).nullable().optional();
 const dateTime = z.string().datetime({ offset: true }).nullable().optional();
+const recurrenceRRule = z.string().trim().min(1).max(500).refine((value) => !validateRRule(value), "RRULE tidak valid.");
+export const recurrenceRuleSchema = z.object({
+  rrule: recurrenceRRule,
+  timezone: z.string().trim().min(1).max(100),
+  generation_lead_days: z.number().int().min(0).max(365).optional(),
+  holiday_handling: z.enum(holidayHandlingValues).optional(),
+  skip_weekends: z.boolean().optional(),
+}).strict();
 
 export const clientCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -59,7 +68,11 @@ export const workItemCreateSchema = z.object({
   section_id: nullableUuid,
   assigneeId: uuid.optional(),
   assigneeRole: z.enum(["maker", "checker", "approver"]).optional(),
-}).passthrough();
+  business_period: z.string().trim().min(4).max(20).nullable().optional(),
+  duplicate_action: z.enum(["warn", "allow"]).default("warn"),
+  amount: z.number().finite().min(0).nullable().optional(),
+  currency_code: z.string().regex(/^[A-Z]{3}$/).default("IDR"),
+}).strict();
 
 export const workItemUpdateSchema = z.object({
   title: z.string().trim().min(1).max(500).optional(),
@@ -87,7 +100,18 @@ export const transitionSchema = z.object({
 export const assignmentSchema = z.object({
   profile_id: uuid,
   role: z.enum(["maker", "checker", "approver"]),
-});
+  leave_warning_acknowledged: z.boolean().optional(),
+}).strict();
+
+export const plannedLeaveCreateSchema = z.object({
+  profile_id: uuid,
+  start_date: z.string().date(),
+  end_date: z.string().date(),
+  reason: z.string().trim().max(5000).optional(),
+}).strict();
+
+export const plannedLeaveUpdateSchema = plannedLeaveCreateSchema.omit({ profile_id: true }).partial().strict();
+export const plannedLeaveRejectSchema = z.object({ reason: z.string().trim().min(1).max(5000) }).strict();
 
 const findingSchema = z.object({
   checklist_item_id: nullableUuid,

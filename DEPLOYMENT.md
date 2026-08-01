@@ -19,6 +19,23 @@ Isi di Coolify sebagai secret atau environment variable server:
 
 `CRON_SECRET` harus berupa secret acak dan dikirim scheduler dengan header `Authorization: Bearer <CRON_SECRET>`. Jangan masukkan nilainya ke repository, URL, atau log.
 
+## Local dan staging integration test
+
+`.env.local` digunakan oleh aplikasi saat development. Salin `.env.local.example` menjadi `.env.local`, lalu isi credential lokal atau staging sesuai kebutuhan. Jangan menyalin secret ke file example dan jangan commit `.env.local`.
+
+Live integration test memakai environment terpisah agar tidak salah menembak database aplikasi:
+
+- `RUN_LIVE_INTEGRATION=true`
+- `LIVE_INTEGRATION_TARGET=staging`
+- `INTEGRATION_SUPABASE_URL`
+- `INTEGRATION_SUPABASE_ANON_KEY`
+- `INTEGRATION_SUPABASE_SERVICE_ROLE_KEY`
+- `INTEGRATION_APP_URL`
+
+Jalankan dengan `npm run test:integration` hanya terhadap project Supabase staging yang terisolasi. `LIVE_INTEGRATION_TARGET` wajib `staging`, dan test menolak `NODE_ENV=production`.
+
+Environment `INTEGRATION_*` tidak diperlukan di production dan tidak boleh diisi dengan credential production.
+
 ## Scheduled jobs
 
 Semua endpoint berikut menerima `POST` dan wajib memakai header authorization tersebut:
