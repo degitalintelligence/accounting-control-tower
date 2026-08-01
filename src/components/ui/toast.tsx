@@ -6,6 +6,7 @@ import { Toast as ToastPrimitive } from "@base-ui/react/toast"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon, CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const toast = ToastPrimitive.createToastManager()
 
@@ -115,20 +116,25 @@ function ToastClose({
   ...props
 }: ToastPrimitive.Close.Props) {
   return (
-    <ToastPrimitive.Close
-      data-slot="toast-close"
-      aria-label="Close toast"
-      render={render}
-      className={cn(
-        "relative shrink-0 text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children ?? (
-        <XIcon aria-hidden="true" />
-      )}
-    </ToastPrimitive.Close>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ToastPrimitive.Close
+            data-slot="toast-close"
+            aria-label="Tutup notifikasi"
+            render={render}
+            className={cn(
+              "relative shrink-0 text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-foreground",
+              className
+            )}
+            {...props}
+          />
+        }
+      >
+        {children ?? <XIcon aria-hidden="true" />}
+      </TooltipTrigger>
+      <TooltipContent>Tutup notifikasi</TooltipContent>
+    </Tooltip>
   )
 }
 

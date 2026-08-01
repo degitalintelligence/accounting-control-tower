@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface WorkItemFiltersProps {
   activeTab: string;
@@ -100,21 +101,26 @@ export function WorkItemFilters({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
+      <div className="scrollbar-subtle flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => onTabChange(tab.value)}
-            className={cn(
-              "whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-              activeTab === tab.value
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-400 hover:text-slate-600"
-            )}
-          >
-            {tab.label}
-          </button>
+          <Tooltip key={tab.value}>
+            <TooltipTrigger
+              type="button"
+              onClick={() => onTabChange(tab.value)}
+              className={cn(
+                "whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                activeTab === tab.value
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-400 hover:text-slate-600"
+              )}
+              aria-label={`Tampilkan ${tab.label.toLowerCase()}`}
+            >
+              {tab.label}
+            </TooltipTrigger>
+            <TooltipContent>
+              {tab.value === "overdue" ? "Tampilkan pekerjaan melewati tenggat" : `Tampilkan ${tab.label.toLowerCase()}`}
+            </TooltipContent>
+          </Tooltip>
         ))}
       </div>
 

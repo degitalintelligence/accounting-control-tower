@@ -1,17 +1,41 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthContext, canAccessOptionalClient, canManageOrganization } from "@/lib/authorization";
+import { getWahaQr, getWahaSessionStatus, startWahaSession } from "@/lib/whatsapp/adapter";
 
 const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
   if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) {
     return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
   }
+  const url = new URL(request.url);
+  const action = url.searchParams.get("action");
+  const connectionId = url.searchParams.get("id");
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
   const db = admin as unknown as SupabaseClient;
+  if ((action === "status" || action === "qr") && connectionId) {
+    const connection = await db.from("integration_connections").select("id, provider, session_id, status").eq("id", connectionId).eq("organization_id", organizationId).maybeSingle();
+    if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (connection.data.provider !== "waha" || !connection.data.session_id) return NextResponse.json({ error: "Connection WAHA belum memiliki session." }, { status: 400 });
+    try {
+      if (action === "qr") {
+        const qr = await getWahaQr(connection.data.session_id);
+        return new NextResponse(qr.body, { headers: { "Content-Type": qr.contentType, "Cache-Control": "no-store" } });
+      }
+      const remote = await getWahaSessionStatus(connection.data.session_id) as { status?: string };
+      const status = remote.status ?? connection.data.status;
+      const updated = await db.from("integration_connections").update({ status, last_health_check_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", connectionId).eq("organization_id", organizationId).select("id, status, last_health_check_at").single();
+      if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 400 });
+      return NextResponse.json({ ...updated.data, remote_status: remote.status ?? null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "WAHA tidak dapat dihubungi.";
+      const updated = await db.from("integration_connections").update({ status: "disconnected", last_health_check_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", connectionId).eq("organization_id", organizationId).select("id, status, last_health_check_at").single();
+      return NextResponse.json({ ...updated.data, error: message }, { status: 502 });
+    }
+  }
   const connections = await db.from("integration_connections").select("id, provider, session_id, status, config, last_health_check_at, created_at, updated_at").eq("organization_id", organizationId).order("created_at", { ascending: false });
   const connectionIds = (connections.data ?? []).map((item: { id: string }) => item.id);
   let groupsQuery = db.from("wa_groups").select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").eq("organization_id", organizationId).order("group_name", { ascending: true });
@@ -29,6 +53,20 @@ export async function POST(request: Request) {
   const body = await request.json() as { action?: string; id?: string; connection_id?: string; wa_group_id?: string; client_id?: string | null; provider?: string; session_id?: string | null; status?: string; provider_group_id?: string; group_name?: string | null; provider_participant_id?: string; phone?: string | null; display_name?: string | null; profile_id?: string | null; is_verified?: boolean };
   const { admin, organizationId, userId } = auth.context;
   const db = admin as unknown as SupabaseClient;
+  if (body.action === "start" && body.id) {
+    const connection = await db.from("integration_connections").select("id, provider, session_id").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
+    if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (connection.data.provider !== "waha" || !connection.data.session_id) return NextResponse.json({ error: "Connection WAHA belum memiliki session." }, { status: 400 });
+    try {
+      await startWahaSession(connection.data.session_id);
+      const result = await db.from("integration_connections").update({ status: "starting", last_health_check_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", body.id).eq("organization_id", organizationId).select("id, status, last_health_check_at").single();
+      if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
+      return NextResponse.json(result.data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "WAHA gagal memulai session.";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+  }
   if (body.action === "connection") {
     const values = { organization_id: organizationId, provider: body.provider ?? "waha", session_id: body.session_id ?? null, status: body.status ?? "disconnected", config: {}, updated_at: new Date().toISOString() };
     const result = body.id ? await db.from("integration_connections").update(values).eq("id", body.id).eq("organization_id", organizationId).select("id, provider, session_id, status, config, last_health_check_at, created_at, updated_at").single() : await db.from("integration_connections").insert(values).select("id, provider, session_id, status, config, last_health_check_at, created_at, updated_at").single();

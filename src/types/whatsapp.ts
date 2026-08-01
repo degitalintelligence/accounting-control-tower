@@ -30,5 +30,5 @@ export type WahaWebhookPayload = {
 export type WahaConfig = {
   baseUrl: string;
   apiKey?: string;
-  session: string;
+  session?: string;
 };

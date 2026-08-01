@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/actions/auth";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface NavItem {
   label: string;
@@ -117,7 +118,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         </button>
 
         {/* Navigation */}
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
+        <nav className="scrollbar-subtle flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {mainNav.map((item) => (
             <NavLink
               key={item.href}
@@ -161,14 +162,16 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             {user?.role && <small className="block text-[9px] text-[#85908d]">{user.role}</small>}
           </div>
           <form action={logout}>
-            <button
-              type="submit"
-              className="control-interactive grid size-9 place-items-center rounded-md text-slate-400 hover:bg-white/[.08] hover:text-white focus-visible:outline-white"
-              aria-label="Keluar"
-              title="Keluar"
-            >
-              <LogOut className="size-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                type="submit"
+                className="control-interactive grid size-9 place-items-center rounded-md text-slate-400 hover:bg-white/[.08] hover:text-white focus-visible:outline-white"
+                aria-label="Keluar dari akun"
+              >
+                <LogOut className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent side="right">Keluar dari akun</TooltipContent>
+            </Tooltip>
           </form>
         </div>
       </aside>

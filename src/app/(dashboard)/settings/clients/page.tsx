@@ -6,6 +6,7 @@ import { Building2, Loader2, Pencil, Plus, Settings, Users, Archive } from "luci
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { notifyClientsUpdated, type ClientOption } from "@/hooks/use-clients";
 import { usePathname } from "next/navigation";
 
@@ -112,7 +113,7 @@ export default function ClientsPage() {
           </div>
           {error && <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-[12px] text-red-600">{error}</p>}
           <div className="divide-y divide-slate-100">
-            {loading ? <div className="flex items-center gap-2 px-5 py-8 text-[13px] text-slate-500"><Loader2 className="size-4 animate-spin" />Memuat client...</div> : clients.length === 0 ? <div className="px-5 py-10 text-center text-[13px] text-[#8b9492]">Belum ada client aktif.</div> : clients.map((client) => <div key={client.id} className="flex items-center gap-3 px-5 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600"><Building2 className="size-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-[13px] font-medium text-[#18201f]">{client.name}</strong><span className="block truncate text-[11px] text-[#8b9492]">{client.slug} · {client.timezone}</span></div><Button variant="ghost" size="icon-sm" onClick={() => startEdit(client)} aria-label={`Edit ${client.name}`}><Pencil /></Button><Button variant="ghost" size="icon-sm" onClick={() => void archiveClient(client)} aria-label={`Arsipkan ${client.name}`}><Archive className="text-red-500" /></Button></div>) }
+            {loading ? <div className="flex items-center gap-2 px-5 py-8 text-[13px] text-slate-500"><Loader2 className="size-4 animate-spin" />Memuat client...</div> : clients.length === 0 ? <div className="px-5 py-10 text-center text-[13px] text-[#8b9492]">Belum ada client aktif.</div> : clients.map((client) => <div key={client.id} className="flex items-center gap-3 px-5 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600"><Building2 className="size-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-[13px] font-medium text-[#18201f]">{client.name}</strong><span className="block truncate text-[11px] text-[#8b9492]">{client.slug} · {client.timezone}</span></div><Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => startEdit(client)} aria-label={`Edit ${client.name}`} />}><Pencil /></TooltipTrigger><TooltipContent>Edit client</TooltipContent></Tooltip><Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => void archiveClient(client)} aria-label={`Arsipkan ${client.name}`} />}><Archive className="text-red-500" /></TooltipTrigger><TooltipContent>Arsipkan client</TooltipContent></Tooltip></div>) }
           </div>
         </section>
         <section className="rounded-[14px] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,.06)]">

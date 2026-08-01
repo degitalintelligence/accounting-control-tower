@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Building2, Settings, Users, UserPlus, Loader2, Power, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Member {
   id: string;
@@ -182,8 +183,8 @@ export default function MembersPage() {
                   >
                     {roleLabels[member.role] ?? member.role}
                   </span>
-                  <button type="button" onClick={() => { setEditingId(member.id); setForm({ email: member.email ?? "", display_name: member.name, role: member.role, client_id: member.client_id ?? "" }); }} className="ml-2 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800" aria-label="Edit anggota"><Pencil className="size-3.5" /></button>
-                  <button type="button" onClick={() => void toggleMember(member)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800" aria-label={member.is_active ? "Nonaktifkan anggota" : "Aktifkan anggota"}><Power className="size-3.5" /></button>
+                  <Tooltip><TooltipTrigger render={<button type="button" onClick={() => { setEditingId(member.id); setForm({ email: member.email ?? "", display_name: member.name, role: member.role, client_id: member.client_id ?? "" }); }} className="ml-2 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800" aria-label={`Edit anggota ${member.name}`} />}><Pencil className="size-3.5" /></TooltipTrigger><TooltipContent>Edit anggota</TooltipContent></Tooltip>
+                  <Tooltip><TooltipTrigger render={<button type="button" onClick={() => void toggleMember(member)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800" aria-label={member.is_active ? `Nonaktifkan anggota ${member.name}` : `Aktifkan anggota ${member.name}`} />}><Power className="size-3.5" /></TooltipTrigger><TooltipContent>{member.is_active ? "Nonaktifkan anggota" : "Aktifkan anggota"}</TooltipContent></Tooltip>
                 </div>
               ))
             )}

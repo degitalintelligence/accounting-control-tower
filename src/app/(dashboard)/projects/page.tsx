@@ -6,6 +6,7 @@ import { ProjectCard } from "@/components/projects/project-card";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -214,25 +215,21 @@ function ProjectsPageContent() {
         {/* Pagination */}
         {!loading && totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => handlePageChange(page - 1)}
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="outline" size="sm" aria-label="Halaman sebelumnya" disabled={page <= 1} onClick={() => handlePageChange(page - 1)} />}>
+                <ChevronLeft className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>Halaman sebelumnya</TooltipContent>
+            </Tooltip>
             <span className="text-sm text-slate-500 px-2">
               Halaman {page} dari {totalPages}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => handlePageChange(page + 1)}
-            >
-              <ChevronRight className="size-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="outline" size="sm" aria-label="Halaman berikutnya" disabled={page >= totalPages} onClick={() => handlePageChange(page + 1)} />}>
+                <ChevronRight className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>Halaman berikutnya</TooltipContent>
+            </Tooltip>
           </div>
         )}
       </div>
