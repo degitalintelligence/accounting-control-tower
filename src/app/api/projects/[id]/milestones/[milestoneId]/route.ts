@@ -66,7 +66,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // Validasi project access
     const projResult = await admin
       .from("projects")
-      .select(`id, work_items!inner(organization_id, deleted_at)`)
+      .select(`id, work_items!projects_work_item_id_fkey!inner(organization_id, deleted_at)`)
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
       .is("work_items.deleted_at", null)
@@ -219,7 +219,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     // Validasi project access
     const projResult = await admin
       .from("projects")
-      .select(`id, work_items!inner(organization_id, deleted_at)`)
+      .select(`id, work_items!projects_work_item_id_fkey!inner(organization_id, deleted_at)`)
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
       .is("work_items.deleted_at", null)

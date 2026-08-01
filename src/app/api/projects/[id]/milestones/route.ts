@@ -46,7 +46,7 @@ async function validateProjectAccess(
 ): Promise<{ valid: boolean; error?: string }> {
   const result = await admin
     .from("projects")
-    .select(`id, work_items!inner(organization_id, client_id, deleted_at)`)
+    .select(`id, work_items!projects_work_item_id_fkey!inner(organization_id, client_id, deleted_at)`)
     .eq("id", projectId)
     .eq("work_items.organization_id", organizationId)
     .is("work_items.deleted_at", null)

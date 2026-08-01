@@ -26,9 +26,10 @@ import type { Milestone } from "@/types/project";
 
 interface MilestoneListProps {
   projectId: string;
+  onChanged?: () => void;
 }
 
-export function MilestoneList({ projectId }: MilestoneListProps) {
+export function MilestoneList({ projectId, onChanged }: MilestoneListProps) {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +112,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
           )
         );
       }
+      onChanged?.();
     } catch {
       // Revert on error
       setMilestones((prev) =>
@@ -157,6 +159,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
       setAddDescription("");
       setAddDueDate("");
       await fetchMilestones();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menambahkan milestone.");
     } finally {
@@ -207,6 +210,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
 
       setEditId(null);
       await fetchMilestones();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengupdate milestone.");
     } finally {
@@ -229,6 +233,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
       }
 
       await fetchMilestones();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menghapus milestone.");
     } finally {
@@ -256,7 +261,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-medium text-slate-900">
           Milestone ({milestones.length})
         </h3>
@@ -355,7 +360,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
                 /* Display row */
                 <div
                   className={cn(
-                    "group flex items-start gap-3 rounded-lg border p-3 transition-colors",
+                    "group flex items-start gap-3 rounded-xl border p-3.5 transition-colors focus-within:border-blue-200",
                     milestone.is_completed
                       ? "bg-emerald-50/50 border-emerald-100"
                       : "bg-white border-slate-100 hover:border-slate-200"
@@ -365,7 +370,8 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
                   <button
                     type="button"
                     onClick={() => handleToggle(milestone)}
-                    className="mt-0.5 shrink-0"
+                    className="mt-0.5 shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label={milestone.is_completed ? `Tandai ${milestone.name} belum selesai` : `Tandai ${milestone.name} selesai`}
                   >
                     {milestone.is_completed ? (
                       <CheckCircle2 className="size-5 text-emerald-500" />
@@ -400,11 +406,12 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                     <button
                       type="button"
                       onClick={() => startEdit(milestone)}
                       className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      aria-label={`Edit ${milestone.name}`}
                     >
                       <Edit className="size-3.5" />
                     </button>
@@ -413,6 +420,7 @@ export function MilestoneList({ projectId }: MilestoneListProps) {
                       onClick={() => handleDelete(milestone.id)}
                       disabled={deletingId === milestone.id}
                       className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      aria-label={`Hapus ${milestone.name}`}
                     >
                       {deletingId === milestone.id ? (
                         <Loader2 className="size-3.5 animate-spin" />

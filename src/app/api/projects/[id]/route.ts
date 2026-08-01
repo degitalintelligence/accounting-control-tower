@@ -72,7 +72,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         budgeted_hours,
         created_at,
         updated_at,
-        work_items!inner(
+        work_items!projects_work_item_id_fkey!inner(
           id,
           title,
           description,

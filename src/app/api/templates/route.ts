@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
           title_template,
           description_template,
           acceptance_criteria_template,
+          checklist_template_id,
           weight,
           is_optional,
           effective_from,
@@ -311,7 +312,7 @@ export async function POST(request: NextRequest) {
     const versionResult = await admin
       .from("template_versions")
       .insert(versionInsertData as never)
-      .select("id, template_id, version_number, title_template, description_template, acceptance_criteria_template, maker_rule, checker_rule, approver_rule, sop_version_id, evidence_schema, maker_deadline_rule, checker_deadline_rule, final_deadline_rule, escalation_policy_id, child_blueprint, weight, is_optional, effective_from, notes, created_at")
+      .select("id, template_id, version_number, title_template, description_template, acceptance_criteria_template, maker_rule, checker_rule, approver_rule, sop_version_id, checklist_template_id, evidence_schema, maker_deadline_rule, checker_deadline_rule, final_deadline_rule, escalation_policy_id, child_blueprint, weight, is_optional, effective_from, notes, created_at")
       .single();
 
     const { data: version, error: versionError } = versionResult as unknown as {

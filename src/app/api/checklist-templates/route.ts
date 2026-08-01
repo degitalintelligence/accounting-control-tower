@@ -16,7 +16,7 @@ export async function GET() {
   if (!canManageOrganization(membershipData.data?.[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
   const result = await admin
     .from("checklist_templates")
-    .select("id, organization_id, name, description, target_role, created_at, updated_at, checklist_items!inner(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)")
+    .select("id, organization_id, name, description, target_role, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)")
     .eq("organization_id", organizationId)
     .eq("is_active", true)
     .is("deleted_at", null)

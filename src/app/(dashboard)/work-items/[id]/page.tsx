@@ -424,85 +424,107 @@ export default function WorkItemDetailPage({
 
   if (loading) {
     return (
-      <>
+      <div className="page-canvas">
         <DetailSkeleton />
-      </>
+      </div>
     );
   }
 
   if (error || !workItem) {
     return (
-      <>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="page-canvas">
+        <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
           <AlertCircle className="size-12 text-red-400 mb-3" />
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">
+          <h2 className="mb-2 text-lg font-semibold text-slate-900">
             {error ?? "Work item tidak ditemukan."}
           </h2>
-          <Button variant="outline" onClick={() => router.push("/work-items")}>
-            <ArrowLeft className="size-4" />
-            Kembali ke Daftar
-          </Button>
-          <Button variant="outline" onClick={fetchData}>
-            Coba Lagi
-          </Button>
+          <p className="mb-6 text-sm leading-6 text-slate-500">Periksa koneksi Anda atau kembali ke daftar pekerjaan untuk memilih item lain.</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={() => router.push("/work-items")}>
+              <ArrowLeft className="size-4" />
+              Kembali ke Daftar
+            </Button>
+            <Button onClick={fetchData} className="cta-primary">
+              Coba Lagi
+            </Button>
+          </div>
         </div>
-      </>
+      </div>
     );
   }
 
   const assignments = workItem.assignments ?? [];
 
   return (
-    <>
-      <div className="space-y-4">
-        {/* Back button */}
+    <div className="page-canvas">
+      <div className="mx-auto w-full max-w-[1440px] space-y-6">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-500 hover:text-slate-900 -ml-2"
+            className="-ml-2 text-slate-500 hover:text-slate-900"
             onClick={() => router.push("/work-items")}
           >
             <ArrowLeft className="size-4" />
-            Kembali
+            Semua pekerjaan
           </Button>
-          <span className="text-[12px] text-slate-400">/</span>
-          <span className="text-[12px] text-slate-600 font-medium truncate">
-            {workItem.title}
-          </span>
         </div>
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold text-slate-900">
-              {workItem.title}
-            </h1>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge className={TYPE_BADGE_CLASS[workItem.type]}>
-                {TYPE_LABELS[workItem.type]}
-              </Badge>
-              <StatusBadge status={workItem.status} />
-              <PriorityBadge priority={workItem.priority} />
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge className={TYPE_BADGE_CLASS[workItem.type]}>{TYPE_LABELS[workItem.type]}</Badge>
+                <StatusBadge status={workItem.status} className="h-6 px-2.5 text-xs" />
+                <span className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">Prioritas</span>
+                <PriorityBadge priority={workItem.priority} className="text-xs" />
+              </div>
+              <h1 className="max-w-4xl break-words text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                {workItem.title}
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+                {workItem.description || "Belum ada deskripsi. Tambahkan konteks agar pekerjaan mudah dipahami oleh tim."}
+              </p>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+              <StatusTransitionButton
+                workItemId={id}
+                currentStatus={workItem.status}
+                onTransitionComplete={fetchData}
+              />
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Ubah detail</Button>
             </div>
           </div>
 
-          <StatusTransitionButton
-            workItemId={id}
-            currentStatus={workItem.status}
-            onTransitionComplete={fetchData}
-          />
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Ubah</Button>
-        </div>
+          <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-3.5">
+              <p className="text-xs font-medium text-slate-500">Tenggat</p>
+              <p className={`mt-1 text-sm font-semibold ${workItem.due_at ? "text-slate-900" : "text-amber-700"}`}>
+                {workItem.due_at ? formatShortDate(workItem.due_at) : "Belum ditentukan"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3.5">
+              <p className="text-xs font-medium text-slate-500">Penugasan</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{assignments.length} orang</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3.5">
+              <p className="text-xs font-medium text-slate-500">Aktivitas</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{history.length} perubahan</p>
+            </div>
+            <div className="rounded-xl bg-amber-50 p-3.5">
+              <p className="text-xs font-medium text-amber-700">Langkah berikutnya</p>
+              <p className="mt-1 text-sm font-semibold text-amber-950">Periksa detail pekerjaan</p>
+            </div>
+          </div>
+        </section>
 
-        {/* Content: main + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
-          {/* Main content with tabs */}
-          <div>
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
             <Tabs defaultValue="overview">
-              <TabsList>
-              <TabsTrigger value="overview">Ringkasan</TabsTrigger>
-              <TabsTrigger value="checklist">Checklist SOP</TabsTrigger>
+              <TabsList className="w-full justify-start overflow-x-auto rounded-xl bg-slate-100 p-1">
+                <TabsTrigger value="overview">Ringkasan</TabsTrigger>
+                <TabsTrigger value="checklist">Checklist SOP</TabsTrigger>
                 <TabsTrigger value="evidence">Evidence</TabsTrigger>
                 <TabsTrigger value="review">Review</TabsTrigger>
                 <TabsTrigger value="comments">Komentar</TabsTrigger>
@@ -655,19 +677,17 @@ export default function WorkItemDetailPage({
             </Tabs>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Dates */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Tanggal</CardTitle>
+          <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100 pb-3">
+                <CardTitle className="text-base">Informasi pekerjaan</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4 pt-4">
                 <div className="flex items-start gap-2">
-                  <Calendar className="size-4 text-slate-400 mt-0.5 shrink-0" />
+                  <Calendar className="mt-0.5 size-4 shrink-0 text-blue-600" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Tenggat</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Tenggat</p>
+                    <p className={`mt-0.5 text-sm font-semibold ${workItem.due_at ? "text-slate-900" : "text-amber-700"}`}>
                       {workItem.due_at
                         ? formatShortDate(workItem.due_at)
                         : "Belum ditentukan"}
@@ -675,19 +695,19 @@ export default function WorkItemDetailPage({
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <Clock className="size-4 text-slate-400 mt-0.5 shrink-0" />
+                  <Clock className="mt-0.5 size-4 shrink-0 text-slate-400" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Dibuat</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Dibuat</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900">
                       {formatShortDate(workItem.created_at)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <Clock className="size-4 text-slate-400 mt-0.5 shrink-0" />
+                  <Clock className="mt-0.5 size-4 shrink-0 text-slate-400" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Terakhir Diubah</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Terakhir diubah</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900">
                       {formatShortDate(workItem.updated_at)}
                     </p>
                   </div>
@@ -695,30 +715,29 @@ export default function WorkItemDetailPage({
               </CardContent>
             </Card>
 
-            {/* Stats */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Statistik</CardTitle>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100 pb-3">
+                <CardTitle className="text-base">Kontrol pekerjaan</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex items-center justify-between text-[13px]">
+              <CardContent className="space-y-3 pt-4">
+                <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">Penugasan</span>
-                  <span className="font-medium text-slate-900">
+                  <span className="font-semibold text-slate-900">
                     {assignments.length}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[13px]">
+                <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">Riwayat</span>
-                  <span className="font-medium text-slate-900">
+                  <span className="font-semibold text-slate-900">
                     {history.length}
                   </span>
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </aside>
         </div>
       </div>
       <EditWorkItemDialog open={editOpen} onOpenChange={setEditOpen} workItem={workItem} onSaved={fetchData} />
-    </>
+    </div>
   );
 }

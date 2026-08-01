@@ -104,6 +104,8 @@ interface TemplateDetail extends TaskTemplate {
   recurrence_rules: unknown[];
 }
 
+type ChecklistSummary = { id: string; name: string; target_role: string; checklist_items?: { id: string; is_required: boolean }[] };
+
 /* ─── Helpers ────────────────────────────────────────── */
 
 function formatDate(iso: string | null): string {
@@ -329,6 +331,7 @@ export default function TemplateDetailPage({
   const router = useRouter();
 
   const [template, setTemplate] = useState<TemplateDetail | null>(null);
+  const [checklists, setChecklists] = useState<ChecklistSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [instantiateOpen, setInstantiateOpen] = useState(false);
@@ -348,6 +351,11 @@ export default function TemplateDetailPage({
 
       const body = await res.json();
       setTemplate(body.data);
+      const checklistResponse = await fetch("/api/checklist-templates");
+      if (checklistResponse.ok) {
+        const checklistBody = await checklistResponse.json();
+        setChecklists(checklistBody.data ?? []);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Terjadi kesalahan tidak diketahui."
@@ -406,6 +414,7 @@ export default function TemplateDetailPage({
 
   const versions = template.template_versions ?? [];
   const latestVersion = versions[0] ?? null;
+  const checklistById = new Map(checklists.map((checklist) => [checklist.id, checklist]));
   const stepCount = Array.isArray(latestVersion?.child_blueprint)
     ? (latestVersion.child_blueprint as unknown as ChildBlueprint[]).length
     : 0;
@@ -546,6 +555,16 @@ export default function TemplateDetailPage({
                           </p>
                         </div>
                       )}
+                      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                        <p className="text-[11px] font-medium text-blue-600">Checklist SOP</p>
+                        {latestVersion.checklist_template_id && checklistById.get(latestVersion.checklist_template_id) ? (
+                          <p className="mt-1 text-sm text-slate-700">
+                            {checklistById.get(latestVersion.checklist_template_id)!.name} · {checklistById.get(latestVersion.checklist_template_id)!.target_role}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-sm text-slate-400">Belum dikaitkan</p>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -661,6 +680,7 @@ export default function TemplateDetailPage({
                       <CardContent>
                         <div className="flex items-center gap-4 text-[12px] text-slate-500">
                           {verSteps > 0 && <span>{verSteps} langkah</span>}
+                          {ver.checklist_template_id && checklistById.get(ver.checklist_template_id) && <span>Checklist: {checklistById.get(ver.checklist_template_id)!.name}</span>}
                           {ver.weight !== undefined && (
                             <span>Bobot: {ver.weight}</span>
                           )}

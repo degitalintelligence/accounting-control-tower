@@ -203,29 +203,30 @@ export default function ProjectDetailPage({
 
   if (loading) {
     return (
-      <>
+      <div className="page-canvas">
         <DetailSkeleton />
-      </>
+      </div>
     );
   }
 
   if (error || !project) {
     return (
-      <>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="page-canvas">
+        <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
           <AlertCircle className="size-12 text-red-400 mb-3" />
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">
+          <h2 className="mb-2 text-lg font-semibold text-slate-900">
             {error ?? "Proyek tidak ditemukan."}
           </h2>
-          <Button variant="outline" onClick={() => router.push("/projects")}>
-            <ArrowLeft className="size-4" />
-            Kembali ke Daftar
-          </Button>
-          <Button variant="outline" onClick={fetchProject}>
-            Coba Lagi
-          </Button>
+          <p className="mb-6 text-sm leading-6 text-slate-500">Periksa koneksi Anda atau kembali ke daftar proyek untuk memilih proyek lain.</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={() => router.push("/projects")}>
+              <ArrowLeft className="size-4" />
+              Kembali ke Daftar
+            </Button>
+            <Button onClick={fetchProject} className="cta-primary">Coba Lagi</Button>
+          </div>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -246,50 +247,44 @@ export default function ProjectDetailPage({
   }).length;
 
   return (
-    <>
-      <div className="space-y-4">
-        {/* Back button */}
+    <div className="page-canvas">
+      <div className="mx-auto w-full max-w-[1440px] space-y-6">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-500 hover:text-slate-900 -ml-2"
+            className="-ml-2 text-slate-500 hover:text-slate-900"
             onClick={() => router.push("/projects")}
           >
             <ArrowLeft className="size-4" />
-            Kembali
+            Semua proyek
           </Button>
-          <span className="text-[12px] text-slate-400">/</span>
-          <span className="text-[12px] text-slate-600 font-medium truncate">
-            {project.title ?? "Proyek"}
-          </span>
         </div>
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold text-slate-900">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge className="bg-blue-50 text-blue-700">Proyek</Badge>
+                {project.status && <StatusBadge status={project.status as WorkItemStatus} className="h-6 px-2.5 text-xs" />}
+                {project.priority && <PriorityBadge priority={project.priority as WorkItemPriority} className="text-xs" />}
+              </div>
+              <h1 className="max-w-4xl break-words text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
               {project.title ?? "Tanpa Judul"}
-            </h1>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge className="bg-blue-50 text-blue-600 text-[11px]">Proyek</Badge>
-              {project.status && (
-                <StatusBadge status={project.status as WorkItemStatus} />
-              )}
-              {project.priority && (
-                <PriorityBadge priority={project.priority as WorkItemPriority} />
-              )}
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+                {project.description || "Belum ada deskripsi proyek. Tambahkan konteks agar tujuan dan progres mudah dipahami tim."}
+              </p>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setEditOpen(true)}
             >
               <Edit className="size-3.5" />
-              Edit
+              Edit detail
             </Button>
             <Button
               variant="outline"
@@ -306,14 +301,20 @@ export default function ProjectDetailPage({
               Hapus
             </Button>
           </div>
-        </div>
+          </div>
 
-        {/* Content: main + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
-          {/* Main content with tabs */}
-          <div>
+          <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-3.5"><p className="text-xs font-medium text-slate-500">Tugas selesai</p><p className="mt-1 text-sm font-semibold text-slate-900">{stats.completed_work_items}/{stats.total_work_items}</p></div>
+            <div className="rounded-xl bg-slate-50 p-3.5"><p className="text-xs font-medium text-slate-500">Milestone selesai</p><p className="mt-1 text-sm font-semibold text-slate-900">{stats.completed_milestones}/{stats.total_milestones}</p></div>
+            <div className="rounded-xl bg-slate-50 p-3.5"><p className="text-xs font-medium text-slate-500">Target selesai</p><p className={`mt-1 text-sm font-semibold ${project.target_date ? "text-slate-900" : "text-amber-700"}`}>{project.target_date ? formatShortDate(project.target_date) : "Belum ditentukan"}</p></div>
+            <div className={`rounded-xl p-3.5 ${overdueItems > 0 ? "bg-red-50" : "bg-emerald-50"}`}><p className={`text-xs font-medium ${overdueItems > 0 ? "text-red-700" : "text-emerald-700"}`}>{overdueItems > 0 ? "Perlu perhatian" : "Kondisi proyek"}</p><p className={`mt-1 text-sm font-semibold ${overdueItems > 0 ? "text-red-950" : "text-emerald-950"}`}>{overdueItems > 0 ? `${overdueItems} tugas terlambat` : "Berjalan terkendali"}</p></div>
+          </div>
+        </section>
+
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
             <Tabs defaultValue="overview">
-              <TabsList>
+              <TabsList className="w-full justify-start overflow-x-auto rounded-xl bg-slate-100 p-1">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="milestones">Milestone</TabsTrigger>
                 <TabsTrigger value="work-items">Tugas</TabsTrigger>
@@ -424,12 +425,12 @@ export default function ProjectDetailPage({
 
               {/* Milestones tab */}
               <TabsContent value="milestones" className="mt-4">
-                <MilestoneList projectId={id} />
+                <MilestoneList projectId={id} onChanged={fetchProject} />
               </TabsContent>
 
               {/* Work Items tab */}
               <TabsContent value="work-items" className="mt-4 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-sm font-medium text-slate-900">
                     Tugas ({project.work_items.length})
                   </h3>
@@ -533,15 +534,14 @@ export default function ProjectDetailPage({
             </Tabs>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
+          <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
             {/* Quick Stats */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Statistik</CardTitle>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100 pb-3">
+                <CardTitle className="text-base">Statistik proyek</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-[13px]">
+              <CardContent className="space-y-3 pt-4">
+                <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500 flex items-center gap-1.5">
                     <FolderKanban className="size-3.5" />
                     Total Tugas
@@ -550,7 +550,7 @@ export default function ProjectDetailPage({
                     {stats.total_work_items}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[13px]">
+                <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500 flex items-center gap-1.5">
                     <CheckCircle2 className="size-3.5" />
                     Tugas Selesai
@@ -559,7 +559,7 @@ export default function ProjectDetailPage({
                     {stats.completed_work_items}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[13px]">
+                <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500 flex items-center gap-1.5">
                     <Target className="size-3.5" />
                     Milestone
@@ -569,7 +569,7 @@ export default function ProjectDetailPage({
                   </span>
                 </div>
                 {overdueItems > 0 && (
-                  <div className="flex items-center justify-between text-[13px]">
+                  <div className="flex items-center justify-between text-sm">
                     <span className="text-red-500 flex items-center gap-1.5">
                       <AlertCircle className="size-3.5" />
                       Terlambat
@@ -583,16 +583,16 @@ export default function ProjectDetailPage({
             </Card>
 
             {/* Dates */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Tanggal</CardTitle>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100 pb-3">
+                <CardTitle className="text-base">Timeline</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4 pt-4">
                 <div className="flex items-start gap-2">
                   <Calendar className="size-4 text-slate-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Mulai</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Mulai</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900">
                       {project.start_date
                         ? formatShortDate(project.start_date)
                         : "Belum ditentukan"}
@@ -602,8 +602,8 @@ export default function ProjectDetailPage({
                 <div className="flex items-start gap-2">
                   <Target className="size-4 text-slate-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Target Selesai</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Target selesai</p>
+                    <p className={`mt-0.5 text-sm font-semibold ${project.target_date ? "text-slate-900" : "text-amber-700"}`}>
                       {project.target_date
                         ? formatShortDate(project.target_date)
                         : "Belum ditentukan"}
@@ -613,8 +613,8 @@ export default function ProjectDetailPage({
                 <div className="flex items-start gap-2">
                   <Clock className="size-4 text-slate-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Dibuat</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Dibuat</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900">
                       {formatShortDate(project.created_at)}
                     </p>
                   </div>
@@ -622,8 +622,8 @@ export default function ProjectDetailPage({
                 <div className="flex items-start gap-2">
                   <Clock className="size-4 text-slate-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[11px] text-slate-400">Terakhir Diubah</p>
-                    <p className="text-[13px] text-slate-900">
+                    <p className="text-xs font-medium text-slate-500">Terakhir diubah</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900">
                       {formatShortDate(project.updated_at)}
                     </p>
                   </div>
@@ -633,16 +633,16 @@ export default function ProjectDetailPage({
 
             {/* Budget */}
             {project.budgeted_hours != null && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Budget</CardTitle>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100 pb-3">
+                  <CardTitle className="text-base">Budget</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-4">
                   <div className="flex items-center gap-2">
                     <Timer className="size-4 text-slate-400" />
                     <div>
-                      <p className="text-[11px] text-slate-400">Jam Dibudgetkan</p>
-                      <p className="text-[13px] font-medium text-slate-900">
+                      <p className="text-xs font-medium text-slate-500">Jam dibudgetkan</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-900">
                         {project.budgeted_hours} jam
                       </p>
                     </div>
@@ -650,7 +650,7 @@ export default function ProjectDetailPage({
                 </CardContent>
               </Card>
             )}
-          </div>
+          </aside>
         </div>
       </div>
       <EditProjectDialog open={editOpen} onOpenChange={setEditOpen} project={project} onSaved={fetchProject} />
@@ -663,6 +663,6 @@ export default function ProjectDetailPage({
         linkedItems={project.work_items}
         onLinkChange={fetchProject}
       />
-    </>
+    </div>
   );
 }

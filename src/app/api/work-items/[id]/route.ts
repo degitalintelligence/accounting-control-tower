@@ -219,6 +219,27 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
     const updateData: Record<string, unknown> = parsed.data;
 
+    if (Object.prototype.hasOwnProperty.call(updateData, "checklist_template_id") && updateData.checklist_template_id !== existing.checklist_template_id) {
+      const checklistTemplateId = updateData.checklist_template_id as string | null;
+      if (checklistTemplateId) {
+        const checklistResult = await admin
+          .from("checklist_templates")
+          .select("id")
+          .eq("id", checklistTemplateId)
+          .eq("organization_id", organizationId)
+          .eq("is_active", true)
+          .is("deleted_at", null)
+          .single();
+        const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+        if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid untuk organisasi ini." }, { status: 400 });
+      }
+
+      const responseResult = await admin.from("checklist_responses").select("id").eq("work_item_id", id).limit(1);
+      const responses = responseResult as unknown as { data: { id: string }[] | null; error: { message: string } | null };
+      if (responses.error) return NextResponse.json({ error: "Gagal memvalidasi response checklist." }, { status: 500 });
+      if (responses.data?.length) return NextResponse.json({ error: "Checklist tidak dapat diganti karena work item sudah memiliki response checklist." }, { status: 409 });
+    }
+
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: "Tidak ada field yang diupdate." },

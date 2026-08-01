@@ -94,6 +94,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           checker_rule,
           approver_rule,
           sop_version_id,
+          checklist_template_id,
           evidence_schema,
           maker_deadline_rule,
           checker_deadline_rule,

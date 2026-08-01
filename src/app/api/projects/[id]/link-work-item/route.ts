@@ -63,14 +63,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Validasi project exists dan milik org
     const projResult = await admin
       .from("projects")
-      .select("id, organization_id, client_id")
+      .select("id, work_item_id, work_items!projects_work_item_id_fkey!inner(organization_id, client_id, deleted_at)")
       .eq("id", id)
-      .eq("organization_id", organizationId)
-      .is("deleted_at", null)
+      .eq("work_items.organization_id", organizationId)
+      .is("work_items.deleted_at", null)
       .single();
 
     const { data: project, error: projError } = projResult as unknown as {
-      data: { id: string; organization_id: string; client_id: string } | null;
+      data: {
+        id: string;
+        work_item_id: string;
+        work_items: { organization_id: string; client_id: string; deleted_at: string | null };
+      } | null;
       error: { message: string } | null;
     };
 
@@ -118,7 +122,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    if (workItem.client_id !== project.client_id) {
+    if (workItem.client_id !== project.work_items.client_id) {
       return NextResponse.json(
         { error: "Work item harus berasal dari client yang sama dengan project." },
         { status: 409 }
@@ -211,7 +215,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     // Validasi project exists dan milik org
     const projResult = await admin
       .from("projects")
-      .select(`id, work_items!inner(organization_id, deleted_at)`)
+      .select(`id, work_item_id, work_items!projects_work_item_id_fkey!inner(organization_id, deleted_at)`)
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
       .is("work_items.deleted_at", null)
