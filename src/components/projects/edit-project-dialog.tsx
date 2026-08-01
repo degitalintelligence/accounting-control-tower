@@ -1,0 +1,12 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
+export function EditProjectDialog({ open, onOpenChange, project, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; project: { id: string; objective: string | null; success_criteria: string | null; start_date: string | null; target_date: string | null; budgeted_hours: number | null }; onSaved: () => void }) {
+  const [objective, setObjective] = useState(project.objective ?? ""); const [criteria, setCriteria] = useState(project.success_criteria ?? ""); const [startDate, setStartDate] = useState(project.start_date ?? ""); const [targetDate, setTargetDate] = useState(project.target_date ?? ""); const [hours, setHours] = useState(project.budgeted_hours?.toString() ?? ""); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
+  async function save() { setSaving(true); setError(null); const response = await fetch(`/api/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objective: objective || null, success_criteria: criteria || null, start_date: startDate || null, target_date: targetDate || null, budgeted_hours: hours ? Number(hours) : null }) }); const body = await response.json().catch(() => null); if (!response.ok) setError(body?.error ?? "Gagal menyimpan."); else { onOpenChange(false); onSaved(); } setSaving(false); }
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Edit project</DialogTitle></DialogHeader><div className="space-y-3"><Input value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Objective" /><Input value={criteria} onChange={(event) => setCriteria(event.target.value)} placeholder="Kriteria keberhasilan" /><Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /><Input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /><Input type="number" value={hours} onChange={(event) => setHours(event.target.value)} placeholder="Budget jam" />{error && <p className="text-sm text-red-600">{error}</p>}</div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Batal</Button><Button onClick={save} disabled={saving}>Simpan</Button></DialogFooter></DialogContent></Dialog>;
+}

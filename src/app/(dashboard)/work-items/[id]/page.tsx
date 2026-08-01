@@ -8,10 +8,10 @@ import { PriorityBadge } from "@/components/work-items/priority-badge";
 import { StatusTransitionButton } from "@/components/work-items/status-transition-button";
 import { CommentSection } from "@/components/work-items/comment-section";
 import { ChecklistPanel } from "@/components/work-items/checklist-panel";
+import { EvidencePanel } from "@/components/work-items/evidence-panel";
 import { ReviewPanel } from "@/components/work-items/review-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
@@ -47,8 +47,10 @@ import type {
   WorkItem,
   WorkItemStatus,
   WorkItemType,
-  Assignment,
 } from "@/types/work-item";
+import { AssignmentPicker } from "@/components/work-items/assignment-picker";
+import { DependencyPanel } from "@/components/work-items/dependency-panel";
+import { EditWorkItemDialog } from "@/components/work-items/edit-work-item-dialog";
 
 /* ─── Status config ─────────────────────────────────────── */
 
@@ -80,11 +82,6 @@ const TYPE_BADGE_CLASS: Record<WorkItemType, string> = {
   report: "bg-purple-50 text-purple-600",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  maker: "Maker",
-  checker: "Checker",
-  approver: "Approver",
-};
 
 /* ─── History entry type (from audit_logs API) ───────────── */
 
@@ -124,49 +121,7 @@ function formatShortDate(iso: string | null): string {
   });
 }
 
-function getInitials(name: string | null | undefined): string {
-  if (!name) return "?";
-  const parts = name.split(" ");
-  return parts.length >= 2
-    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    : name.slice(0, 2).toUpperCase();
-}
-
 /* ─── AssigneeList ──────────────────────────────────────── */
-
-function AssigneeList({ assignments }: { assignments?: Assignment[] }) {
-  if (!assignments || assignments.length === 0) {
-    return (
-      <p className="text-sm text-slate-400 italic">Belum ada penugasan.</p>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {assignments.map((a) => (
-        <div
-          key={a.id}
-          className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2"
-        >
-          <Avatar className="size-8">
-            <AvatarFallback className="bg-slate-200 text-slate-600 text-[10px] font-bold">
-              {getInitials(a.profile_name)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-slate-900 truncate">
-              {a.profile_name ?? "Belum diisi"}
-            </p>
-            <p className="text-[11px] text-slate-400">{a.profile_email ?? ""}</p>
-          </div>
-          <Badge className="bg-slate-100 text-slate-600 text-[10px]">
-            {ROLE_LABELS[a.role] ?? a.role}
-          </Badge>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /* ─── Action labels & colors ─────────────────────────────── */
 
@@ -354,6 +309,7 @@ export default function WorkItemDetailPage({
   const [assignRole, setAssignRole] = useState<string | null>(null);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -493,6 +449,7 @@ export default function WorkItemDetailPage({
             currentStatus={workItem.status}
             onTransitionComplete={fetchData}
           />
+        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit</Button>
         </div>
 
         {/* Content: main + sidebar */}
@@ -503,6 +460,7 @@ export default function WorkItemDetailPage({
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="checklist">Checklist SOP</TabsTrigger>
+                <TabsTrigger value="evidence">Evidence</TabsTrigger>
                 <TabsTrigger value="review">Review</TabsTrigger>
                 <TabsTrigger value="comments">Komentar</TabsTrigger>
                 <TabsTrigger value="history">Riwayat</TabsTrigger>
@@ -543,9 +501,7 @@ export default function WorkItemDetailPage({
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <AssigneeList assignments={assignments} />
-                  </CardContent>
+                  <CardContent><AssignmentPicker workItemId={id} assignments={assignments} onChanged={fetchData} /></CardContent>
                 </Card>
 
                 {/* Assign dialog inline */}
@@ -619,6 +575,11 @@ export default function WorkItemDetailPage({
 
               <TabsContent value="checklist" className="mt-4">
                 <ChecklistPanel workItemId={id} />
+                <Card className="mt-4"><CardHeader><CardTitle className="text-sm">Dependency</CardTitle></CardHeader><CardContent><DependencyPanel workItemId={id} /></CardContent></Card>
+              </TabsContent>
+
+              <TabsContent value="evidence" className="mt-4">
+                <EvidencePanel workItemId={id} />
               </TabsContent>
 
               <TabsContent value="review" className="mt-4">
@@ -700,6 +661,7 @@ export default function WorkItemDetailPage({
           </div>
         </div>
       </div>
+      <EditWorkItemDialog open={editOpen} onOpenChange={setEditOpen} workItem={workItem} onSaved={fetchData} />
     </>
   );
 }

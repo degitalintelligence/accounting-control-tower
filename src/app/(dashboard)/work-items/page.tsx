@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { Suspense, useState, useCallback, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { WorkItemFilters } from "@/components/work-items/work-item-filters";
 import { WorkItemCard } from "@/components/work-items/work-item-card";
@@ -210,5 +210,9 @@ function WorkItemsPageContent() {
 }
 
 export default function WorkItemsPage() {
-  return <WorkItemsPageContent />;
+  return (
+    <Suspense fallback={null}>
+      <WorkItemsPageContent />
+    </Suspense>
+  );
 }

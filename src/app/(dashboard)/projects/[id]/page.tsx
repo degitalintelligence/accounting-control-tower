@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkItemStatus, WorkItemPriority } from "@/types/work-item";
+import { EditProjectDialog } from "@/components/projects/edit-project-dialog";
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -159,6 +160,7 @@ export default function ProjectDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const fetchProject = useCallback(async () => {
     setLoading(true);
@@ -280,10 +282,7 @@ export default function ProjectDetailPage({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                /* Edit functionality can be added later */
-              }}
-              disabled
+              onClick={() => setEditOpen(true)}
             >
               <Edit className="size-3.5" />
               Edit
@@ -650,6 +649,7 @@ export default function ProjectDetailPage({
           </div>
         </div>
       </div>
+      <EditProjectDialog open={editOpen} onOpenChange={setEditOpen} project={project} onSaved={fetchProject} />
 
       {/* Link work item dialog */}
       <LinkWorkItemDialog

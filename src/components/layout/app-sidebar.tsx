@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -40,6 +41,7 @@ const mainNav: NavItem[] = [
 const controlNav: NavItem[] = [
   { label: "Antrean review", href: "/work-items?filter=review", icon: Eye, badge: 4 },
   { label: "Audit SOP", href: "/templates", icon: Shield },
+  { label: "Checklist", href: "/checklists", icon: CheckSquare },
   { label: "Kotak masuk WhatsApp", href: "/wa-inbox", icon: MessageCircle, badge: 3, badgeVariant: "amber" },
 ];
 
@@ -47,6 +49,7 @@ const manageNav: NavItem[] = [
   { label: "Tim & beban kerja", href: "/settings/workload", icon: Users },
   { label: "Klien", href: "/settings/clients", icon: Building2 },
   { label: "Pengaturan", href: "/settings", icon: Settings },
+  { label: "Administrasi", href: "/settings/administration", icon: Shield },
 ];
 
 interface AppSidebarProps {
@@ -56,6 +59,11 @@ interface AppSidebarProps {
 
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const pathname = usePathname();
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const user = useAuthStore((s) => s.user);
 
   const initials = user?.name
@@ -122,7 +130,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <NavLink
               key={item.href}
               item={item}
-              active={isActive(pathname, item.href)}
+              active={isMounted && isActive(pathname, item.href)}
               onClick={onClose}
             />
           ))}
@@ -134,7 +142,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <NavLink
               key={item.href}
               item={item}
-              active={isActive(pathname, item.href)}
+              active={isMounted && isActive(pathname, item.href)}
               onClick={onClose}
             />
           ))}
@@ -146,7 +154,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <NavLink
               key={item.href}
               item={item}
-              active={isActive(pathname, item.href)}
+              active={isMounted && isActive(pathname, item.href)}
               onClick={onClose}
             />
           ))}

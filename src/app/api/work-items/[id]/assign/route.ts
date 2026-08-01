@@ -76,6 +76,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { profile_id, role } = parsed.data;
     const assignmentRole = role as AssignmentRole;
 
+    const memberResult = await admin
+      .from("memberships")
+      .select("profile_id, client_id")
+      .eq("organization_id", organizationId)
+      .eq("profile_id", profile_id)
+      .eq("is_active", true);
+    const memberData = memberResult as unknown as { data: { profile_id: string; client_id: string | null }[] | null };
+    if (!memberData.data?.length) return NextResponse.json({ error: "Pengguna bukan anggota organisasi aktif." }, { status: 403 });
+
     // Verifikasi work item exists dan milik org yang sama
     const wiResult = await admin
       .from("work_items")
@@ -205,5 +214,36 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { error: "Terjadi kesalahan server." },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const admin = createServiceRoleClient();
+    const { organizationId, error } = await getUserOrganizationId(admin, user.id);
+    if (error || !organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
+    const { id } = await context.params;
+    const body = await request.json() as { assignment_id?: string; reason?: string };
+    if (!body.assignment_id) return NextResponse.json({ error: "assignment_id wajib diisi." }, { status: 400 });
+    const existingResult = await admin
+      .from("assignments")
+      .select("id, profile_id, role, work_item_id, work_items!inner(organization_id)")
+      .eq("id", body.assignment_id)
+      .eq("work_item_id", id)
+      .eq("work_items.organization_id", organizationId)
+      .is("unassigned_at", null)
+      .single();
+    const existing = existingResult as unknown as { data: { id: string; profile_id: string; role: AssignmentRole } | null; error: { message: string } | null };
+    if (existing.error || !existing.data) return NextResponse.json({ error: "Assignment aktif tidak ditemukan." }, { status: 404 });
+    const updated = await admin.from("assignments").update({ unassigned_at: new Date().toISOString(), reason: body.reason?.trim() || "Reassign" } as never).eq("id", body.assignment_id);
+    const updateData = updated as unknown as { error: { message: string } | null };
+    if (updateData.error) return NextResponse.json({ error: "Gagal membatalkan assignment." }, { status: 500 });
+    await logAudit(admin, { organizationId, actorId: user.id, action: "work_item.unassigned", entityType: "assignment", entityId: body.assignment_id, oldValue: existing.data, newValue: { reason: body.reason?.trim() || "Reassign" } });
+    return NextResponse.json({ data: { id: body.assignment_id } });
+  } catch {
+    return NextResponse.json({ error: "Terjadi kesalahan server." }, { status: 500 });
   }
 }

@@ -50,3 +50,14 @@ export async function PATCH(request: NextRequest, context: Context) {
   if (data.error) return NextResponse.json({ error: "Gagal mengubah item checklist." }, { status: 500 });
   return NextResponse.json({ data: data.data });
 }
+
+export async function DELETE(request: NextRequest, context: Context) {
+  const auth = await authorize(context);
+  if (auth.response) return auth.response;
+  const body = await request.json() as { item_id?: string };
+  if (!body.item_id) return NextResponse.json({ error: "item_id wajib diisi." }, { status: 400 });
+  const result = await auth.admin!.from("checklist_items").delete().eq("id", body.item_id).eq("checklist_template_id", auth.id);
+  const data = result as unknown as { error: { message: string } | null };
+  if (data.error) return NextResponse.json({ error: "Gagal menghapus item checklist." }, { status: 500 });
+  return NextResponse.json({ data: { id: body.item_id } });
+}

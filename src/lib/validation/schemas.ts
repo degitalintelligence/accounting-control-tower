@@ -15,6 +15,34 @@ export const clientUpdateSchema = z.object({
   timezone: z.string().trim().min(1).max(100).optional(),
 }).strict();
 
+export const organizationUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  slug: z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  timezone: z.string().trim().min(1).max(100),
+  currency: z.string().trim().min(3).max(10),
+}).strict();
+
+export const memberCreateSchema = z.object({
+  email: z.string().trim().email().max(320),
+  display_name: z.string().trim().min(1).max(200),
+  role: z.enum(["admin", "finance_manager", "finance_staff"]),
+  client_id: uuid.nullable().optional(),
+  entity_id: uuid.nullable().optional(),
+}).strict();
+
+export const memberUpdateSchema = memberCreateSchema.omit({ email: true }).partial().extend({
+  is_active: z.boolean().optional(),
+});
+
+export const notificationPreferencesSchema = z.object({
+  email_enabled: z.boolean(),
+  email_on_assignment: z.boolean(),
+  email_on_status_change: z.boolean(),
+  email_on_deadline: z.boolean(),
+  email_on_overdue: z.boolean(),
+  email_on_review: z.boolean(),
+}).strict();
+
 export const workItemCreateSchema = z.object({
   title: z.string().trim().min(1).max(500),
   type: z.enum(["routine", "project", "ad_hoc", "report"]),

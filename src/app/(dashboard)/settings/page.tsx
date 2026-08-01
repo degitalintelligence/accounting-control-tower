@@ -1,18 +1,31 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Settings, Users } from "lucide-react";
+import { Bell, Building2, Loader2, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { label: "General", href: "/settings", icon: Settings },
   { label: "Members", href: "/settings/members", icon: Users },
   { label: "Clients", href: "/settings/clients", icon: Building2 },
+  { label: "Notifikasi", href: "/settings/notifications", icon: Bell },
 ];
 
 export default function SettingsPage() {
   const pathname = usePathname();
+  const [form, setForm] = React.useState({ name: "", slug: "", timezone: "Asia/Jakarta", currency: "IDR" });
+  const [saving, setSaving] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => { void fetch("/api/settings/organization").then((response) => response.json()).then((body) => { const settings = body.data?.settings ?? {}; setForm({ name: body.data?.name ?? "", slug: body.data?.slug ?? "", timezone: settings.timezone ?? "Asia/Jakarta", currency: settings.currency ?? "IDR" }); }); }, []);
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setMessage(null);
+    const response = await fetch("/api/settings/organization", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    setMessage(response.ok ? "Pengaturan tersimpan." : "Pengaturan gagal disimpan."); setSaving(false);
+  }
 
   return (
     <main className="flex-1 p-6 bg-[#f3f5f2] min-h-screen">
@@ -56,37 +69,34 @@ export default function SettingsPage() {
             Informasi Organisasi
           </h2>
 
-          <div className="space-y-4">
+          <form onSubmit={save} className="space-y-4">
             <div>
               <label className="block text-[12px] font-medium text-[#8b9492] mb-1">
                 Nama Organisasi
               </label>
-              <div className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f] bg-slate-50">
-                Kreasheet Accounting
-              </div>
+              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
             </div>
 
             <div>
               <label className="block text-[12px] font-medium text-[#8b9492] mb-1">
                 Slug
               </label>
-              <div className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f] bg-slate-50">
-                kreasheet
-              </div>
+              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} required />
             </div>
 
             <div>
               <label className="block text-[12px] font-medium text-[#8b9492] mb-1">
                 Timezone
               </label>
-              <div className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f] bg-slate-50">
-                Asia/Jakarta
-              </div>
+              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })} required />
             </div>
-          </div>
+            <div><label className="block text-[12px] font-medium text-[#8b9492] mb-1">Mata uang</label><input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-[#18201f]" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} required /></div>
+            <button disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600">{saving && <Loader2 className="size-3.5 animate-spin" />}Simpan perubahan</button>
+            {message && <p className="text-xs text-emerald-600">{message}</p>}
+          </form>
 
           <p className="mt-4 text-[11px] text-[#8b9492]">
-            Hubungi admin untuk mengubah pengaturan organisasi.
+            Perubahan nama dan konfigurasi berlaku untuk seluruh workspace.
           </p>
         </div>
       </div>
