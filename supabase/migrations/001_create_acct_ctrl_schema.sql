@@ -179,8 +179,13 @@ CREATE TABLE acct_ctrl.assignments (
   assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   unassigned_at TIMESTAMPTZ,
   reason TEXT,
-  UNIQUE(work_item_id, role, profile_id) WHERE unassigned_at IS NULL
+  UNIQUE(work_item_id, role, profile_id)
 );
+
+-- Partial unique index: one active assignment per (work_item, role, profile)
+CREATE UNIQUE INDEX idx_assignments_active_unique
+  ON acct_ctrl.assignments(work_item_id, role, profile_id)
+  WHERE unassigned_at IS NULL;
 
 -- 7. Work item status history (immutable audit trail)
 CREATE TABLE acct_ctrl.work_item_status_history (
@@ -709,9 +714,9 @@ DO $$
 DECLARE
   t TEXT;
   tables_with_org TEXT[] := ARRAY[
-    'organizations', 'clients', 'entities', 'memberships',
-    'teams', 'team_members', 'sections', 'work_items',
-    'task_templates', 'template_versions', 'sop_templates',
+    'clients', 'entities', 'memberships',
+    'teams', 'sections', 'work_items',
+    'task_templates', 'sop_templates',
     'checklist_templates', 'files', 'escalation_policies',
     'integration_connections', 'wa_groups', 'notifications',
     'domain_events', 'audit_logs', 'action_suggestions'
@@ -728,15 +733,20 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Organizations: filter by id (organizations IS the org table)
+CREATE POLICY "org_isolation_organizations" ON acct_ctrl.organizations
+  FOR ALL TO authenticated
+  USING (id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid)
+  WITH CHECK (id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid);
+
 -- Tables with organization_id but accessed via work_item join
 DO $$
 DECLARE
   t TEXT;
   tables_via_work_item TEXT[] := ARRAY[
     'assignments', 'work_item_status_history', 'checklist_responses',
-    'evidence_requirements', 'work_item_files', 'reviews',
-    'review_findings', 'approvals', 'comments', 'outbox_events',
-    'notification_deliveries', 'escalation_instances'
+    'work_item_files', 'reviews',
+    'approvals', 'comments', 'escalation_instances'
   ];
 BEGIN
   FOREACH t IN ARRAY tables_via_work_item LOOP
@@ -767,6 +777,98 @@ CREATE POLICY "profiles_own" ON acct_ctrl.profiles
   FOR ALL TO authenticated
   USING (id = auth.uid())
   WITH CHECK (id = auth.uid());
+
+-- Evidence requirements: via work_items (work_item_id can be NULL for template-only)
+CREATE POLICY "org_isolation_evidence_requirements" ON acct_ctrl.evidence_requirements
+  FOR ALL TO authenticated
+  USING (
+    work_item_id IS NULL OR EXISTS (
+      SELECT 1 FROM acct_ctrl.work_items wi
+      WHERE wi.id = work_item_id
+        AND wi.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  )
+  WITH CHECK (
+    work_item_id IS NULL OR EXISTS (
+      SELECT 1 FROM acct_ctrl.work_items wi
+      WHERE wi.id = work_item_id
+        AND wi.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  );
+
+-- Team members: via teams
+CREATE POLICY "org_isolation_team_members" ON acct_ctrl.team_members
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM acct_ctrl.teams t
+      WHERE t.id = team_id
+        AND t.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM acct_ctrl.teams t
+      WHERE t.id = team_id
+        AND t.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  );
+
+-- Review findings: via reviews → work_items
+CREATE POLICY "org_isolation_review_findings" ON acct_ctrl.review_findings
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM acct_ctrl.reviews r
+      JOIN acct_ctrl.work_items wi ON wi.id = r.work_item_id
+      WHERE r.id = review_id
+        AND wi.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM acct_ctrl.reviews r
+      JOIN acct_ctrl.work_items wi ON wi.id = r.work_item_id
+      WHERE r.id = review_id
+        AND wi.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  );
+
+-- Outbox events: via domain_events
+CREATE POLICY "org_isolation_outbox_events" ON acct_ctrl.outbox_events
+  FOR ALL TO authenticated
+  USING (
+    domain_event_id IS NULL OR EXISTS (
+      SELECT 1 FROM acct_ctrl.domain_events de
+      WHERE de.id = domain_event_id
+        AND de.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  )
+  WITH CHECK (
+    domain_event_id IS NULL OR EXISTS (
+      SELECT 1 FROM acct_ctrl.domain_events de
+      WHERE de.id = domain_event_id
+        AND de.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  );
+
+-- Notification deliveries: via notifications
+CREATE POLICY "org_isolation_notification_deliveries" ON acct_ctrl.notification_deliveries
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM acct_ctrl.notifications n
+      WHERE n.id = notification_id
+        AND n.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM acct_ctrl.notifications n
+      WHERE n.id = notification_id
+        AND n.organization_id = (current_setting('request.jwt.claims', true)::jsonb->>'organization_id')::uuid
+    )
+  );
 
 -- Projects, milestones, dependencies: via work_item
 CREATE POLICY "org_isolation_projects" ON acct_ctrl.projects

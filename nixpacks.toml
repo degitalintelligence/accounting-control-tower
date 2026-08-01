@@ -1,6 +1,10 @@
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm"]
 
+[variables]
+NODE_ENV = "production"
+NEXT_TELEMETRY_DISABLED = "1"
+
 [phases.install]
 cmds = ["npm ci --legacy-peer-deps"]
 
@@ -8,4 +12,4 @@ cmds = ["npm ci --legacy-peer-deps"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm start"
+cmd = "npm start -- --hostname 0.0.0.0"

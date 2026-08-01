@@ -1,0 +1,76 @@
+"use client";
+
+import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { AppSidebar } from "./app-sidebar";
+import { AppHeader } from "./app-header";
+import { CommandPalette } from "./command-palette";
+
+interface AppShellProps {
+  children: React.ReactNode;
+}
+
+export function AppShell({ children }: AppShellProps) {
+  const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const handleMenuClick = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
+  }, []);
+
+  const handleSidebarClose = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  const handleNewWorkItem = useCallback(() => {
+    router.push("/work-items?new=1");
+  }, [router]);
+
+  const handleSearch = useCallback(() => {
+    router.push("/work-items?focus=search");
+  }, [router]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isFormField = target?.matches("input, textarea, select, [contenteditable='true']");
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
+
+      if (isFormField || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      if (event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        handleNewWorkItem();
+      } else if (event.key === "/") {
+        event.preventDefault();
+        handleSearch();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleNewWorkItem, handleSearch]);
+
+  return (
+    <div className="flex min-h-screen bg-[#f3f5f2]">
+      <AppSidebar open={sidebarOpen} onClose={handleSidebarClose} />
+
+      {/* Main content area */}
+      <div className="flex min-w-0 flex-1 flex-col lg:ml-[244px]">
+        <AppHeader
+          onMenuClick={handleMenuClick}
+          onNewWorkItem={handleNewWorkItem}
+          onSearch={handleSearch}
+        />
+        <main className="flex-1">{children}</main>
+      </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </div>
+  );
+}
