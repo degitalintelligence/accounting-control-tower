@@ -10,6 +10,17 @@ function parseRule(rrule: string) {
 
 function dateKey(date: Date) { return date.toISOString().slice(0, 10); }
 
+function localDateKey(date: Date, timezone: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+function parseDate(value: string | undefined) {
+  if (!value) return null;
+  const normalized = value.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3").slice(0, 10);
+  const date = new Date(`${normalized}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function matches(date: Date, rule: Record<string, string>, skipWeekends: boolean) {
   const day = date.getUTCDay();
   if (skipWeekends && (day === 0 || day === 6)) return false;
@@ -23,15 +34,21 @@ function matches(date: Date, rule: Record<string, string>, skipWeekends: boolean
   return true;
 }
 
-function occurrences(rrule: string, skipWeekends: boolean, from: Date, until: Date) {
+function occurrences(rrule: string, timezone: string, skipWeekends: boolean, from: Date, until: Date) {
   const rule = parseRule(rrule);
   const result: string[] = [];
-  const cursor = new Date(from);
+  const cursor = new Date(`${localDateKey(from, timezone)}T00:00:00.000Z`);
   const interval = Math.max(1, Number(rule.INTERVAL ?? 1));
+  const count = Number.isFinite(Number(rule.COUNT)) ? Math.max(0, Number(rule.COUNT)) : null;
+  const ruleUntil = parseDate(rule.UNTIL);
+  const anchor = new Date(cursor);
   while (cursor <= until && result.length < 200) {
-    const elapsedDays = Math.floor((cursor.getTime() - from.getTime()) / 86400000);
+    const elapsedDays = Math.floor((cursor.getTime() - anchor.getTime()) / 86400000);
     const validFrequency = rule.FREQ === "DAILY" || rule.FREQ === "WEEKDAY" || rule.FREQ === "WEEKLY" || rule.FREQ === "MONTHLY" || rule.FREQ === "YEARLY";
-    if (validFrequency && matches(cursor, rule, rule.FREQ === "WEEKDAY" || skipWeekends) && (rule.FREQ !== "DAILY" || elapsedDays % interval === 0)) result.push(dateKey(cursor));
+    const frequencyInterval = rule.FREQ === "DAILY" ? elapsedDays % interval === 0 : rule.FREQ === "WEEKLY" ? Math.floor(elapsedDays / 7) % interval === 0 : rule.FREQ === "MONTHLY" ? (cursor.getUTCMonth() - anchor.getUTCMonth() + 12 * (cursor.getUTCFullYear() - anchor.getUTCFullYear())) % interval === 0 : rule.FREQ === "YEARLY" ? (cursor.getUTCFullYear() - anchor.getUTCFullYear()) % interval === 0 : true;
+    const beforeRuleUntil = !ruleUntil || cursor <= ruleUntil;
+    if (validFrequency && beforeRuleUntil && frequencyInterval && matches(cursor, rule, rule.FREQ === "WEEKDAY" || skipWeekends)) result.push(dateKey(cursor));
+    if (count !== null && result.length >= count) break;
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return result;
@@ -78,7 +95,7 @@ export async function runRecurrenceWorker(admin: Client) {
   if (rules.error) throw new Error(rules.error.message);
   const now = new Date();
   const from = new Date(now); from.setUTCDate(from.getUTCDate() - 90);
-  for (const rule of rules.data ?? []) for (const date of occurrences(rule.rrule, rule.skip_weekends, from, new Date(now.getTime() + (rule.generation_lead_days || 0) * 86400000))) await enqueue(admin, rule, rule.task_templates.organization_id, date);
+  for (const rule of rules.data ?? []) for (const date of occurrences(rule.rrule, rule.timezone, rule.skip_weekends, from, new Date(now.getTime() + (rule.generation_lead_days || 0) * 86400000))) await enqueue(admin, rule, rule.task_templates.organization_id, date);
   const jobsResult = await admin.from("recurrence_job_runs").select("id, status, attempts, max_attempts, recurrence_rule_id, template_id, instance_key, occurrence_date").eq("status", "pending").or(`next_retry_at.is.null,next_retry_at.lte.${now.toISOString()}`).order("occurrence_date", { ascending: true }).limit(50);
   const jobs = jobsResult as unknown as { data: Job[] | null; error: { message: string } | null };
   if (jobs.error) throw new Error(jobs.error.message);

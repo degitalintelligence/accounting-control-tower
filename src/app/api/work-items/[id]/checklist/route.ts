@@ -51,9 +51,19 @@ export async function PATCH(request: NextRequest, context: Context) {
   const assigned = auth.assignments.some((entry) => entry.profile_id === auth.userId && !entry.unassigned_at && entry.role === templateRoleData.data?.target_role);
   const manager = ["admin", "manager", "finance_manager", "accounting_manager"].includes(membershipData.data?.role ?? "");
   if (!assigned && !manager) return NextResponse.json({ error: "Anda tidak berwenang mengubah checklist ini." }, { status: 403 });
-  const item = await auth.admin!.from("checklist_items").select("id").eq("id", body.checklist_item_id).eq("checklist_template_id", auth.templateId).single();
-  const itemData = item as unknown as { data: { id: string } | null; error: { message: string } | null };
+  const item = await auth.admin!.from("checklist_items").select("id, input_type, validation_rules").eq("id", body.checklist_item_id).eq("checklist_template_id", auth.templateId).single();
+  const itemData = item as unknown as { data: { id: string; input_type: string; validation_rules: Record<string, unknown> } | null; error: { message: string } | null };
   if (itemData.error || !itemData.data) return NextResponse.json({ error: "Item checklist tidak valid." }, { status: 400 });
+  const value = body.value?.trim() ?? null;
+  const rules = itemData.data.validation_rules ?? {};
+  if (itemData.data.input_type === "number" && value !== null && (value === "" || !Number.isFinite(Number(value)))) return NextResponse.json({ error: "Nilai harus berupa angka." }, { status: 400 });
+  if (itemData.data.input_type === "url" && value !== null) {
+    try { new URL(value); } catch { return NextResponse.json({ error: "URL checklist tidak valid." }, { status: 400 }); }
+  }
+  if (itemData.data.input_type === "confirmation" && value !== null && value !== "true") return NextResponse.json({ error: "Konfirmasi harus bernilai benar." }, { status: 400 });
+  if (typeof rules.min_length === "number" && value !== null && value.length < rules.min_length) return NextResponse.json({ error: "Nilai checklist terlalu pendek." }, { status: 400 });
+  if (typeof rules.max_length === "number" && value !== null && value.length > rules.max_length) return NextResponse.json({ error: "Nilai checklist terlalu panjang." }, { status: 400 });
+  if (itemData.data.input_type === "file" && !body.file_id) return NextResponse.json({ error: "File wajib dilampirkan." }, { status: 400 });
   const result = await auth.admin!.from("checklist_responses").upsert({ work_item_id: auth.id, checklist_item_id: body.checklist_item_id, profile_id: auth.userId, value: body.value ?? null, file_id: body.file_id ?? null, updated_at: new Date().toISOString() } as never, { onConflict: "work_item_id,checklist_item_id,profile_id" }).select().single();
   const data = result as unknown as { data: unknown; error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal menyimpan checklist." }, { status: 500 });

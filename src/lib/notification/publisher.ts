@@ -17,13 +17,15 @@ export async function publishNotificationEvent(
     dedup_key: event.dedupKey ?? null,
   };
 
-  const domainResult = await supabase.from("domain_events").insert({
+  const eventKey = event.dedupKey ? `notification:${event.dedupKey}` : null;
+  const domainResult = await supabase.from("domain_events").upsert({
     organization_id: event.organizationId,
     event_type: event.eventType,
     aggregate_type: event.aggregateType,
     aggregate_id: event.aggregateId,
+    event_key: eventKey,
     payload,
-  });
+  }, { onConflict: "event_key", ignoreDuplicates: false }).select("id").maybeSingle();
 
   const domain = domainResult as unknown as {
     data: { id: string } | null;
@@ -34,11 +36,12 @@ export async function publishNotificationEvent(
     throw new Error(domain.error?.message ?? "Gagal menyimpan domain event.");
   }
 
-  const outboxResult = await supabase.from("outbox_events").insert({
+  const outboxResult = await supabase.from("outbox_events").upsert({
+    organization_id: event.organizationId,
     domain_event_id: domain.data.id,
     event_type: event.eventType,
     payload,
-  });
+  }, { onConflict: "domain_event_id", ignoreDuplicates: true });
 
   const outbox = outboxResult as unknown as {
     error: { message: string; code: string; hint: string; details: string } | null;

@@ -4,7 +4,7 @@ import { publishNotificationEvent } from "./publisher";
 
 type SchedulingClient = Pick<SupabaseClient, "from">;
 
-function inQuietHours(now: Date, timezone: string, start: string | null, end: string | null) {
+export function inQuietHours(now: Date, timezone: string, start: string | null, end: string | null) {
   if (!start || !end) return false;
   const local = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
   const current = Number(local.replace(":", ""));
@@ -15,8 +15,9 @@ function inQuietHours(now: Date, timezone: string, start: string | null, end: st
 
 export async function runDeadlineReminderSweep(admin: SchedulingClient) {
   const now = new Date();
-  const until = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-  const itemsResult = await admin.from("work_items").select("id, organization_id, title, due_at, assignments(profile_id)").gt("due_at", now.toISOString()).lte("due_at", until).not("status", "in", "(completed,cancelled)").is("deleted_at", null);
+  const rangeStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const rangeEnd = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString();
+  const itemsResult = await admin.from("work_items").select("id, organization_id, title, due_at, assignments(profile_id)").gt("due_at", rangeStart).lte("due_at", rangeEnd).not("status", "in", "(completed,cancelled)").is("deleted_at", null);
   const items = itemsResult as unknown as { data: { id: string; organization_id: string; title: string; due_at: string; assignments: { profile_id: string }[] }[] | null; error: { message: string } | null };
   if (items.error) throw new Error(items.error.message);
   let scheduled = 0;
@@ -26,10 +27,39 @@ export async function runDeadlineReminderSweep(admin: SchedulingClient) {
     const profileResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end").in("id", profiles);
     const profileData = profileResult as unknown as { data: { id: string; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
     if (profileData.error) throw new Error(profileData.error.message);
-    const eligible = (profileData.data ?? []).filter((profile) => !inQuietHours(now, profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end)).map((profile) => profile.id);
+    const profilesById = new Map((profileData.data ?? []).map((profile) => [profile.id, profile]));
+    const due = new Date(item.due_at).getTime();
+    const days = Math.round((due - now.getTime()) / (24 * 60 * 60 * 1000));
+    const offset = days <= -1 ? "h+1" : days === 0 ? "today" : days <= 1 ? "h-1" : "h-3";
+    const eligible = [...profilesById.values()].filter((profile) => !inQuietHours(now, profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end)).map((profile) => profile.id);
     if (!eligible.length) continue;
-    await publishNotificationEvent(admin, { eventType: "deadline_approaching", organizationId: item.organization_id, aggregateType: "work_item", aggregateId: item.id, profileIds: eligible, title: "Deadline mendekat", body: item.title, data: { work_item_id: item.id, due_at: item.due_at }, dedupKey: `deadline-24h:${item.id}:${item.due_at}` });
+    await publishNotificationEvent(admin, { eventType: "deadline_approaching", organizationId: item.organization_id, aggregateType: "work_item", aggregateId: item.id, profileIds: eligible, title: offset === "today" ? "Deadline hari ini" : offset === "h+1" ? "Deadline terlewat" : `Reminder deadline ${offset.toUpperCase()}`, body: item.title, data: { work_item_id: item.id, due_at: item.due_at, reminder_offset: offset }, dedupKey: `deadline:${offset}:${item.id}:${item.due_at.slice(0, 10)}` });
     scheduled += eligible.length;
+  }
+  return { scheduled };
+}
+
+export async function runBasicDigestSweep(admin: SchedulingClient) {
+  const now = new Date();
+  const profilesResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end");
+  const profiles = profilesResult as unknown as { data: { id: string; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
+  if (profiles.error) throw new Error(profiles.error.message);
+  let scheduled = 0;
+  for (const profile of profiles.data ?? []) {
+    if (inQuietHours(now, profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end)) continue;
+    const preferenceResult = await admin.from("notification_preferences").select("digest_enabled, digest_hour").eq("profile_id", profile.id).maybeSingle();
+    const preference = preferenceResult as unknown as { data: { digest_enabled: boolean; digest_hour: number } | null; error: { message: string } | null };
+    if (preference.error) throw new Error(preference.error.message);
+    if (preference.data?.digest_enabled === false) continue;
+    const localHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: profile.timezone, hour: "2-digit", hour12: false }).format(now));
+    if (localHour !== (preference.data?.digest_hour ?? 8)) continue;
+    const assignmentsResult = await admin.from("assignments").select("work_item_id, work_items!inner(id, organization_id, title, due_at, status)").eq("profile_id", profile.id).is("unassigned_at", null).not("work_items.status", "in", "(completed,cancelled)");
+    const assignments = assignmentsResult as unknown as { data: { work_items: { id: string; organization_id: string; title: string; due_at: string | null; status: string } }[] | null; error: { message: string } | null };
+    if (assignments.error || !assignments.data?.length) continue;
+    const first = assignments.data[0].work_items;
+    const body = `${assignments.data.length} work item aktif menunggu perhatian.`;
+    await publishNotificationEvent(admin, { eventType: "digest", organizationId: first.organization_id, aggregateType: "profile", aggregateId: profile.id, profileIds: [profile.id], title: "Ringkasan pekerjaan", body, data: { work_item_ids: assignments.data.map((row) => row.work_items.id) }, dedupKey: `digest:${profile.id}:${now.toISOString().slice(0, 10)}` });
+    scheduled += 1;
   }
   return { scheduled };
 }

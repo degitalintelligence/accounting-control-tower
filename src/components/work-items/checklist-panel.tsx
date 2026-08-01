@@ -24,13 +24,13 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
 
   useEffect(() => { queueMicrotask(() => load()); }, [load]);
 
-  async function save(itemId: string, value: string) {
+  async function save(itemId: string, value: string, fileId?: string | null) {
     setSaving(itemId);
     setError(null);
     const response = await fetch(`/api/work-items/${workItemId}/checklist`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checklist_item_id: itemId, value }),
+      body: JSON.stringify({ checklist_item_id: itemId, value, file_id: fileId ?? null }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
@@ -68,12 +68,27 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
                 <label className="text-sm text-slate-700">
                   {item.label} {item.is_required && <span className="text-red-500">*</span>}
                 </label>
-                {item.input_type === "checkbox" ? (
+                {item.input_type === "checkbox" || item.input_type === "confirmation" ? (
                   <Button type="button" size="sm" variant={completed ? "secondary" : "outline"} disabled={saving === item.id} onClick={() => save(item.id, completed ? "" : "true")}>
                     {saving === item.id ? <Loader2 className="size-3.5 animate-spin" /> : completed ? "Selesai" : "Tandai selesai"}
                   </Button>
+                ) : item.input_type === "file" ? (
+                  <Input type="file" disabled={saving === item.id} onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      const form = new FormData();
+                      form.set("file", file);
+                      const upload = await fetch(`/api/work-items/${workItemId}/files`, { method: "POST", body: form });
+                      const uploaded = await upload.json().catch(() => null) as { data?: { file?: { id?: string } } } | null;
+                      if (!upload.ok || !uploaded?.data?.file?.id) {
+                        setError("File checklist gagal diunggah.");
+                        return;
+                      }
+                      await save(item.id, file.name, uploaded.data.file.id);
+                    }
+                  }} />
                 ) : (
-                  <Input type={item.input_type} value={value} disabled={saving === item.id} onChange={(event) => save(item.id, event.target.value)} />
+                  <Input type={item.input_type === "url" ? "url" : item.input_type} value={value} disabled={saving === item.id} onChange={(event) => save(item.id, event.target.value)} />
                 )}
               </div>
             </div>

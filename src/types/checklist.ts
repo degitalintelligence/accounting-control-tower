@@ -1,6 +1,6 @@
 import type { AssignmentRole } from "@/types/work-item";
 
-export type ChecklistInputType = "checkbox" | "text" | "number" | "date";
+export type ChecklistInputType = "checkbox" | "text" | "number" | "date" | "file" | "url" | "confirmation";
 
 export interface ChecklistTemplate {
   id: string;

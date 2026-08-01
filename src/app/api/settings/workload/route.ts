@@ -24,7 +24,11 @@ export async function GET(request: NextRequest) {
     }
   }
   const ids = [...grouped.keys()];
-  const profileResult = ids.length ? await admin.from("profiles").select("id, display_name, email").in("id", ids) : { data: [] };
-  const profiles = (profileResult.data ?? []) as unknown as Array<{ id: string; display_name: string; email: string | null }>;
-  return NextResponse.json({ data: [...grouped.values()].map((entry) => ({ ...entry, profile: profiles.find((profile) => profile.id === entry.profile_id) ?? null })) });
+  const profileResult = ids.length ? await admin.from("profiles").select("id, display_name, email, capacity_hours_per_week, max_active_work_items, workload_timezone").in("id", ids) : { data: [] };
+  const profiles = (profileResult.data ?? []) as unknown as Array<{ id: string; display_name: string; email: string | null; capacity_hours_per_week: number; max_active_work_items: number; workload_timezone: string }>;
+  return NextResponse.json({ data: [...grouped.values()].map((entry) => {
+    const profile = profiles.find((item) => item.id === entry.profile_id) ?? null;
+    const capacity = profile?.max_active_work_items ?? 0;
+    return { ...entry, profile, capacity_utilization: capacity ? Math.round((entry.active / capacity) * 100) : null, over_capacity: capacity > 0 && entry.active > capacity };
+  }) });
 }

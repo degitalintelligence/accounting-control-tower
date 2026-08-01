@@ -9,6 +9,10 @@ export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
+  if (isOrgWide) {
+    const analytics = await (admin as unknown as { rpc: (name: string, params: Record<string, string>) => Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }> }).rpc("dashboard_analytics", { p_organization_id: organizationId });
+    if (!analytics.error && analytics.data?.[0]) return NextResponse.json(analytics.data[0]);
+  }
   const scope = <T extends { in: (column: string, values: string[]) => T }>(query: T) => isOrgWide ? query : query.in("client_id", clientIds);
 
   const now = new Date().toISOString();
@@ -76,5 +80,10 @@ export async function GET() {
     on_time_rate: onTimeRate,
     total_completed: completedCount,
     total_items: totalItems ?? 0,
+    average_cycle_hours: null,
+    revision_rate: null,
+    high_risk_open: null,
+    overdue_weight: null,
+    audit_coverage_rate: null,
   });
 }

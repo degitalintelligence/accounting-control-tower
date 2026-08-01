@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { verifyWahaToken } from "@/lib/whatsapp/config";
 import type { WahaMessage, WahaWebhookPayload } from "@/types/whatsapp";
-import { parseExplicitCommand, explicitCommandHelp } from "@/lib/whatsapp/commands";
-import { resolveParticipant } from "@/lib/whatsapp/identity";
-import { sendWahaText } from "@/lib/whatsapp/adapter";
 
 export const runtime = "nodejs";
 
@@ -12,16 +9,11 @@ function providerMessageId(message: WahaMessage): string | null {
   return message.id ?? message._data?.id?._serialized ?? message._data?.id?.id ?? null;
 }
 
-function value(message: WahaMessage, key: "body" | "type" | "from" | "author" | "chatId" | "timestamp"): string | number | null {
-  const direct = message[key];
-  if (direct !== undefined) return direct;
-  if (key === "timestamp") return message._data?.t ?? null;
-  return message._data?.[key] ?? null;
-}
-
 function stringValue(message: WahaMessage, key: "body" | "type" | "from" | "author" | "chatId"): string | null {
-  const result = value(message, key);
-  return typeof result === "string" ? result : null;
+  const direct = message[key];
+  if (typeof direct === "string") return direct;
+  const nested = message._data?.[key];
+  return typeof nested === "string" ? nested : null;
 }
 
 function timestamp(message: WahaMessage): number {
@@ -52,123 +44,33 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createServiceRoleClient();
-  const connectionResult = await admin
-    .from("integration_connections")
-    .select("id")
-    .eq("provider", "waha")
-    .eq("session_id", payload.session)
-    .limit(1)
-    .maybeSingle();
+  const connectionResult = await admin.from("integration_connections").select("id").eq("provider", "waha").eq("session_id", payload.session).limit(1).maybeSingle();
   const connection = connectionResult as unknown as { data: { id: string } | null; error: { message: string } | null };
   if (connection.error || !connection.data) return NextResponse.json({ accepted: true });
 
-  const groupResult = await admin
-    .from("wa_groups")
-    .select("id, organization_id")
-    .eq("connection_id", connection.data.id)
-    .eq("provider_group_id", groupId)
-    .eq("is_active", true)
-    .maybeSingle();
+  const groupResult = await admin.from("wa_groups").select("id, organization_id").eq("connection_id", connection.data.id).eq("provider_group_id", groupId).eq("is_active", true).maybeSingle();
   const group = groupResult as unknown as { data: { id: string; organization_id: string } | null; error: { message: string } | null };
   if (group.error || !group.data) return NextResponse.json({ accepted: true });
 
-  const senderParticipantId = stringValue(message, "author") ?? stringValue(message, "from");
-  const rawContent = stringValue(message, "body");
-
-  const insertResult = await admin.from("wa_messages").insert({
-    connection_id: connection.data.id,
-    wa_group_id: group.data.id,
-    provider_message_id: providerId,
-    sender_participant_id: senderParticipantId,
-    content: rawContent,
-    message_type: stringValue(message, "type") ?? "text",
-    media_metadata: message.media ?? {},
-    raw_payload: payload,
-    received_at: new Date(timestamp(message) * 1000).toISOString(),
-  } as never).select("id").maybeSingle();
-  const inserted = insertResult as unknown as { data: { id: string } | null; error: { code?: string; message: string } | null };
-  if (inserted.error && inserted.error.code !== "23505") {
-    console.error("[POST /api/wa-webhook] Gagal menyimpan pesan WhatsApp:", { message: inserted.error.message, code: inserted.error.code });
-    return NextResponse.json({ error: "Gagal menyimpan pesan." }, { status: 500 });
-  }
-  let messageId = inserted.data?.id;
-  if (!messageId) {
-    const existingResult = await admin
-      .from("wa_messages")
-      .select("id")
-      .eq("connection_id", connection.data.id)
-      .eq("provider_message_id", providerId)
-      .maybeSingle();
-    const existing = existingResult as unknown as { data: { id: string } | null; error: { message: string } | null };
-    if (existing.error || !existing.data) return NextResponse.json({ error: "Pesan tersimpan tetapi tidak dapat dijadwalkan." }, { status: 500 });
-    messageId = existing.data.id;
+  const enqueueResult = await admin.rpc("enqueue_whatsapp_message" as never, {
+    p_connection_id: connection.data.id,
+    p_wa_group_id: group.data.id,
+    p_organization_id: group.data.organization_id,
+    p_provider_message_id: providerId,
+    p_sender_participant_id: stringValue(message, "author") ?? stringValue(message, "from"),
+    p_content: stringValue(message, "body"),
+    p_message_type: stringValue(message, "type") ?? "text",
+    p_media_metadata: message.media ?? {},
+    p_raw_payload: payload,
+    p_received_at: new Date(timestamp(message) * 1000).toISOString(),
+    p_event_type: "whatsapp_message_received",
+    p_event_payload: { provider: "waha", session_id: payload.session, group_id: groupId, provider_message_id: providerId },
+  } as never);
+  const enqueued = enqueueResult as unknown as { data: { message_id: string; duplicate: boolean }[] | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
+  if (enqueued.error) {
+    console.error("[POST /api/wa-webhook] Gagal enqueue pesan WhatsApp:", { message: enqueued.error.message, code: enqueued.error.code, hint: enqueued.error.hint, details: enqueued.error.details });
+    return NextResponse.json({ error: "Gagal menerima pesan." }, { status: 500 });
   }
 
-  const content = rawContent;
-  const command = parseExplicitCommand(content);
-  if (content?.trim().startsWith("/task") && !command) {
-    try { await sendWahaText(groupId, explicitCommandHelp()); } catch {}
-    return NextResponse.json({ accepted: true, command: "invalid" });
-  }
-  if (command) {
-    const sender = await resolveParticipant(admin, group.data.id, senderParticipantId);
-    if (sender.status !== "resolved" || !sender.profileId) {
-      try { await sendWahaText(groupId, sender.status === "ambiguous" ? "Identitas WhatsApp ambigu. Admin perlu memilih mapping yang benar." : "Identitas WhatsApp belum terverifikasi."); } catch {}
-      return NextResponse.json({ accepted: true, command: "identity_required" });
-    }
-    const maker = command.makerParticipantId ? await resolveParticipant(admin, group.data.id, command.makerParticipantId) : sender;
-    const checker = command.checkerParticipantId ? await resolveParticipant(admin, group.data.id, command.checkerParticipantId) : null;
-    if (maker.status !== "resolved" || (checker && checker.status !== "resolved") || maker.profileId === checker?.profileId) {
-      try { await sendWahaText(groupId, "Maker/checker belum dapat di-resolve secara unik atau memiliki konflik."); } catch {}
-      return NextResponse.json({ accepted: true, command: "identity_required" });
-    }
-    const clientResult = await admin.from("clients").select("id").eq("organization_id", group.data.organization_id).is("deleted_at", null).or(`slug.eq.${command.clientRef},name.ilike.${command.clientRef}`).maybeSingle();
-    const client = clientResult as unknown as { data: { id: string } | null; error: { message: string } | null };
-    if (client.error || !client.data) {
-      try { await sendWahaText(groupId, "Client tidak ditemukan di organisasi ini."); } catch {}
-      return NextResponse.json({ accepted: true, command: "invalid_client" });
-    }
-    const workItemResult = await admin.rpc("create_whatsapp_command_work_item", {
-      p_organization_id: group.data.organization_id,
-      p_client_id: client.data.id,
-      p_title: command.title,
-      p_due_at: command.dueAt,
-      p_source_reference_id: messageId,
-      p_source_metadata: { provider: "waha", session_id: payload.session, group_id: groupId, message_id: providerId, sender_profile_id: sender.profileId, maker_profile_id: maker.profileId, checker_profile_id: checker?.profileId ?? null, creation_mode: "explicit_command" },
-      p_created_by: sender.profileId,
-      p_maker_id: maker.profileId,
-      p_checker_id: checker?.profileId ?? null,
-    } as never);
-    const workItem = workItemResult as unknown as { data: { id: string; title: string } | null; error: { message: string } | null };
-    if (!workItem.data || workItem.error) return NextResponse.json({ error: "Command diterima tetapi task gagal dibuat." }, { status: 500 });
-    try { await sendWahaText(groupId, `Task dibuat: ${workItem.data.title}`); } catch {}
-    return NextResponse.json({ accepted: true, command: "created", work_item_id: workItem.data.id });
-  }
-
-  const domainResult = await admin.from("domain_events").insert({
-    organization_id: group.data.organization_id,
-    event_type: "ai_extraction_requested",
-    aggregate_type: "wa_message",
-    aggregate_id: messageId,
-    payload: { message_id: messageId, organization_id: group.data.organization_id },
-  } as never).select("id").maybeSingle();
-  const domain = domainResult as unknown as { data: { id: string } | null; error: { code?: string; message: string } | null };
-  if (domain.error && domain.error.code !== "23505") {
-    console.error("[POST /api/wa-webhook] Gagal membuat job AI extraction:", { message: domain.error.message, code: domain.error.code });
-    return NextResponse.json({ error: "Pesan tersimpan tetapi job tidak dapat dibuat." }, { status: 500 });
-  }
-  if (domain.data) {
-    const outboxResult = await admin.from("outbox_events").insert({
-      domain_event_id: domain.data.id,
-      event_type: "ai_extraction_requested",
-      payload: { message_id: messageId, organization_id: group.data.organization_id },
-      max_retries: 5,
-    } as never);
-    const outbox = outboxResult as unknown as { error: { message: string } | null };
-    if (outbox.error) {
-      console.error("[POST /api/wa-webhook] Gagal memasukkan job AI extraction:", { message: outbox.error.message });
-      return NextResponse.json({ error: "Pesan tersimpan tetapi job tidak dapat dibuat." }, { status: 500 });
-    }
-  }
-  return NextResponse.json({ accepted: true, duplicate: inserted.error?.code === "23505" });
+  return NextResponse.json({ accepted: true, duplicate: enqueued.data?.[0]?.duplicate ?? false });
 }

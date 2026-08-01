@@ -332,6 +332,7 @@ export interface Database {
         Relationships: [];
         Row: {
           id: string;
+          organization_id: string;
           domain_event_id: string | null;
           event_type: string;
           payload: Json;
@@ -341,11 +342,16 @@ export interface Database {
           next_retry_at: string | null;
           processed_at: string | null;
           claimed_at: string | null;
+          claimed_by: string | null;
+          lease_expires_at: string | null;
+          claim_token: string | null;
           last_error: string | null;
+          dead_letter_event_id: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
+          organization_id: string;
           domain_event_id?: string | null;
           event_type: string;
           payload?: Json;
@@ -355,7 +361,10 @@ export interface Database {
           next_retry_at?: string | null;
           processed_at?: string | null;
           claimed_at?: string | null;
+          claimed_by?: string | null;
+          lease_expires_at?: string | null;
           last_error?: string | null;
+          dead_letter_event_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -368,6 +377,11 @@ export interface Database {
           max_retries?: number;
           next_retry_at?: string | null;
           processed_at?: string | null;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          lease_expires_at?: string | null;
+          last_error?: string | null;
+          dead_letter_event_id?: string | null;
           created_at?: string;
         };
       };

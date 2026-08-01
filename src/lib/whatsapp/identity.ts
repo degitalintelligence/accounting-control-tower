@@ -28,3 +28,14 @@ export async function resolveParticipant(
   if (unique.length > 1) return { status: "ambiguous", profileId: null, candidates: unique };
   return { status: "unresolved", profileId: null, candidates: [] };
 }
+
+export async function resolveProfileName(admin: IdentityClient, groupId: string, name: string | null): Promise<IdentityResolution> {
+  if (!name?.trim()) return { status: "unresolved", profileId: null, candidates: [] };
+  const result = await admin.from("wa_participant_mappings").select("profile_id, is_verified").eq("wa_group_id", groupId).ilike("display_name", name.trim());
+  const resolved = result as unknown as { data: { profile_id: string | null; is_verified: boolean }[] | null; error: { message: string } | null };
+  if (resolved.error) throw new Error(resolved.error.message);
+  const unique = [...new Set((resolved.data ?? []).filter((row) => row.is_verified && row.profile_id).map((row) => row.profile_id as string))];
+  if (unique.length === 1) return { status: "resolved", profileId: unique[0], candidates: unique };
+  if (unique.length > 1) return { status: "ambiguous", profileId: null, candidates: unique };
+  return { status: "unresolved", profileId: null, candidates: [] };
+}

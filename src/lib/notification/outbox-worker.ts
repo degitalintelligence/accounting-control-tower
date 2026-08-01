@@ -6,8 +6,9 @@ import type { NotificationEvent } from "@/types/notification";
 import type { Json } from "@/lib/supabase/types";
 import { sendWahaText } from "@/lib/whatsapp/adapter";
 import { structuredSupabaseError } from "@/lib/supabase/error";
+import { inQuietHours } from "./scheduling";
 
-type NotificationClient = Pick<SupabaseClient, "from">;
+type NotificationClient = Pick<SupabaseClient, "from" | "rpc">;
 
 type OutboxRow = {
   id: string;
@@ -16,6 +17,9 @@ type OutboxRow = {
   payload: Json;
   retry_count: number;
   max_retries: number;
+  organization_id: string;
+  claimed_by: string | null;
+  claim_token: string | null;
 };
 
 type DomainEventRow = {
@@ -78,63 +82,34 @@ function toNotificationEvent(
   };
 }
 
-async function claimNext(admin: NotificationClient): Promise<OutboxRow | null> {
-  const now = new Date().toISOString();
-  const pendingResult = await admin
-    .from("outbox_events")
-    .select("id, domain_event_id, event_type, payload, retry_count, max_retries")
-    .eq("status", "pending")
-    .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const pending = pendingResult as unknown as {
-    data: OutboxRow | null;
-    error: { message: string } | null;
-  };
-
-  if (pending.error) throw new Error(pending.error.message);
-  if (!pending.data) return null;
-
-  const claimedResult = await admin
-    .from("outbox_events")
-    .update({ status: "processing" })
-    .eq("id", pending.data.id)
-    .eq("status", "pending")
-    .select("id, domain_event_id, event_type, payload, retry_count, max_retries")
-    .maybeSingle();
-  const claimed = claimedResult as unknown as {
-    data: OutboxRow | null;
-    error: { message: string } | null;
-  };
-
+async function claimNext(admin: NotificationClient, workerId: string): Promise<OutboxRow | null> {
+  const result = await admin.rpc("claim_outbox_event" as never, {
+    p_worker_id: workerId,
+    p_event_type: "notification",
+    p_lease_seconds: 300,
+  });
+  const claimed = result as unknown as { data: OutboxRow[] | null; error: { message: string } | null };
   if (claimed.error) throw new Error(claimed.error.message);
-  return claimed.data;
+  return claimed.data?.[0] ?? null;
 }
 
-async function markProcessed(admin: NotificationClient, id: string) {
+async function markProcessed(admin: NotificationClient, id: string, workerId: string) {
   const result = await admin
     .from("outbox_events")
-    .update({ status: "processed", processed_at: new Date().toISOString(), next_retry_at: null })
+    .update({ status: "processed", processed_at: new Date().toISOString(), next_retry_at: null, lease_expires_at: null, claimed_at: null, claimed_by: null, claim_token: null })
     .eq("id", id)
-    .eq("status", "processing");
+    .eq("status", "processing")
+    .eq("claimed_by", workerId);
   const update = result as unknown as { error: { message: string } | null };
   if (update.error) throw new Error(update.error.message);
 }
 
-async function markFailed(admin: NotificationClient, row: OutboxRow) {
-  const retryCount = row.retry_count + 1;
-  const exhausted = retryCount >= row.max_retries;
-  const nextRetryAt = new Date(Date.now() + Math.min(8 * 60 * 60 * 1000, 30_000 * 2 ** (retryCount - 1))).toISOString();
-  const result = await admin
-    .from("outbox_events")
-    .update({
-      status: exhausted ? "failed" : "pending",
-      retry_count: retryCount,
-      next_retry_at: exhausted ? null : nextRetryAt,
-    })
-    .eq("id", row.id)
-    .eq("status", "processing");
+async function markFailed(admin: NotificationClient, row: OutboxRow, workerId: string, error: unknown) {
+  const result = await admin.rpc("fail_outbox_event" as never, {
+    p_outbox_event_id: row.id,
+    p_error_message: error instanceof Error ? error.message.slice(0, 500) : "Kesalahan tidak diketahui.",
+    p_worker_id: workerId,
+  });
   const update = result as unknown as { error: { message: string } | null };
   if (update.error) throw new Error(update.error.message);
 }
@@ -156,7 +131,7 @@ async function processRow(admin: NotificationClient, row: OutboxRow) {
   if (!domain.data) throw new Error("Domain event tidak ditemukan.");
 
   if (!isRecord(row.payload) || !Array.isArray(row.payload.profile_ids) || typeof row.payload.title !== "string") {
-    return;
+    throw new Error("Payload notification tidak valid.");
   }
 
   const event = toNotificationEvent(row, domain.data);
@@ -171,6 +146,7 @@ function preferenceColumn(eventType: NotificationEvent["eventType"]) {
   if (eventType === "deadline_approaching") return "email_on_deadline";
   if (eventType === "item_overdue") return "email_on_overdue";
   if (eventType === "review_requested" || eventType === "review_approved") return "email_on_review";
+  if (eventType === "digest") return null;
   return null;
 }
 
@@ -183,8 +159,8 @@ async function deliverEmailNotifications(
   if (!preference || notifications.length === 0) return;
 
   const profileIds = notifications.map((notification) => notification.profile_id);
-  const profilesResult = await admin.from("profiles").select("id, email").in("id", profileIds);
-  const profiles = profilesResult as unknown as { data: { id: string; email: string | null }[] | null; error: { message: string } | null };
+  const profilesResult = await admin.from("profiles").select("id, email, timezone, quiet_hours_start, quiet_hours_end").in("id", profileIds);
+  const profiles = profilesResult as unknown as { data: { id: string; email: string | null; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
   if (profiles.error) throw new Error(profiles.error.message);
 
   const preferencesResult = await admin
@@ -204,7 +180,8 @@ async function deliverEmailNotifications(
   for (const notification of notifications) {
     const email = emailByProfile.get(notification.profile_id);
     const userPreference = preferenceByProfile.get(notification.profile_id);
-    if (!email || userPreference?.email_enabled === false || userPreference?.[preference] === false) continue;
+    const profile = (profiles.data ?? []).find((candidate) => candidate.id === notification.profile_id);
+    if (!email || !profile || inQuietHours(new Date(), profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end) || userPreference?.email_enabled === false || userPreference?.[preference] === false) continue;
 
     const deliveryResult = await admin.from("notification_deliveries").upsert(
       { notification_id: notification.id, channel: "email", status: "processing" },
@@ -240,10 +217,15 @@ async function deliverEmailNotifications(
 
 async function deliverWhatsAppNotifications(admin: NotificationClient, event: NotificationEvent, notifications: { id: string; profile_id: string; title: string; body: string | null }[]) {
   if (event.channel !== "whatsapp" || !notifications.length) return;
+  const profileResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end").in("id", notifications.map((notification) => notification.profile_id));
+  const profiles = profileResult as unknown as { data: { id: string; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
+  if (profiles.error) throw new Error(profiles.error.message);
   const mappingsResult = await admin.from("wa_participant_mappings").select("profile_id, provider_participant_id, wa_group_id").in("profile_id", notifications.map((notification) => notification.profile_id)).eq("is_verified", true);
   const mappings = mappingsResult as unknown as { data: { profile_id: string; provider_participant_id: string; wa_group_id: string }[] | null; error: { message: string } | null };
   if (mappings.error) throw new Error(mappings.error.message);
   for (const notification of notifications) {
+    const profile = (profiles.data ?? []).find((candidate) => candidate.id === notification.profile_id);
+    if (!profile || inQuietHours(new Date(), profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end)) continue;
     const mapping = (mappings.data ?? []).find((candidate) => candidate.profile_id === notification.profile_id);
     if (!mapping) continue;
     const groupResult = await admin.from("wa_groups").select("provider_group_id").eq("id", mapping.wa_group_id).eq("is_active", true).maybeSingle();
@@ -264,19 +246,20 @@ async function deliverWhatsAppNotifications(admin: NotificationClient, event: No
 }
 
 export async function runNotificationOutboxWorker(admin: NotificationClient) {
+  const workerId = `notification-${crypto.randomUUID()}`;
   let processed = 0;
   let failed = 0;
 
   for (let index = 0; index < batchSize; index += 1) {
-    const row = await claimNext(admin);
+    const row = await claimNext(admin, workerId);
     if (!row) break;
 
     try {
       await processRow(admin, row);
-      await markProcessed(admin, row.id);
+      await markProcessed(admin, row.id, workerId);
       processed += 1;
     } catch (error) {
-      await markFailed(admin, row);
+      await markFailed(admin, row, workerId, error);
       failed += 1;
       console.error("[notification-outbox] Pemrosesan gagal:", {
         outboxId: row.id,

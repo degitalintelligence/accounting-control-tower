@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit/logger";
+import { publishNotificationEvent } from "./publisher";
 
 type AnyClient = Pick<SupabaseClient, "from">;
 
@@ -99,12 +100,11 @@ function getRecipients(rule: EscalationRule): string[] {
   return ["maker"];
 }
 
-async function notifyRecipients(
+async function getRecipientIds(
   admin: AnyClient,
   item: WorkItem,
   policy: Policy,
-  rule: EscalationRule,
-  overdueHours: number
+  rule: EscalationRule
 ) {
   const roles = getRecipients(rule);
   const result = await admin
@@ -121,26 +121,7 @@ async function notifyRecipients(
 
   if (error) throw error;
 
-  const dedupPrefix = `escalation:${policy.id}:${item.id}:${rule.threshold_hours}`;
-  for (const recipient of recipients ?? []) {
-    await admin.from("notifications").upsert(
-      {
-        profile_id: recipient.profile_id,
-        organization_id: item.organization_id,
-        event_type: "item_escalated",
-        title: "Work item memerlukan eskalasi",
-        body: `Work item telah overdue lebih dari ${rule.threshold_hours} jam.`,
-        data: {
-          work_item_id: item.id,
-          escalation_level: rule.level,
-          overdue_hours: Math.floor(overdueHours),
-        },
-        channel: "in_app",
-        dedup_key: `${dedupPrefix}:${recipient.profile_id}`,
-      },
-      { onConflict: "dedup_key", ignoreDuplicates: true }
-    );
-  }
+  return (recipients ?? []).map((recipient) => recipient.profile_id);
 }
 
 async function recordEscalationEvent(
@@ -148,46 +129,21 @@ async function recordEscalationEvent(
   item: WorkItem,
   policy: Policy,
   rule: EscalationRule,
-  overdueHours: number
+  overdueHours: number,
+  profileIds: string[]
 ) {
-  const eventKey = `escalation:${policy.id}:${item.id}:${rule.threshold_hours}`;
-  const event = await admin
-    .from("domain_events")
-    .upsert(
-      {
-        organization_id: item.organization_id,
-        event_type: "work_item.escalated",
-        aggregate_type: "work_item",
-        aggregate_id: item.id,
-        event_key: eventKey,
-        payload: {
-          policy_id: policy.id,
-          escalation_level: rule.level,
-          threshold_hours: rule.threshold_hours,
-          overdue_hours: Math.floor(overdueHours),
-        },
-      },
-      { onConflict: "event_key", ignoreDuplicates: true }
-    )
-    .select("id")
-    .maybeSingle();
-
-  const { data: domainEvent, error } = event as unknown as {
-    data: { id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (error) throw error;
-  if (!domainEvent) return;
-
-  await admin.from("outbox_events").upsert(
-    {
-      domain_event_id: domainEvent.id,
-      event_type: "work_item.escalated",
-      payload: { event_key: eventKey, work_item_id: item.id },
-    },
-    { onConflict: "domain_event_id", ignoreDuplicates: true }
-  );
+  if (!profileIds.length) return;
+  await publishNotificationEvent(admin, {
+    eventType: "item_escalated",
+    organizationId: item.organization_id,
+    aggregateType: "work_item",
+    aggregateId: item.id,
+    profileIds,
+    title: "Work item memerlukan eskalasi",
+    body: `Work item telah overdue lebih dari ${rule.threshold_hours} jam.`,
+    data: { work_item_id: item.id, escalation_level: rule.level, overdue_hours: Math.floor(overdueHours) },
+    dedupKey: `escalation:${policy.id}:${item.id}:${rule.threshold_hours}`,
+  });
 }
 
 async function processRule(
@@ -201,8 +157,8 @@ async function processRule(
   if (overdueHours < rule.threshold_hours) return instance;
 
   const shouldAdvance = !instance || levelRank[rule.level] > levelRank[instance.current_level];
-  await notifyRecipients(admin, item, policy, rule, overdueHours);
-  await recordEscalationEvent(admin, item, policy, rule, overdueHours);
+  const profileIds = await getRecipientIds(admin, item, policy, rule);
+  await recordEscalationEvent(admin, item, policy, rule, overdueHours, profileIds);
 
   if (shouldAdvance) {
     const update = await admin

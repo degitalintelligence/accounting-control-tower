@@ -6,20 +6,25 @@ import { aiReviewSchema, validationMessage, workItemIdQuerySchema } from "@/lib/
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
 type Assignment = { profile_id: string; role: string; unassigned_at: string | null };
-type AuthContext = { admin: ReturnType<typeof createServiceRoleClient>; userId: string; organizationId: string; membershipRole: string; item: { id: string; organization_id: string; title: string; description: string | null; acceptance_criteria: string | null; status: string; checklist_template_id: string | null; assignments: Assignment[] } };
+type AuthContext = { admin: ReturnType<typeof createServiceRoleClient>; userId: string; organizationId: string; membershipRole: string; item: { id: string; organization_id: string; client_id: string; title: string; description: string | null; acceptance_criteria: string | null; status: string; checklist_template_id: string | null; assignments: Assignment[] } };
 
 async function authorize(id: string): Promise<AuthContext | NextResponse> {
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createServiceRoleClient();
-  const membershipResult = await admin.from("memberships").select("organization_id, role").eq("profile_id", user.id).eq("is_active", true).limit(1).single();
-  const membership = membershipResult as unknown as { data: { organization_id: string; role: string } | null; error: ErrorShape | null };
+  const membershipResult = await admin.from("memberships").select("organization_id, client_id, role").eq("profile_id", user.id).eq("is_active", true);
+  const membership = membershipResult as unknown as { data: { organization_id: string; client_id: string | null; role: string }[] | null; error: ErrorShape | null };
   if (membership.error || !membership.data) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
-  const itemResult = await admin.from("work_items").select("id, organization_id, title, description, acceptance_criteria, status, checklist_template_id, assignments(profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", membership.data.organization_id).is("deleted_at", null).single();
+  const organizationIds = [...new Set(membership.data.map((entry) => entry.organization_id))];
+  if (organizationIds.length !== 1) return NextResponse.json({ error: "Organisasi aktif tidak tunggal." }, { status: 409 });
+  const organizationId = organizationIds[0];
+  const itemResult = await admin.from("work_items").select("id, organization_id, client_id, title, description, acceptance_criteria, status, checklist_template_id, assignments(profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
   const item = itemResult as unknown as { data: AuthContext["item"] | null; error: ErrorShape | null };
   if (item.error || !item.data) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
-  return { admin, userId: user.id, organizationId: membership.data.organization_id, membershipRole: membership.data.role, item: item.data };
+  if (!membership.data.some((entry) => entry.organization_id === organizationId && (entry.client_id === null || entry.client_id === item.data!.client_id))) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
+  const scopedMembership = membership.data.find((entry) => entry.organization_id === organizationId && (entry.client_id === null || entry.client_id === item.data!.client_id));
+  return { admin, userId: user.id, organizationId, membershipRole: scopedMembership?.role ?? "", item: item.data };
 }
 
 function canUseAssistant(auth: AuthContext) {
@@ -46,7 +51,7 @@ export async function GET(request: NextRequest) {
   const auth = await authorize(id);
   if (auth instanceof NextResponse) return auth;
   if (!canUseAssistant(auth)) return NextResponse.json({ error: "Anda tidak berwenang melihat AI Notes." }, { status: 403 });
-  const result = await auth.admin.from("ai_review_notes").select("id, status, result, generated_by, reviewed_by, created_at, reviewed_at").eq("work_item_id", id).eq("organization_id", auth.organizationId).order("created_at", { ascending: false }).limit(10);
+  const result = await auth.admin.from("ai_review_notes").select("id, status, result, generated_by, reviewed_by, created_at, reviewed_at").eq("work_item_id", id).eq("organization_id", auth.organizationId).eq("client_id", auth.item.client_id).order("created_at", { ascending: false }).limit(10);
   const data = result as unknown as { data: unknown[] | null; error: ErrorShape | null };
   if (data.error) return NextResponse.json({ error: "Gagal mengambil AI Notes." }, { status: 500 });
   return NextResponse.json({ data: data.data ?? [], membership_role: auth.membershipRole });
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (!["admin", "manager", "finance_manager", "accounting_manager"].includes(auth.membershipRole)) return NextResponse.json({ error: "Hanya manager yang dapat menerima atau menolak AI Notes." }, { status: 403 });
     if (!body.note_id) return NextResponse.json({ error: "note_id wajib diisi." }, { status: 400 });
     const status = body.action === "accept" ? "accepted" : "rejected";
-    const update = await auth.admin.from("ai_review_notes").update({ status, reviewed_by: auth.userId, reviewed_at: new Date().toISOString() } as never).eq("id", body.note_id).eq("work_item_id", id).eq("organization_id", auth.organizationId).eq("status", "pending").select("id, status").single();
+    const update = await auth.admin.from("ai_review_notes").update({ status, reviewed_by: auth.userId, reviewed_at: new Date().toISOString() } as never).eq("id", body.note_id).eq("work_item_id", id).eq("organization_id", auth.organizationId).eq("client_id", auth.item.client_id).eq("status", "pending").select("id, status").single();
     const updated = update as unknown as { data: { id: string; status: string } | null; error: ErrorShape | null };
     if (updated.error || !updated.data) return NextResponse.json({ error: "AI Note tidak ditemukan atau sudah diproses." }, { status: 409 });
     await logAudit(auth.admin, { organizationId: auth.organizationId, actorId: auth.userId, action: `ai_review_note.${status}`, entityType: "ai_review_note", entityId: updated.data.id, newValue: { status } });
@@ -74,7 +79,7 @@ export async function POST(request: NextRequest) {
   const checklist = checklistResult as unknown as { data: { value: string | null; file_id: string | null; checklist_items: { label: string; is_required: boolean } }[] | null; error: ErrorShape | null };
   if (checklist.error) return NextResponse.json({ error: "Gagal memuat checklist." }, { status: 500 });
   const result = await assistReview(contextFor(auth, (checklist.data ?? []).map((entry) => ({ ...entry.checklist_items, value: entry.value, file_id: entry.file_id }))));
-  const inserted = await auth.admin.from("ai_review_notes").insert({ organization_id: auth.organizationId, work_item_id: id, generated_by: auth.userId, result, status: "pending" } as never).select("id, status, result, generated_by, created_at").single();
+  const inserted = await auth.admin.from("ai_review_notes").insert({ organization_id: auth.organizationId, client_id: auth.item.client_id, work_item_id: id, generated_by: auth.userId, result, status: "pending" } as never).select("id, status, result, generated_by, created_at").single();
   const note = inserted as unknown as { data: unknown | null; error: ErrorShape | null };
   if (note.error || !note.data) return NextResponse.json({ error: "Gagal menyimpan AI Notes." }, { status: 500 });
   await logAudit(auth.admin, { organizationId: auth.organizationId, actorId: auth.userId, action: "ai_review_note.created", entityType: "ai_review_note", entityId: (note.data as { id: string }).id, newValue: { status: "pending" }, metadata: { completeness_count: result.completeness.length, anomaly_count: result.anomalies.length } });

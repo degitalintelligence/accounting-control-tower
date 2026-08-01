@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getUserOrganizationId } from "@/lib/checklists";
 import { getRequiredServerEnv } from "@/lib/server-env";
+import { createHash } from "node:crypto";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -64,6 +65,10 @@ export async function GET(_request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth instanceof NextResponse) return auth;
 
+  const workItemStatus = await auth.admin.from("work_items").select("status").eq("id", auth.id).single();
+  const workItemStatusData = workItemStatus as unknown as { data: { status: string } | null; error: { message: string } | null };
+  if (workItemStatusData.error || !workItemStatusData.data) return errorResponse("Work item tidak ditemukan.", 404);
+
   const [filesResult, requirementsResult] = await Promise.all([
     auth.admin
       .from("work_item_files")
@@ -98,6 +103,11 @@ export async function POST(request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth instanceof NextResponse) return auth;
 
+  const workItemStatus = await auth.admin.from("work_items").select("status").eq("id", auth.id).single();
+  const workItemStatusData = workItemStatus as unknown as { data: { status: string } | null; error: { message: string } | null };
+  if (workItemStatusData.error || !workItemStatusData.data) return errorResponse("Work item tidak ditemukan.", 404);
+  if (["approved", "awaiting_approval", "completed"].includes(workItemStatusData.data.status)) return errorResponse("Evidence work item sudah terkunci.", 409);
+
   const body = await request.formData();
   const file = body.get("file");
   const evidenceRequirementId = body.get("evidence_requirement_id")?.toString() || null;
@@ -106,11 +116,14 @@ export async function POST(request: NextRequest, context: Context) {
   const linkFilename = body.get("filename")?.toString() || null;
   const linkMimeType = body.get("mime_type")?.toString() || null;
   const linkSize = body.get("size_bytes")?.toString();
+  const suppliedChecksum = body.get("checksum")?.toString().toLowerCase() || null;
 
   if (evidenceRequirementId) {
     const requirement = await auth.admin.from("evidence_requirements").select("id, file_types, max_size_mb").eq("id", evidenceRequirementId).eq("work_item_id", auth.id).single();
     const requirementData = requirement as unknown as { data: { id: string; file_types: string[] | null; max_size_mb: number | null } | null; error: { message: string } | null };
     if (requirementData.error || !requirementData.data) return errorResponse("Evidence requirement tidak valid.", 400);
+    if (linkMimeType && requirementData.data.file_types?.length && !requirementData.data.file_types.some((type) => type.toLowerCase() === linkMimeType.toLowerCase())) return errorResponse("Tipe file tidak sesuai requirement.", 400);
+    if (linkSize && requirementData.data.max_size_mb && Number(linkSize) > requirementData.data.max_size_mb * 1024 * 1024) return errorResponse("Ukuran file melebihi requirement.", 400);
   }
 
   let storagePath = linkPath;
@@ -120,11 +133,13 @@ export async function POST(request: NextRequest, context: Context) {
   let uploaded = false;
   const bucket = getRequiredServerEnv("SUPABASE_STORAGE_BUCKET");
 
+  let checksum = suppliedChecksum;
   if (file instanceof File && file.size > 0) {
     if (file.size > 50 * 1024 * 1024) return errorResponse("Ukuran file maksimal 50 MB.", 400);
     filename = file.name;
     mimeType = file.type || null;
     sizeBytes = file.size;
+    checksum = createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex");
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180);
     storagePath = `${auth.organizationId}/${auth.id}/${crypto.randomUUID()}-${safeName}`;
     const uploadResult = await auth.admin.storage.from(bucket).upload(storagePath, file, { contentType: mimeType ?? undefined, upsert: false });
@@ -132,10 +147,21 @@ export async function POST(request: NextRequest, context: Context) {
     uploaded = true;
   }
 
-  if (!storagePath || !filename || !sizeBytes || !Number.isFinite(sizeBytes) || sizeBytes <= 0) return errorResponse("File atau metadata link wajib diisi.", 400);
+  if (!storagePath || !filename || !sizeBytes || !Number.isFinite(sizeBytes) || sizeBytes <= 0 || !checksum || !/^[a-f0-9]{64}$/.test(checksum)) return errorResponse("File, checksum SHA-256, atau metadata link wajib diisi.", 400);
+  if (!storagePath.startsWith(`${auth.organizationId}/${auth.id}/`)) return errorResponse("storage_path tidak memiliki ownership work item yang valid.", 400);
   if (sizeBytes > 50 * 1024 * 1024) return errorResponse("Ukuran file maksimal 50 MB.", 400);
 
-  const fileResult = await auth.admin.from("files").insert({ organization_id: auth.organizationId, storage_path: storagePath, filename, mime_type: mimeType, size_bytes: sizeBytes, uploaded_by: auth.userId } as never).select("id, filename, mime_type, size_bytes, created_at").single();
+  if (evidenceRequirementId) {
+    const requirement = await auth.admin.from("evidence_requirements").select("file_types, max_size_mb").eq("id", evidenceRequirementId).eq("work_item_id", auth.id).single();
+    const requirementData = requirement as unknown as { data: { file_types: string[] | null; max_size_mb: number | null } | null; error: { message: string } | null };
+    if (requirementData.error || !requirementData.data) return errorResponse("Evidence requirement tidak valid.", 400);
+    if (requirementData.data.file_types?.length && !requirementData.data.file_types.some((type) => type.toLowerCase() === (mimeType ?? "").toLowerCase())) return errorResponse("Tipe file tidak sesuai requirement.", 400);
+    if (requirementData.data.max_size_mb && sizeBytes > requirementData.data.max_size_mb * 1024 * 1024) return errorResponse("Ukuran file melebihi requirement.", 400);
+  }
+  const existingFile = await auth.admin.from("files").select("is_locked").eq("id", body.get("file_id")?.toString() ?? "").maybeSingle();
+  const existingFileData = existingFile as unknown as { data: { is_locked: boolean } | null };
+  if (existingFileData.data?.is_locked) return errorResponse("Evidence sudah terkunci.", 409);
+  const fileResult = await auth.admin.from("files").insert({ organization_id: auth.organizationId, storage_path: storagePath, filename, mime_type: mimeType, size_bytes: sizeBytes, checksum, uploaded_by: auth.userId } as never).select("id, filename, mime_type, size_bytes, checksum, created_at").single();
   const insertedFile = fileResult as unknown as { data: Record<string, unknown> | null; error: { message: string; code: string; hint: string; details: string } | null };
   if (insertedFile.error || !insertedFile.data) {
     if (uploaded) await auth.admin.storage.from(bucket).remove([storagePath]);

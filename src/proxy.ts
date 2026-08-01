@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { consumeRateLimit, getClientAddress, rateLimitCategory, rateLimitHeaders } from "@/lib/rate-limit";
 
 /** Routes yang tidak butuh auth */
-const publicRoutes = ["/login"];
+const publicRoutes = ["/login", "/auth/callback", "/reset-password"];
 const bypassRoutes = ["/api/wa-webhook", "/api/jobs", "/api/health"];
 
 export async function proxy(request: NextRequest) {
@@ -72,7 +72,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Sudah login dan mengakses login page → redirect ke dashboard
-  if (user && isOnPublicRoute) {
+  if (user && isOnPublicRoute && pathname !== "/reset-password") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

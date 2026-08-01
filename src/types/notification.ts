@@ -8,6 +8,8 @@ export const notificationEventTypes = [
   "item_overdue",
   "review_requested",
   "review_approved",
+  "item_escalated",
+  "digest",
 ] as const;
 
 export type NotificationEventType = (typeof notificationEventTypes)[number];

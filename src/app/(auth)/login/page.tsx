@@ -1,15 +1,19 @@
 "use client";
 
-import { useActionState } from "react";
-import { login } from "@/app/actions/auth";
+import { useActionState, useState } from "react";
+import { login, requestEmailOtp, verifyEmailOtp } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(loginAction, null);
+  const [otpState, otpAction, isOtpPending] = useActionState(requestEmailOtp, null);
+  const [verifyState, verifyAction, isVerifyPending] = useActionState(verifyEmailOtp, null);
+  const [otpRequested, setOtpRequested] = useState(false);
 
   async function loginAction(_prevState: unknown, formData: FormData) {
     return await login(formData);
@@ -68,6 +72,28 @@ export default function LoginPage() {
               {isPending ? "Masuk..." : "Masuk"}
             </Button>
           </form>
+          <Separator className="my-6" />
+          {!otpRequested ? (
+            <form action={(formData) => { setOtpRequested(true); otpAction(formData); }} className="space-y-3">
+              <p className="text-sm text-slate-600">Masuk tanpa password menggunakan kode sekali pakai ke email.</p>
+              <Input name="email" type="email" placeholder="nama@perusahaan.com" required autoComplete="email" disabled={isOtpPending} aria-label="Email untuk kode OTP" />
+              {otpState?.error && <p className="text-sm text-destructive">{otpState.error}</p>}
+              <Button type="submit" variant="outline" className="w-full" disabled={isOtpPending}>
+                {isOtpPending ? "Mengirim kode..." : "Kirim kode ke email"}
+              </Button>
+            </form>
+          ) : (
+            <form action={verifyAction} className="space-y-3">
+              <p className="text-sm text-slate-600">{otpState?.message ?? "Masukkan kode yang dikirim ke email Anda."}</p>
+              <Input name="email" type="email" defaultValue={otpState?.email} required autoComplete="email" disabled={isVerifyPending} aria-label="Email OTP" />
+              <Input name="token" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="Kode 6 digit" required autoComplete="one-time-code" disabled={isVerifyPending} aria-label="Kode OTP" />
+              <input type="hidden" name="next" value="/dashboard" />
+              {verifyState?.error && <p className="text-sm text-destructive">{verifyState.error}</p>}
+              <Button type="submit" className="w-full bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={isVerifyPending}>
+                {isVerifyPending ? "Memverifikasi..." : "Verifikasi dan masuk"}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

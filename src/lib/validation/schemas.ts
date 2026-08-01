@@ -111,7 +111,7 @@ export const checklistResponseSchema = z.object({
 
 export const checklistItemCreateSchema = z.object({
   label: z.string().trim().min(1).max(500),
-  input_type: z.enum(["checkbox", "text", "number", "date"]).optional(),
+  input_type: z.enum(["checkbox", "text", "number", "date", "file", "url", "confirmation"]).optional(),
   is_required: z.boolean().optional(),
   sort_order: z.number().int().min(0).max(100000).optional(),
   validation_rules: z.record(z.string(), z.unknown()).optional(),

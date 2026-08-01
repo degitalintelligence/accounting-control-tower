@@ -52,6 +52,17 @@ import { AssignmentPicker } from "@/components/work-items/assignment-picker";
 import { DependencyPanel } from "@/components/work-items/dependency-panel";
 import { EditWorkItemDialog } from "@/components/work-items/edit-work-item-dialog";
 
+type ReportStage = "draft" | "prepared" | "submitted" | "accepted" | "rejected" | "delivered";
+
+const REPORT_STAGE_LABELS: Record<ReportStage, string> = {
+  draft: "Draft",
+  prepared: "Disiapkan",
+  submitted: "Dikirim",
+  accepted: "Diterima",
+  rejected: "Ditolak",
+  delivered: "Delivered",
+};
+
 /* ─── Status config ─────────────────────────────────────── */
 
 const STATUS_LABELS: Record<WorkItemStatus, string> = {
@@ -310,6 +321,10 @@ export default function WorkItemDetailPage({
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [reportStage, setReportStage] = useState<ReportStage>("draft");
+  const [deliveryReference, setDeliveryReference] = useState("");
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -330,6 +345,10 @@ export default function WorkItemDetailPage({
 
       const itemBody = await itemRes.json();
       setWorkItem(itemBody.data);
+      if (itemBody.data.type === "report") {
+        setReportStage(itemBody.data.report_stage ?? "draft");
+        setDeliveryReference(itemBody.data.delivery_reference ?? "");
+      }
 
       if (historyRes.ok) {
         const historyBody = await historyRes.json();
@@ -343,6 +362,27 @@ export default function WorkItemDetailPage({
       setLoading(false);
     }
   }, [id]);
+
+  const saveReportStage = async () => {
+    setReportSaving(true);
+    setReportError(null);
+    try {
+      const response = await fetch(`/api/work-items/${id}/report`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: reportStage, delivery_reference: deliveryReference || null }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? "Gagal menyimpan lifecycle report.");
+      }
+      await fetchData();
+    } catch (cause) {
+      setReportError(cause instanceof Error ? cause.message : "Gagal menyimpan lifecycle report.");
+    } finally {
+      setReportSaving(false);
+    }
+  };
 
   useEffect(() => {
     queueMicrotask(() => fetchData());
@@ -468,6 +508,20 @@ export default function WorkItemDetailPage({
 
               {/* Overview */}
               <TabsContent value="overview" className="mt-4 space-y-4">
+                {workItem.type === "report" && (
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Lifecycle dan delivery report</CardTitle></CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                        <label className="space-y-1 text-sm"><span className="text-slate-500">Stage</span><Select value={reportStage} onValueChange={(value) => setReportStage(value as ReportStage)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(REPORT_STAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
+                        <label className="space-y-1 text-sm"><span className="text-slate-500">Referensi delivery</span><input value={deliveryReference} onChange={(event) => setDeliveryReference(event.target.value)} placeholder="Nomor email, portal, atau dokumen" className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" /></label>
+                        <Button onClick={saveReportStage} disabled={reportSaving} className="bg-orange-500 text-white hover:bg-orange-600">{reportSaving ? <Loader2 className="size-4 animate-spin" /> : "Simpan"}</Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-500">{Object.entries(REPORT_STAGE_LABELS).map(([value, label]) => <span key={value} className={`rounded-full px-2 py-1 ${value === reportStage ? "bg-blue-100 font-semibold text-blue-700" : "bg-slate-100"}`}>{label}</span>)}</div>
+                      {reportError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{reportError}</p>}
+                    </CardContent>
+                  </Card>
+                )}
                 {/* Description */}
                 <Card>
                   <CardHeader className="pb-2">

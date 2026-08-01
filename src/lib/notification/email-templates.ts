@@ -22,6 +22,8 @@ const labels: Record<NotificationEventType, string> = {
   item_overdue: "Pekerjaan melewati tenggat",
   review_requested: "Review diperlukan",
   review_approved: "Review disetujui",
+  item_escalated: "Eskalasi pekerjaan",
+  digest: "Ringkasan pekerjaan",
 };
 
 export function renderNotificationEmail(input: {

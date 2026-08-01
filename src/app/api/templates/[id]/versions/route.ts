@@ -62,7 +62,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Verifikasi template exists dan milik org yang sama
+    const actorMembership = await admin
+      .from("memberships")
+      .select("role, client_id")
+      .eq("profile_id", user.id)
+      .eq("organization_id", organizationId)
+      .eq("is_active", true);
+
+    const actorMembershipData = actorMembership as unknown as { data: { role: string; client_id: string | null }[] | null };
+    if (!actorMembershipData.data?.some((entry) => ["owner", "admin", "manager", "finance_manager", "accounting_manager"].includes(entry.role))) {
+      return NextResponse.json({ error: "Hanya role pengelola yang dapat membuat template version." }, { status: 403 });
+    }
+
     const tplResult = await admin
       .from("task_templates")
       .select("id, organization_id, name")

@@ -54,3 +54,13 @@ export function createServiceRoleClient() {
     },
   });
 }
+
+export function createPublicAuthClient() {
+  return createSupabaseClient<Database>(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    db: { schema: "acct_ctrl" },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}

@@ -226,6 +226,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
+    if (Object.prototype.hasOwnProperty.call(updateData, "due_at") && updateData.due_at !== existing.due_at) {
+      const assignmentsResult = await admin.from("assignments").select("id").eq("work_item_id", id).is("unassigned_at", null).limit(1);
+      const assignments = assignmentsResult as unknown as { data: { id: string }[] | null; error: { message: string } | null };
+      const memberships = await admin.from("memberships").select("role").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
+      const canManageDueDate = authMembershipHasRole(memberships, ["admin", "owner", "manager", "finance_manager", "accounting_manager"]);
+      const canChangeOverdueDueDate = authMembershipHasRole(memberships, ["admin", "owner"]);
+      if (assignments.error) return NextResponse.json({ error: "Gagal memvalidasi kebijakan due date." }, { status: 500 });
+      if (assignments.data?.length && !canManageDueDate) return NextResponse.json({ error: "Due date work item yang sudah di-assign hanya dapat diubah oleh manager atau admin." }, { status: 403 });
+      if (existing.due_at && new Date(existing.due_at as string).getTime() < Date.now() && !canChangeOverdueDueDate) return NextResponse.json({ error: "Due date yang sudah overdue membutuhkan otorisasi elevated." }, { status: 403 });
+      if (updateData.due_at && existing.start_at && new Date(updateData.due_at as string).getTime() < new Date(existing.start_at as string).getTime()) return NextResponse.json({ error: "Due date tidak boleh sebelum start date." }, { status: 400 });
+    }
+
     updateData.updated_at = new Date().toISOString();
 
     const updateResult = await admin
@@ -280,6 +292,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       { status: 500 }
     );
   }
+}
+
+function authMembershipHasRole(result: unknown, roles: string[]) {
+  const memberships = result as { data: { role: string }[] | null; error: { message: string } | null };
+  return (memberships.data ?? []).some((membership) => roles.includes(membership.role));
 }
 
 /**
