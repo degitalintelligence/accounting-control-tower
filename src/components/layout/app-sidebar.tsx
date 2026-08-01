@@ -1,6 +1,5 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -59,11 +58,6 @@ interface AppSidebarProps {
 
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const pathname = usePathname();
-  const isMounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
   const user = useAuthStore((s) => s.user);
 
   const initials = user?.name
@@ -130,7 +124,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <NavLink
               key={item.href}
               item={item}
-              active={isMounted && isActive(pathname, item.href)}
+              active={isActive(pathname, item.href)}
               onClick={onClose}
             />
           ))}
@@ -142,7 +136,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <NavLink
               key={item.href}
               item={item}
-              active={isMounted && isActive(pathname, item.href)}
+              active={isActive(pathname, item.href)}
               onClick={onClose}
             />
           ))}
@@ -154,7 +148,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <NavLink
               key={item.href}
               item={item}
-              active={isMounted && isActive(pathname, item.href)}
+              active={isActive(pathname, item.href)}
               onClick={onClose}
             />
           ))}
