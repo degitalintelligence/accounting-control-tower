@@ -5,14 +5,16 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "./notification-bell";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ContextualHelpButton } from "@/components/help/contextual-help-sheet";
 
 interface AppHeaderProps {
   onMenuClick: () => void;
   onNewWorkItem: () => void;
   onSearch: () => void;
+  onHelp: () => void;
 }
 
-export function AppHeader({ onMenuClick, onNewWorkItem, onSearch }: AppHeaderProps) {
+export function AppHeader({ onMenuClick, onNewWorkItem, onSearch, onHelp }: AppHeaderProps) {
   const [periodLabel, setPeriodLabel] = useState("Periode");
 
   useEffect(() => {
@@ -63,6 +65,8 @@ export function AppHeader({ onMenuClick, onNewWorkItem, onSearch }: AppHeaderPro
           </TooltipTrigger>
           <TooltipContent>Cari pekerjaan</TooltipContent>
         </Tooltip>
+
+        <ContextualHelpButton onClick={onHelp} />
 
         <NotificationBell />
 

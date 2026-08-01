@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { CommandPalette } from "./command-palette";
+import { ContextualHelpSheet } from "@/components/help/contextual-help-sheet";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const handleMenuClick = useCallback(() => {
     setSidebarOpen((prev) => !prev);
@@ -30,6 +32,10 @@ export function AppShell({ children }: AppShellProps) {
   const handleSearch = useCallback(() => {
     router.push("/work-items?focus=search");
   }, [router]);
+
+  const handleHelp = useCallback(() => {
+    setHelpOpen(true);
+  }, []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -67,10 +73,12 @@ export function AppShell({ children }: AppShellProps) {
           onMenuClick={handleMenuClick}
           onNewWorkItem={handleNewWorkItem}
           onSearch={handleSearch}
+          onHelp={handleHelp}
         />
         <main className="flex-1">{children}</main>
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <ContextualHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }
