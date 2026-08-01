@@ -4,7 +4,23 @@ import { consumeRateLimit, getClientAddress, rateLimitCategory, rateLimitHeaders
 
 /** Routes yang tidak butuh auth */
 const publicRoutes = ["/login", "/auth/callback", "/reset-password"];
-const bypassRoutes = ["/api/wa-webhook", "/api/jobs", "/api/health"];
+const bypassRoutes = [
+  "/api/wa-webhook",
+  "/api/health",
+  "/api/jobs/ai-extraction",
+  "/api/jobs/escalation-check",
+  "/api/jobs/notifications",
+  "/api/jobs/recurrence",
+  "/api/jobs/reminders",
+  "/api/jobs/whatsapp-retention",
+];
+
+const securityHeaders = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
+};
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,22 +29,27 @@ export async function proxy(request: NextRequest) {
   if (category) {
     const decision = consumeRateLimit(`${category.name}:${getClientAddress(request.headers)}`, category.limit, category.windowMs);
     if (!decision.allowed) {
-      return NextResponse.json({ error: "Terlalu banyak permintaan. Silakan coba lagi nanti." }, { status: 429, headers: rateLimitHeaders(decision) });
+      const response = NextResponse.json({ error: "Terlalu banyak permintaan. Silakan coba lagi nanti." }, { status: 429, headers: rateLimitHeaders(decision) });
+      Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
+      return response;
     }
   }
 
   // Skip static files, favicon, Next.js internals
   if (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
+    pathname.startsWith("/favicon")
   ) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
+    return response;
   }
 
   // Skip bypass routes (e.g. WhatsApp webhook — no auth needed)
-  if (bypassRoutes.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
+  if (bypassRoutes.includes(pathname)) {
+    const response = NextResponse.next();
+    Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
+    return response;
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -90,6 +111,6 @@ export const config = {
      * - favicon.ico (favicon)
      * - Semua file dengan ekstensi (gambar, css, js, dll)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.).*)",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

@@ -271,14 +271,37 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
   const workerId = `ai-extraction-${crypto.randomUUID()}`;
   let processed = 0;
   let failed = 0;
-  const eventTypes = ["whatsapp_message_received", "whatsapp_reply_requested", "ai_extraction_requested"];
   for (let index = 0; index < batchSize; index += 1) {
-    const row = await claimNext(admin, workerId, eventTypes[index % eventTypes.length]);
+    const row = await claimNext(admin, workerId, "ai_extraction_requested");
     if (!row) break;
     try {
-      if (row.event_type === "ai_extraction_requested") await processJob(admin, row);
-      else if (row.event_type === "whatsapp_message_received") await processReceivedMessage(admin, row);
-      else if (row.event_type === "whatsapp_reply_requested") await processReply(admin, row);
+      await processJob(admin, row);
+      await markCompleted(admin, row.id, workerId);
+      processed += 1;
+    } catch (error) {
+      await markFailed(admin, row, workerId, error);
+      failed += 1;
+      console.error("[ai-extraction-worker] Pemrosesan gagal:", { outboxId: row.id, message: errorMessage(error) });
+    }
+  }
+  for (let index = 0; index < batchSize; index += 1) {
+    const row = await claimNext(admin, workerId, "whatsapp_message_received");
+    if (!row) break;
+    try {
+      await processReceivedMessage(admin, row);
+      await markCompleted(admin, row.id, workerId);
+      processed += 1;
+    } catch (error) {
+      await markFailed(admin, row, workerId, error);
+      failed += 1;
+      console.error("[ai-extraction-worker] Pemrosesan gagal:", { outboxId: row.id, message: errorMessage(error) });
+    }
+  }
+  for (let index = 0; index < batchSize; index += 1) {
+    const row = await claimNext(admin, workerId, "whatsapp_reply_requested");
+    if (!row) break;
+    try {
+      await processReply(admin, row);
       await markCompleted(admin, row.id, workerId);
       processed += 1;
     } catch (error) {

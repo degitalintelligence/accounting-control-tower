@@ -7,7 +7,7 @@ const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 
 describe("regression controls", () => {
   it("membatasi queue event pada event_type yang diklaim", () => {
-    const migration = read("supabase/migrations/022_harden_event_integrity.sql");
+  const migration = read("supabase/migrations/028_fix_whatsapp_worker_claim.sql");
     expect(migration).toContain("o.event_type = p_event_type");
     expect(migration).toContain("p_event_type = 'notification' AND o.event_type IN");
   });

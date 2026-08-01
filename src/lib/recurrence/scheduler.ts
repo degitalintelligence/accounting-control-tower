@@ -94,7 +94,7 @@ export async function runRecurrenceWorker(admin: Client) {
   const rules = rulesResult as unknown as { data: (Rule & { task_templates: { organization_id: string } })[] | null; error: { message: string } | null };
   if (rules.error) throw new Error(rules.error.message);
   const now = new Date();
-  const from = new Date(now); from.setUTCDate(from.getUTCDate() - 90);
+  const from = new Date(now);
   for (const rule of rules.data ?? []) for (const date of occurrences(rule.rrule, rule.timezone, rule.skip_weekends, from, new Date(now.getTime() + (rule.generation_lead_days || 0) * 86400000))) await enqueue(admin, rule, rule.task_templates.organization_id, date);
   const jobsResult = await admin.from("recurrence_job_runs").select("id, status, attempts, max_attempts, recurrence_rule_id, template_id, instance_key, occurrence_date").eq("status", "pending").or(`next_retry_at.is.null,next_retry_at.lte.${now.toISOString()}`).order("occurrence_date", { ascending: true }).limit(50);
   const jobs = jobsResult as unknown as { data: Job[] | null; error: { message: string } | null };

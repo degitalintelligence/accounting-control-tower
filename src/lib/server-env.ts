@@ -22,13 +22,13 @@ export type ServerEnvValidation = {
 };
 
 export function validateServerEnv(names: readonly ServerEnvName[]): ServerEnvValidation {
-  const missing = names.filter((name) => !process.env[name]);
+  const missing = names.filter((name) => !process.env[name]?.trim());
   const invalid = names.filter((name) => {
-    const value = process.env[name];
+    const value = process.env[name]?.trim();
     if (!value || !["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_APP_URL"].includes(name)) return false;
     try {
       const url = new URL(value);
-      return url.protocol !== "https:" && process.env.NODE_ENV === "production";
+      return (url.protocol !== "https:" && process.env.NODE_ENV === "production") || Boolean(url.username || url.password);
     } catch {
       return true;
     }
@@ -56,7 +56,7 @@ export function getRequiredServerEnv(name: ServerEnvName): string {
 }
 
 export function isCronRequestAuthorized(authorization: string | null) {
-  const secret = process.env.CRON_SECRET;
+  const secret = process.env.CRON_SECRET?.trim();
   if (!secret) return "misconfigured" as const;
   if (!authorization?.startsWith("Bearer ")) return "unauthorized" as const;
 

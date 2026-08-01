@@ -169,6 +169,9 @@ export interface Database {
           is_rollup_parent: boolean;
           requires_explicit_delivery: boolean;
           approval_cycle: number;
+          report_stage: string;
+          delivery_confirmed_at: string | null;
+          delivery_reference: string | null;
           title: string;
           description: string | null;
           acceptance_criteria: string | null;
@@ -211,6 +214,9 @@ export interface Database {
           is_rollup_parent?: boolean;
           requires_explicit_delivery?: boolean;
           approval_cycle?: number;
+          report_stage?: string;
+          delivery_confirmed_at?: string | null;
+          delivery_reference?: string | null;
           title: string;
           description?: string | null;
           acceptance_criteria?: string | null;
@@ -268,6 +274,32 @@ export interface Database {
           updated_at?: string;
           completed_at?: string | null;
           deleted_at?: string | null;
+          report_stage?: string;
+          delivery_confirmed_at?: string | null;
+          delivery_reference?: string | null;
+        };
+      };
+      whatsapp_retention_policies: {
+        Row: {
+          organization_id: string;
+          retention_days: number;
+          raw_payload_retention_days: number;
+          is_active: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          organization_id: string;
+          retention_days?: number;
+          raw_payload_retention_days?: number;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          organization_id?: string;
+          retention_days?: number;
+          raw_payload_retention_days?: number;
+          is_active?: boolean;
+          updated_at?: string;
         };
       };
       recurrence_rules: {
@@ -540,6 +572,49 @@ export interface Database {
           p_checker_id?: string | null;
         };
         Returns: { id: string; title: string }[];
+      };
+      report_analytics: {
+        Args: { p_organization_id: string; p_client_ids?: string[] | null };
+        Returns: {
+          total: number;
+          completed: number;
+          active: number;
+          overdue: number;
+          delivered: number;
+          pending_delivery: number;
+          on_time_rate: number;
+          lifecycle: Json;
+          versions: Json;
+        }[];
+      };
+      enqueue_whatsapp_message: {
+        Args: {
+          p_connection_id: string;
+          p_wa_group_id: string;
+          p_organization_id: string;
+          p_provider_message_id: string;
+          p_sender_participant_id: string;
+          p_content: string;
+          p_message_type: string;
+          p_media_metadata: Json | null;
+          p_raw_payload: Json | null;
+          p_received_at: string;
+          p_event_type: string;
+          p_event_payload: Json;
+        };
+        Returns: { message_id: string; duplicate: boolean }[];
+      };
+      enqueue_whatsapp_reply: {
+        Args: { p_organization_id: string; p_message_id: string; p_chat_id: string; p_text: string };
+        Returns: string;
+      };
+      cleanup_whatsapp_retention: {
+        Args: { p_limit?: number };
+        Returns: { raw_payloads_cleaned: number; messages_deleted: number }[];
+      };
+      claim_outbox_event: {
+        Args: { p_worker_id: string; p_event_type?: string | null; p_lease_seconds?: number };
+        Returns: Database["acct_ctrl"]["Tables"]["outbox_events"]["Row"][];
       };
     };
     Enums: Record<string, unknown>;
