@@ -1,46 +1,28 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { getAuthContext } from "@/lib/authorization";
 
 /**
  * GET /api/dashboard/activity-feed
  * Returns last 10 audit log entries for the organization.
  */
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = createServiceRoleClient();
-
-  // Get user's organization_id
-  const { data: membership } = (await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle()) as unknown as {
-    data: { organization_id: string } | null;
-  };
-
-  const orgId = membership?.organization_id;
-
-  if (!orgId) {
-    return NextResponse.json([]);
-  }
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
   // Fetch recent audit logs
-  const { data: logs } = (await admin
+  const logsQuery = admin
     .from("audit_logs")
     .select("id, action, entity_type, entity_id, created_at, actor_id")
-    .eq("organization_id", orgId)
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
-    .limit(10)) as unknown as {
+    .limit(10);
+  if (!isOrgWide) {
+    const scopedItems = await admin.from("work_items").select("id").eq("organization_id", organizationId).in("client_id", clientIds);
+    const ids = ((scopedItems.data ?? []) as { id: string }[]).map((item) => item.id);
+    if (!ids.length) return NextResponse.json([]);
+  }
+  const { data: logs } = (await logsQuery) as unknown as {
     data: {
       id: string;
       action: string;
@@ -51,10 +33,18 @@ export async function GET() {
     }[];
   };
 
+  const scopedEntityIds = [...new Set((logs ?? []).filter((log) => log.entity_type === "work_item").map((log) => log.entity_id))];
+  let allowedEntityIds = scopedEntityIds;
+  if (!isOrgWide && scopedEntityIds.length) {
+    const scopedItems = await admin.from("work_items").select("id").in("id", scopedEntityIds).in("client_id", clientIds);
+    allowedEntityIds = ((scopedItems.data ?? []) as { id: string }[]).map((item) => item.id);
+  }
+  const visibleLogs = (logs ?? []).filter((log) => log.entity_type !== "work_item" || allowedEntityIds.includes(log.entity_id));
+
   // Fetch actor names
   const actorIds = [
     ...new Set(
-      (logs ?? []).map((l) => l.actor_id).filter(Boolean)
+      visibleLogs.map((l) => l.actor_id).filter(Boolean)
     ),
   ] as string[];
 
@@ -72,7 +62,7 @@ export async function GET() {
     }
   }
 
-  const result = (logs ?? []).map((log) => {
+  const result = visibleLogs.map((log) => {
     const timeAgo = getTimeAgo(log.created_at);
     const actorName = log.actor_id
       ? actorMap[log.actor_id] ?? "System"

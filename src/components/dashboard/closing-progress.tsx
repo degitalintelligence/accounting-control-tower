@@ -10,118 +10,16 @@ import {
   CircleDot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ChildTask, ParentTask } from "@/hooks/use-dashboard";
 
 type CheckStatus = "done" | "partial" | "danger";
 
-interface ChildTask {
-  id: string;
-  name: string;
-  assignee: string;
-  assigneeInitials: string;
-  status: string;
-  checkStatus: CheckStatus;
-  progress: number;
-}
-
-interface ParentTask {
-  id: string;
-  name: string;
-  progress: number;
-  children: ChildTask[];
-}
 
 const checkIcons: Record<CheckStatus, { icon: typeof CheckCircle2; color: string }> = {
   done: { icon: CheckCircle2, color: "text-[#20865a]" },
   partial: { icon: CircleDot, color: "text-[#9a6810]" },
   danger: { icon: AlertCircle, color: "text-[#c94040]" },
 };
-
-const mockTasks: ParentTask[] = [
-  {
-    id: "p1",
-    name: "Rekonsiliasi Bank",
-    progress: 65,
-    children: [
-      {
-        id: "c1",
-        name: "Bank Mandiri",
-        assignee: "Rina",
-        assigneeInitials: "RN",
-        status: "Submitted",
-        checkStatus: "done",
-        progress: 100,
-      },
-      {
-        id: "c2",
-        name: "Bank BCA",
-        assignee: "Sari",
-        assigneeInitials: "SR",
-        status: "In Progress",
-        checkStatus: "partial",
-        progress: 50,
-      },
-      {
-        id: "c3",
-        name: "Bank BNI",
-        assignee: "Budi",
-        assigneeInitials: "BD",
-        status: "Overdue",
-        checkStatus: "danger",
-        progress: 20,
-      },
-    ],
-  },
-  {
-    id: "p2",
-    name: "Laporan Pajak",
-    progress: 90,
-    children: [
-      {
-        id: "c4",
-        name: "PPH 21",
-        assignee: "Andi",
-        assigneeInitials: "AD",
-        status: "Approved",
-        checkStatus: "done",
-        progress: 100,
-      },
-      {
-        id: "c5",
-        name: "PPN",
-        assignee: "Sari",
-        assigneeInitials: "SR",
-        status: "Under Review",
-        checkStatus: "partial",
-        progress: 80,
-      },
-    ],
-  },
-  {
-    id: "p3",
-    name: "Invoice Matching",
-    progress: 40,
-    children: [
-      {
-        id: "c6",
-        name: "Vendor ABC",
-        assignee: "Budi",
-        assigneeInitials: "BD",
-        status: "Blocked",
-        checkStatus: "danger",
-        progress: 10,
-      },
-      {
-        id: "c7",
-        name: "Vendor XYZ",
-        assignee: "Rina",
-        assigneeInitials: "RN",
-        status: "In Progress",
-        checkStatus: "partial",
-        progress: 70,
-      },
-    ],
-  },
-];
 
 function ProgressBar({ value, className }: { value: number; className?: string }) {
   return (
@@ -195,8 +93,7 @@ function ParentRow({ task }: { task: ParentTask }) {
   );
 }
 
-export function ClosingProgress() {
-  const overallProgress = 78;
+export function ClosingProgress({ data = [], overallProgress = 0 }: { data?: ParentTask[]; overallProgress?: number }) {
 
   return (
     <div className="bg-white border border-[#dfe4e1] rounded-xl shadow-[0_1px_2px_rgba(24,32,31,.04),0_8px_30px_rgba(24,32,31,.045)]">
@@ -204,7 +101,7 @@ export function ClosingProgress() {
         <div className="flex items-center gap-2">
           <CalendarClock className="w-4 h-4 text-[#20865a]" />
           <h3 className="text-sm font-bold text-[#1a2421]">
-            August Closing Progress
+            Closing Progress
           </h3>
         </div>
         <span className="text-sm font-bold text-[#20865a]">
@@ -215,7 +112,7 @@ export function ClosingProgress() {
         <ProgressBar value={overallProgress} className="h-2" />
       </div>
       <div className="p-2 space-y-0.5">
-        {mockTasks.map((t) => (
+        {data.map((t) => (
           <ParentRow key={t.id} task={t} />
         ))}
       </div>

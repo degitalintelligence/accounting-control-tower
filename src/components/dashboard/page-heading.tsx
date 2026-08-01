@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface PageHeadingProps {
   userName?: string;
@@ -9,13 +10,14 @@ interface PageHeadingProps {
 }
 
 function GoalRing({ percent }: { percent: number }) {
+  const safePercent = Math.min(100, Math.max(0, percent));
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (percent / 100) * circumference;
+  const offset = circumference - (safePercent / 100) * circumference;
 
   return (
-    <div className="relative flex items-center justify-center w-20 h-20 shrink-0">
-      <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+    <div className="relative flex items-center justify-center w-20 h-20 shrink-0" role="img" aria-label={`Tingkat penyelesaian tepat waktu ${safePercent}%`}>
+      <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
         <circle
           cx="40"
           cy="40"
@@ -38,9 +40,9 @@ function GoalRing({ percent }: { percent: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-base font-bold text-[#1a2421]">{percent}%</span>
-        <span className="text-[8px] font-medium text-[#8a9490] uppercase tracking-wider">
-          Goal
+        <span className="text-base font-bold text-ink">{safePercent}%</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          Target
         </span>
       </div>
     </div>
@@ -52,39 +54,48 @@ export function PageHeading({
   exceptionCount = 9,
   goalPercent = 78,
 }: PageHeadingProps) {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("id-ID", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const [dateStr, setDateStr] = useState("Memuat tanggal...");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDateStr(
+        new Intl.DateTimeFormat("id-ID", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: "Asia/Jakarta",
+        }).format(new Date())
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
-    <div className="flex items-start justify-between gap-4 mb-6">
+    <header className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-6">
       <div>
-        <p className="text-xs font-medium text-[#8a9490] mb-1">{dateStr}</p>
-        <h1 className="text-xl font-bold text-[#1a2421]">
+        <p className="text-sm font-medium text-muted-foreground mb-1">{dateStr}</p>
+        <h1 className="text-xl font-bold text-ink">
           Selamat Pagi, {userName}
         </h1>
         <div className="flex items-center gap-1.5 mt-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-[#c94040]" />
-          <span className="text-xs text-[#c94040] font-semibold">
-            {exceptionCount} Exceptions Need Your Attention
+          <AlertTriangle className="w-4 h-4 text-danger" aria-hidden="true" />
+          <span className="text-sm text-danger font-semibold" role="status">
+            {exceptionCount} pengecualian membutuhkan perhatian
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-3 bg-white border border-[#dfe4e1] rounded-xl shadow-[0_1px_2px_rgba(24,32,31,.04),0_8px_30px_rgba(24,32,31,.045)] px-4 py-3">
+      <div className="surface-card flex items-center gap-3 rounded-xl px-4 py-3">
         <GoalRing percent={goalPercent} />
         <div>
-          <p className="text-xs font-bold text-[#1a2421]">
-            Autonomous Completion
+          <p className="text-sm font-bold text-ink">
+            Penyelesaian Otomatis
           </p>
-          <p className="text-[10px] text-[#8a9490]">
-            78% tasks auto-resolved this week
+          <p className="text-sm text-muted-foreground">
+            {goalPercent}% tugas terselesaikan otomatis minggu ini
           </p>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

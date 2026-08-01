@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, Users } from "lucide-react";
+import { Building2, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -33,6 +33,7 @@ const roleColors: Record<string, string> = {
 const tabs = [
   { label: "General", href: "/settings", icon: Settings },
   { label: "Members", href: "/settings/members", icon: Users },
+  { label: "Clients", href: "/settings/clients", icon: Building2 },
 ];
 
 export default function MembersPage() {

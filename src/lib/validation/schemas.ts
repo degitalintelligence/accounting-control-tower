@@ -5,6 +5,16 @@ const nullableUuid = uuid.nullable().optional();
 const nullableText = z.string().trim().max(10000).nullable().optional();
 const dateTime = z.string().datetime({ offset: true }).nullable().optional();
 
+export const clientCreateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  timezone: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
+export const clientUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  timezone: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
 export const workItemCreateSchema = z.object({
   title: z.string().trim().min(1).max(500),
   type: z.enum(["routine", "project", "ad_hoc", "report"]),

@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { TemplateCard } from "@/components/templates/template-card";
 import { CreateTemplateDialog } from "@/components/templates/create-template-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,7 +95,7 @@ function TemplatesPageContent() {
   );
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
@@ -238,7 +237,7 @@ function TemplatesPageContent() {
         onOpenChange={setCreateDialogOpen}
         onSuccess={handleCreateSuccess}
       />
-    </AppShell>
+    </>
   );
 }
 

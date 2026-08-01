@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { MilestoneList } from "@/components/projects/milestone-list";
 import { LinkWorkItemDialog } from "@/components/projects/link-work-item-dialog";
 import { StatusBadge } from "@/components/work-items/status-badge";
@@ -201,15 +200,15 @@ export default function ProjectDetailPage({
 
   if (loading) {
     return (
-      <AppShell>
+      <>
         <DetailSkeleton />
-      </AppShell>
+      </>
     );
   }
 
   if (error || !project) {
     return (
-      <AppShell>
+      <>
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <AlertCircle className="size-12 text-red-400 mb-3" />
           <h2 className="text-lg font-semibold text-slate-900 mb-1">
@@ -220,7 +219,7 @@ export default function ProjectDetailPage({
             Kembali ke Daftar
           </Button>
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -241,7 +240,7 @@ export default function ProjectDetailPage({
   }).length;
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-4">
         {/* Back button */}
         <div className="flex items-center gap-2">
@@ -660,6 +659,6 @@ export default function ProjectDetailPage({
         linkedItems={project.work_items}
         onLinkChange={fetchProject}
       />
-    </AppShell>
+    </>
   );
 }

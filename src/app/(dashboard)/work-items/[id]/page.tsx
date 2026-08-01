@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
+import { useAuthStore } from "@/stores/auth-store";
 import { StatusBadge } from "@/components/work-items/status-badge";
 import { PriorityBadge } from "@/components/work-items/priority-badge";
 import { StatusTransitionButton } from "@/components/work-items/status-transition-button";
@@ -344,6 +344,7 @@ export default function WorkItemDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [workItem, setWorkItem] = useState<WorkItem | null>(null);
   const [history, setHistory] = useState<AuditLogEntry[]>([]);
@@ -393,7 +394,10 @@ export default function WorkItemDetailPage({
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignRole) return;
+    if (!assignRole || !currentUserId) {
+      setAssignError("Sesi pengguna belum siap. Silakan coba lagi.");
+      return;
+    }
 
     setAssignLoading(true);
     setAssignError(null);
@@ -402,7 +406,7 @@ export default function WorkItemDetailPage({
       const res = await fetch(`/api/work-items/${id}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile_id: "self", role: assignRole }),
+        body: JSON.stringify({ profile_id: currentUserId, role: assignRole }),
       });
 
       if (!res.ok) {
@@ -424,15 +428,15 @@ export default function WorkItemDetailPage({
 
   if (loading) {
     return (
-      <AppShell>
+      <>
         <DetailSkeleton />
-      </AppShell>
+      </>
     );
   }
 
   if (error || !workItem) {
     return (
-      <AppShell>
+      <>
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <AlertCircle className="size-12 text-red-400 mb-3" />
           <h2 className="text-lg font-semibold text-slate-900 mb-1">
@@ -443,14 +447,14 @@ export default function WorkItemDetailPage({
             Kembali ke Daftar
           </Button>
         </div>
-      </AppShell>
+      </>
     );
   }
 
   const assignments = workItem.assignments ?? [];
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-4">
         {/* Back button */}
         <div className="flex items-center gap-2">
@@ -696,6 +700,6 @@ export default function WorkItemDetailPage({
           </div>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

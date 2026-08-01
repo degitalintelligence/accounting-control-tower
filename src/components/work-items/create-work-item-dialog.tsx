@@ -20,6 +20,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { ClientSelect } from "@/components/shared/client-select";
 
 interface CreateWorkItemDialogProps {
   open: boolean;
@@ -71,8 +72,8 @@ export function CreateWorkItemDialog({
       setError("Judul wajib diisi.");
       return;
     }
-    if (!form.client_id.trim()) {
-      setError("Client ID wajib diisi.");
+    if (!form.client_id) {
+      setError("Client wajib dipilih.");
       return;
     }
 
@@ -82,7 +83,7 @@ export function CreateWorkItemDialog({
         type: form.type,
         title: form.title.trim(),
         priority: form.priority,
-        client_id: form.client_id.trim(),
+        client_id: form.client_id,
       };
       if (form.description.trim()) {
         body.description = form.description.trim();
@@ -200,21 +201,7 @@ export function CreateWorkItemDialog({
             />
           </div>
 
-          {/* Client ID */}
-          <div className="space-y-1.5">
-            <Label htmlFor="wi-client">
-              Client ID <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="wi-client"
-              placeholder="UUID klien terkait"
-              value={form.client_id}
-              onChange={(e) => updateField("client_id", e.currentTarget.value)}
-            />
-            <p className="text-[11px] text-slate-400">
-              Masukkan UUID client dari database.
-            </p>
-          </div>
+          <ClientSelect id="wi-client" value={form.client_id} onChange={(value) => updateField("client_id", value)} />
 
           {/* Error message */}
           {error && (

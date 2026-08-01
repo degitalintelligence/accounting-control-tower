@@ -13,6 +13,7 @@ export interface WaInboxItemData {
   makerName: string | null;
   checkerName: string | null;
   dueAt: string | null;
+  suggestedClientId: string;
   confidence: number;
   type: "suggestion" | "message";
 }
@@ -26,6 +27,7 @@ type SuggestionResponse = {
   suggested_maker_id: string | null;
   suggested_checker_id: string | null;
   suggested_due_at: string | null;
+  suggested_client_id: string | null;
   confidence: number | null;
   status: string;
   created_at: string;
@@ -54,6 +56,7 @@ function toInboxItem(suggestion: SuggestionResponse): WaInboxItemData {
     makerName: metadataString(metadata, ["maker_name", "makerName"]) ?? suggestion.suggested_maker_id,
     checkerName: metadataString(metadata, ["checker_name", "checkerName"]) ?? suggestion.suggested_checker_id,
     dueAt: suggestion.suggested_due_at,
+    suggestedClientId: suggestion.suggested_client_id ?? "",
     confidence: Math.round((suggestion.confidence ?? 0) * 100),
     type: "suggestion",
   };
@@ -92,8 +95,12 @@ export function useWaInbox() {
     queueMicrotask(() => fetchItems());
   }, [fetchItems]);
 
-  const confirmSuggestion = useCallback(async (id: string) => {
-    const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/confirm`, { method: "POST" });
+  const confirmSuggestion = useCallback(async (id: string, clientId?: string) => {
+    const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(clientId ? { client_id: clientId } : {}),
+    });
     if (!response.ok) throw new Error(await readError(response, "Saran tugas belum dapat dikonfirmasi."));
     setItems((current) => current.filter((item) => item.id !== id));
   }, []);

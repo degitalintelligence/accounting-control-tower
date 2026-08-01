@@ -83,7 +83,7 @@ export function WorkItemFilters({
   return (
     <div className="space-y-3">
       {/* Header + CTA */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Work Items</h1>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -100,14 +100,14 @@ export function WorkItemFilters({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((tab) => (
           <button
             key={tab.value}
             type="button"
             onClick={() => onTabChange(tab.value)}
             className={cn(
-              "px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors",
+              "whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
               activeTab === tab.value
                 ? "border-slate-900 text-slate-900"
                 : "border-transparent text-slate-400 hover:text-slate-600"

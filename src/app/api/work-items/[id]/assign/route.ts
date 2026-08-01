@@ -67,7 +67,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const parsed = assignmentSchema.safeParse(await request.json());
+    const requestBody = await request.json();
+    const parsed = assignmentSchema.safeParse({
+      ...requestBody,
+      profile_id: requestBody.profile_id === "self" ? user.id : requestBody.profile_id,
+    });
     if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
     const { profile_id, role } = parsed.data;
     const assignmentRole = role as AssignmentRole;

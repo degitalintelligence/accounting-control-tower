@@ -9,7 +9,7 @@ export async function getSuggestionContext() {
   const admin = createServiceRoleClient();
   const result = await admin
     .from("memberships")
-    .select("organization_id")
+    .select("organization_id, role")
     .eq("profile_id", auth.user.id)
     .eq("is_active", true)
     .limit(1)

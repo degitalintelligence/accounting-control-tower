@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense, useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { WorkItemFilters } from "@/components/work-items/work-item-filters";
 import { WorkItemCard } from "@/components/work-items/work-item-card";
 import { CreateWorkItemDialog } from "@/components/work-items/create-work-item-dialog";
@@ -105,7 +104,7 @@ function WorkItemsPageContent() {
   );
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-4">
         {/* Filters & Header */}
         <WorkItemFilters
@@ -206,14 +205,10 @@ function WorkItemsPageContent() {
         onOpenChange={setCreateDialogOpen}
         onSuccess={handleCreateSuccess}
       />
-    </AppShell>
+    </>
   );
 }
 
 export default function WorkItemsPage() {
-  return (
-    <Suspense fallback={null}>
-      <WorkItemsPageContent />
-    </Suspense>
-  );
+  return <WorkItemsPageContent />;
 }

@@ -191,7 +191,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // Ambil data lama untuk audit
     const fetchResult = await admin
       .from("work_items")
-      .select("*")
+      .select("id, organization_id, client_id, title, description, acceptance_criteria, type, parent_id, project_id, milestone_id, report_id, template_id, template_version_id, checklist_template_id, recurrence_instance_key, status, priority, risk_level, weight, is_optional, start_at, due_at, review_due_at, client_due_at, timezone, source_type, source_reference_id, source_metadata, created_by, created_at, updated_at, completed_at, deleted_at, progress_percent, health_flag, is_rollup_parent, requires_explicit_delivery, approval_cycle")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)

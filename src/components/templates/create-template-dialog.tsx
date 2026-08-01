@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,16 +20,12 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { ClientSelect } from "@/components/shared/client-select";
 
 interface CreateTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-}
-
-interface ClientOption {
-  id: string;
-  name: string;
 }
 
 interface FormData {
@@ -58,43 +54,6 @@ export function CreateTemplateDialog({
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [clients, setClients] = useState<ClientOption[]>([]);
-  const [clientsLoading, setClientsLoading] = useState(false);
-  const [clientInputMode, setClientInputMode] = useState(false);
-
-  // Fetch clients when dialog opens
-  useEffect(() => {
-    if (!open) return;
-
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setClientsLoading(true);
-    });
-
-    fetch("/api/clients")
-      .then((res) => {
-        if (!res.ok) throw new Error("API not available");
-        return res.json();
-      })
-      .then((data) => {
-        if (!cancelled) {
-          const list = Array.isArray(data) ? data : data.data ?? [];
-          setClients(list);
-          if (list.length === 0) setClientInputMode(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setClientInputMode(true);
-      })
-      .finally(() => {
-        if (!cancelled) setClientsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
@@ -108,7 +67,7 @@ export function CreateTemplateDialog({
       setError("Nama template wajib diisi.");
       return;
     }
-    if (!form.client_id.trim()) {
+    if (!form.client_id) {
       setError("Client wajib dipilih.");
       return;
     }
@@ -124,7 +83,7 @@ export function CreateTemplateDialog({
         description: form.description.trim() || undefined,
         type: form.type,
         priority: form.priority,
-        client_id: form.client_id.trim(),
+        client_id: form.client_id,
         version: {
           title_template: form.title_template.trim(),
         },
@@ -227,41 +186,7 @@ export function CreateTemplateDialog({
             </div>
           </div>
 
-          {/* Client */}
-          <div className="space-y-1.5">
-            <Label htmlFor="tpl-client">
-              Client <span className="text-red-500">*</span>
-            </Label>
-            {clientInputMode || clients.length === 0 ? (
-              <>
-                <Input
-                  id="tpl-client"
-                  placeholder="UUID client"
-                  value={form.client_id}
-                  onChange={(e) => updateField("client_id", e.currentTarget.value)}
-                />
-                <p className="text-[11px] text-slate-400">
-                  Masukkan UUID client dari database.
-                </p>
-              </>
-            ) : (
-              <Select
-                value={form.client_id || null}
-                onValueChange={(val) => updateField("client_id", val ?? "")}
-              >
-                <SelectTrigger id="tpl-client" className="w-full">
-                  <SelectValue placeholder={clientsLoading ? "Memuat..." : "Pilih client..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          <ClientSelect id="tpl-client" value={form.client_id} onChange={(value) => updateField("client_id", value)} />
 
           {/* Title template (first version) */}
           <div className="space-y-1.5">

@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     name: body.name.trim(),
     description: body.description ?? null,
     target_role: targetRole,
-  } as never).select().single();
+  } as never).select("id, organization_id, name, description, target_role, is_active, created_at, updated_at").single();
   const template = templateResult as unknown as { data: { id: string } | null; error: { message: string; code: string; hint: string; details: string } | null };
   if (template.error || !template.data) return NextResponse.json({ error: "Gagal membuat template checklist." }, { status: 500 });
   const items = (body.items ?? []).filter((item) => item.label?.trim()).map((item, index) => ({

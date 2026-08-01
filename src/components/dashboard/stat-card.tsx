@@ -1,6 +1,7 @@
 "use client";
 
 import { type LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 type Variant = "danger" | "warning" | "neutral" | "success";
@@ -12,6 +13,7 @@ interface StatCardProps {
   value: string | number;
   description?: string;
   actionText?: string;
+  actionHref?: string;
 }
 
 const variantStyles: Record<Variant, { bg: string; text: string }> = {
@@ -28,11 +30,12 @@ export function StatCard({
   value,
   description,
   actionText,
+  actionHref,
 }: StatCardProps) {
   const v = variantStyles[variant];
 
   return (
-    <div className="bg-white border border-[#dfe4e1] rounded-xl shadow-[0_1px_2px_rgba(24,32,31,.04),0_8px_30px_rgba(24,32,31,.045)] p-4 flex items-start gap-3">
+    <article className="surface-card rounded-xl p-4 flex items-start gap-3">
       <div
         className={cn(
           "flex items-center justify-center w-10 h-10 rounded-lg shrink-0",
@@ -42,19 +45,19 @@ export function StatCard({
         <Icon className={cn("w-5 h-5", v.text)} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-medium text-[#8a9490] uppercase tracking-wide">
+        <p className="text-sm font-medium text-muted-foreground">
           {label}
         </p>
-        <p className={cn("text-2xl font-bold mt-0.5", v.text)}>{value}</p>
+        <p className={cn("text-2xl font-bold mt-0.5", v.text)} aria-live="polite">{value}</p>
         {description && (
-          <p className="text-xs text-[#8a9490] mt-0.5">{description}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
         )}
       </div>
-      {actionText && (
-        <button className="text-[11px] font-semibold text-[#20865a] hover:text-[#1a6e4a] whitespace-nowrap self-center">
-          {actionText} &rarr;
-        </button>
+      {actionText && actionHref && (
+        <Link href={actionHref} className="control-interactive rounded px-1 text-sm font-semibold text-success whitespace-nowrap self-center">
+          {actionText} <span aria-hidden="true">→</span>
+        </Link>
       )}
-    </div>
+    </article>
   );
 }

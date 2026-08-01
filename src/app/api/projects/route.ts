@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit/logger";
 async function getUserOrganizationId(
   admin: ReturnType<typeof createServiceRoleClient>,
   userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
+): Promise<{ organizationId: string | null; clientIds: string[]; isOrgWide: boolean; error: string | null }> {
   const result = await admin
     .from("memberships")
     .select("organization_id")
@@ -23,13 +23,11 @@ async function getUserOrganizationId(
   };
 
   if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
+    return { organizationId: null, clientIds: [], isOrgWide: false, error: membership.error?.message ?? "User tidak memiliki membership aktif." };
   }
-
-  return { organizationId: membership.data.organization_id, error: null };
+  const memberships = await admin.from("memberships").select("client_id").eq("profile_id", userId).eq("organization_id", membership.data.organization_id).eq("is_active", true);
+  const rows = (memberships.data ?? []) as { client_id: string | null }[];
+  return { organizationId: membership.data.organization_id, clientIds: [...new Set(rows.flatMap((row) => row.client_id ? [row.client_id] : []))], isOrgWide: rows.some((row) => row.client_id === null), error: null };
 }
 
 /**
@@ -49,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     const admin = createServiceRoleClient();
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
+    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       console.error("[GET /api/projects] Gagal ambil org:", { message: orgError });
       return NextResponse.json(
@@ -99,6 +97,7 @@ export async function GET(request: NextRequest) {
       .is("work_items.deleted_at", null)
       .order("created_at", { ascending: false })
       .range(from, to);
+    if (!isOrgWide) query = query.in("work_items.client_id", clientIds);
 
     if (status) {
       query = query.eq("work_items.status", status);
@@ -225,7 +224,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceRoleClient();
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
+    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       console.error("[POST /api/projects] Gagal ambil org:", { message: orgError });
       return NextResponse.json(
@@ -309,18 +308,18 @@ export async function POST(request: NextRequest) {
       // Option A: Validasi work_item exists dan milik org yang sama
       const wiResult = await admin
         .from("work_items")
-        .select("id, organization_id")
+        .select("id, organization_id, client_id")
         .eq("id", targetWorkItemId)
         .eq("organization_id", organizationId)
         .is("deleted_at", null)
         .single();
 
       const { data: existingWi, error: wiError } = wiResult as unknown as {
-        data: { id: string; organization_id: string } | null;
+        data: { id: string; organization_id: string; client_id: string } | null;
         error: { message: string } | null;
       };
 
-      if (wiError || !existingWi) {
+      if (wiError || !existingWi || (!isOrgWide && !clientIds.includes(existingWi.client_id))) {
         return NextResponse.json(
           { error: "Work item tidak ditemukan atau bukan milik organisasi ini." },
           { status: 404 }
@@ -344,7 +343,7 @@ export async function POST(request: NextRequest) {
         target_date: target_date ?? null,
         budgeted_hours: budgeted_hours ?? null,
       } as never)
-      .select()
+      .select("id, work_item_id, objective, success_criteria, start_date, target_date, budgeted_hours, created_at, updated_at")
       .single();
 
     const { data: project, error: insertError } = insertResult as unknown as {

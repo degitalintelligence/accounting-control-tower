@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       try { await sendWahaText(groupId, "Maker/checker belum dapat di-resolve secara unik atau memiliki konflik."); } catch {}
       return NextResponse.json({ accepted: true, command: "identity_required" });
     }
-    const clientResult = await admin.from("clients").select("id").eq("id", command.clientId).eq("organization_id", group.data.organization_id).is("deleted_at", null).maybeSingle();
+    const clientResult = await admin.from("clients").select("id").eq("organization_id", group.data.organization_id).is("deleted_at", null).or(`slug.eq.${command.clientRef},name.ilike.${command.clientRef}`).maybeSingle();
     const client = clientResult as unknown as { data: { id: string } | null; error: { message: string } | null };
     if (client.error || !client.data) {
       try { await sendWahaText(groupId, "Client tidak ditemukan di organisasi ini."); } catch {}
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
     const workItemResult = await admin.rpc("create_whatsapp_command_work_item", {
       p_organization_id: group.data.organization_id,
-      p_client_id: command.clientId,
+      p_client_id: client.data.id,
       p_title: command.title,
       p_due_at: command.dueAt,
       p_source_reference_id: messageId,

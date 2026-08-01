@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { ProjectCard } from "@/components/projects/project-card";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -101,7 +100,7 @@ function ProjectsPageContent() {
   );
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-4">
         {/* Header & Filters */}
         <div className="space-y-3">
@@ -244,7 +243,7 @@ function ProjectsPageContent() {
         onOpenChange={setCreateDialogOpen}
         onSuccess={handleCreateSuccess}
       />
-    </AppShell>
+    </>
   );
 }
 

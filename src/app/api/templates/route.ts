@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
     const insertResult = await admin
       .from("task_templates")
       .insert(templateInsertData as never)
-      .select()
+      .select("id, organization_id, client_id, entity_id, section_id, name, description, type, priority, risk_level, is_active, effective_from, effective_until, parent_template_id, created_by, created_at, updated_at, deleted_at")
       .single();
 
     const { data: template, error: insertError } = insertResult as unknown as {
@@ -305,7 +305,7 @@ export async function POST(request: NextRequest) {
     const versionResult = await admin
       .from("template_versions")
       .insert(versionInsertData as never)
-      .select()
+      .select("id, template_id, version_number, title_template, description_template, acceptance_criteria_template, maker_rule, checker_rule, approver_rule, sop_version_id, evidence_schema, maker_deadline_rule, checker_deadline_rule, final_deadline_rule, escalation_policy_id, child_blueprint, weight, is_optional, effective_from, notes, created_at")
       .single();
 
     const { data: version, error: versionError } = versionResult as unknown as {

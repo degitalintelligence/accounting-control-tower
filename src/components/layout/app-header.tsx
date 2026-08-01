@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Search, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "./notification-bell";
 
@@ -11,40 +12,47 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ onMenuClick, onNewWorkItem, onSearch }: AppHeaderProps) {
-  const now = new Date();
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
-  const periodLabel = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+  const [periodLabel, setPeriodLabel] = useState("Periode");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPeriodLabel(
+        new Intl.DateTimeFormat("id-ID", {
+          month: "long",
+          year: "numeric",
+          timeZone: "Asia/Jakarta",
+        }).format(new Date())
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-20 flex h-[67px] items-center justify-between border-b border-[#dfe4e1] bg-white px-4 sm:px-[30px]">
-      {/* Left: mobile menu + period picker */}
+    <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-line bg-surface px-4 sm:px-6 lg:px-8">
       <div className="flex items-center gap-2.5">
         <button
+          type="button"
           onClick={onMenuClick}
-          className="grid size-9 place-items-center rounded-lg border border-[#dfe4e1] bg-white lg:hidden"
+          className="control-interactive grid size-10 place-items-center rounded-lg border border-line bg-surface lg:hidden"
           aria-label="Buka menu"
         >
           <Menu className="size-[18px]" />
         </button>
 
-        <div className="hidden items-center gap-2.5 text-[12px] text-[#6f7a77] sm:flex">
-          <span className="text-[12px]">Period</span>
-          <button className="rounded-lg border border-[#dfe4e1] bg-white px-[11px] py-2 text-[12px] font-semibold text-[#18201f]">
+        <div className="hidden items-center gap-2.5 text-sm text-muted-foreground sm:flex">
+          <span>Periode</span>
+          <button type="button" className="control-interactive rounded-lg border border-line bg-surface px-3 py-2 font-semibold text-foreground">
             {periodLabel}
           </button>
         </div>
       </div>
 
-      {/* Right: actions */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onSearch}
-          className="hidden size-9 place-items-center rounded-lg border border-[#dfe4e1] bg-white sm:grid"
-          aria-label="Cari"
+          className="control-interactive hidden size-10 place-items-center rounded-lg border border-line bg-surface sm:grid"
+          aria-label="Cari pekerjaan"
         >
           <Search className="size-[16px] text-[#6f7a77]" />
         </button>
@@ -55,10 +63,10 @@ export function AppHeader({ onMenuClick, onNewWorkItem, onSearch }: AppHeaderPro
           type="button"
           onClick={onNewWorkItem}
           size="default"
-          className="gap-1.5 rounded-lg bg-[#18201f] px-3.5 py-2.5 text-[12px] font-bold text-white shadow-[0_3px_8px_rgba(24,32,31,.12)] hover:bg-[#2d3937]"
+          className="cta-primary h-10 gap-1.5 rounded-lg px-3.5 shadow-sm"
         >
           <Plus className="size-4" />
-          <span className="hidden sm:inline">New Task</span>
+          <span className="hidden sm:inline">Pekerjaan baru</span>
         </Button>
       </div>
     </header>

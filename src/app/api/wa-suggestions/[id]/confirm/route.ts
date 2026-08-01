@@ -3,11 +3,14 @@ import { logAudit } from "@/lib/audit/logger";
 import { publishNotificationEvent } from "@/lib/notification/publisher";
 import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestions";
 import { canManageOrganization } from "@/lib/authorization";
+import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(_request: Request, context: RouteContext) {
   const { id } = await context.params;
+  const requestBody = await _request.json().catch(() => ({}));
+  const requestedClientId = typeof requestBody.client_id === "string" ? requestBody.client_id : null;
   const { user, organizationId, role, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
@@ -42,12 +45,13 @@ export async function POST(_request: Request, context: RouteContext) {
   }
   const suggestion = suggestionQuery.data;
   if (!suggestion) return NextResponse.json({ error: "Suggestion tidak ditemukan atau sudah diproses." }, { status: 404 });
-  if (!suggestion.suggested_client_id) return NextResponse.json({ error: "Suggestion belum memiliki client yang valid." }, { status: 400 });
+  const clientId = requestedClientId ?? suggestion.suggested_client_id;
+  if (!clientId || !z.string().uuid().safeParse(clientId).success) return NextResponse.json({ error: "Client wajib dipilih dan harus valid." }, { status: 400 });
 
   const clientResult = await admin
     .from("clients")
     .select("id")
-    .eq("id", suggestion.suggested_client_id)
+    .eq("id", clientId)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -64,7 +68,7 @@ export async function POST(_request: Request, context: RouteContext) {
       .select("id")
       .eq("id", suggestion.suggested_section_id)
       .eq("organization_id", organizationId)
-      .or(`client_id.is.null,client_id.eq.${suggestion.suggested_client_id}`)
+      .or(`client_id.is.null,client_id.eq.${clientId}`)
       .is("deleted_at", null)
       .maybeSingle();
     const section = sectionResult as unknown as { data: { id: string } | null; error: unknown };
@@ -108,6 +112,7 @@ export async function POST(_request: Request, context: RouteContext) {
     p_suggestion_id: id,
     p_organization_id: organizationId,
     p_confirmed_by: user.id,
+    p_client_id: clientId,
   } as never);
   const confirmed = result as unknown as { data: { suggestion_id: string; work_item_id: string }[] | null; error: unknown };
   if (confirmed.error || !confirmed.data?.[0]) {

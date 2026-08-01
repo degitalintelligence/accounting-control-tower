@@ -12,7 +12,7 @@ export default function WaInboxPage() {
   const messages = items.filter((item) => item.type === "message");
 
   return (
-    <main className="min-h-screen flex-1 bg-[#f3f5f2] p-6">
+    <main className="page-canvas">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>

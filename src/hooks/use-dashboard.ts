@@ -41,11 +41,26 @@ export interface DashboardInsights {
   signals: string[];
 }
 
+export interface DashboardSections {
+  exceptions: ExceptionItem[];
+  reviews: ReviewItem[];
+  closing: ParentTask[];
+  exceptionCount: number;
+  reviewCount: number;
+  overallProgress: number;
+}
+
+export interface ExceptionItem { id: string; severity: "critical" | "warning" | "blocked"; tag: string; taskId: string; title: string; description: string; assignee: string; assigneeInitials: string; actionLabel: string }
+export interface ReviewItem { id: string; fileIcon: "X" | "S" | "P"; title: string; submitter: string; submitterInitials: string; time: string; risk: "high" | "medium" | "low"; riskLabel: string }
+export interface ChildTask { id: string; name: string; assignee: string; assigneeInitials: string; status: string; checkStatus: "done" | "partial" | "danger"; progress: number }
+export interface ParentTask { id: string; name: string; progress: number; children: ChildTask[] }
+
 export function useDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [insights, setInsights] = useState<DashboardInsights | null>(null);
+  const [sections, setSections] = useState<DashboardSections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,28 +69,40 @@ export function useDashboard() {
     setError(null);
 
     try {
-      const [statsRes, deadlinesRes, activityRes, insightsRes] = await Promise.all([
+      const [statsRes, deadlinesRes, activityRes, insightsRes, sectionsRes] = await Promise.all([
         fetch("/api/dashboard/stats"),
         fetch("/api/dashboard/upcoming-deadlines"),
         fetch("/api/dashboard/activity-feed"),
         fetch("/api/ai/insights"),
+        fetch("/api/dashboard/sections"),
       ]);
 
-      if (!statsRes.ok || !deadlinesRes.ok || !activityRes.ok || !insightsRes.ok) {
-        throw new Error("Failed to fetch dashboard data");
+      const responses: Array<[string, Response]> = [
+        ["statistik", statsRes],
+        ["deadline", deadlinesRes],
+        ["aktivitas", activityRes],
+        ["insight", insightsRes],
+        ["bagian dashboard", sectionsRes],
+      ];
+      const failedResponse = responses.find(([, response]) => !response.ok);
+
+      if (failedResponse) {
+        throw new Error(`Data ${failedResponse[0]} belum dapat dimuat.`);
       }
 
-      const [statsData, deadlinesData, activityData, insightsData] = await Promise.all([
+      const [statsData, deadlinesData, activityData, insightsData, sectionsData] = await Promise.all([
         statsRes.json(),
         deadlinesRes.json(),
         activityRes.json(),
         insightsRes.json(),
+        sectionsRes.json(),
       ]);
 
       setStats(statsData);
       setDeadlines(deadlinesData);
       setActivity(activityData);
       setInsights(insightsData.insights ?? null);
+      setSections(sectionsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -87,5 +114,5 @@ export function useDashboard() {
     queueMicrotask(() => fetchAll());
   }, [fetchAll]);
 
-  return { stats, deadlines, activity, insights, loading, error, refetch: fetchAll };
+  return { stats, deadlines, activity, insights, sections, loading, error, refetch: fetchAll };
 }

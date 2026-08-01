@@ -1,49 +1,27 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { getAuthContext } from "@/lib/authorization";
 
 /**
  * GET /api/dashboard/upcoming-deadlines
  * Returns top 5 work items with nearest due dates.
  */
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = createServiceRoleClient();
-
-  // Get user's organization_id
-  const { data: membership } = (await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle()) as unknown as {
-    data: { organization_id: string } | null;
-  };
-
-  const orgId = membership?.organization_id;
-
-  if (!orgId) {
-    return NextResponse.json([]);
-  }
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
   // Fetch top 5 deadlines for all active workflow statuses.
-  const { data: items } = (await admin
+  let itemsQuery = admin
     .from("work_items")
     .select("id, title, type, priority, status, due_at, risk_level")
-    .eq("organization_id", orgId)
+    .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .not("status", "in", "(completed,cancelled)")
     .not("due_at", "is", null)
     .order("due_at", { ascending: true })
-    .limit(5)) as unknown as {
+    .limit(5);
+  if (!isOrgWide) itemsQuery = itemsQuery.in("client_id", clientIds);
+  const { data: items } = (await itemsQuery) as unknown as {
     data: {
       id: string;
       title: string;
@@ -64,7 +42,7 @@ export async function GET() {
       .from("assignments")
       .select("work_item_id, profile_id, profiles(display_name)")
       .in("work_item_id", itemIds)
-      .eq("role", "assignee")
+      .eq("role", "maker")
       .is("unassigned_at", null)) as unknown as {
       data: {
         work_item_id: string;

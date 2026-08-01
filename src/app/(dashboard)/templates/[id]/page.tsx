@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { TemplateStepEditor } from "@/components/templates/template-step-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -371,15 +370,15 @@ export default function TemplateDetailPage({
 
   if (loading) {
     return (
-      <AppShell>
+      <>
         <DetailSkeleton />
-      </AppShell>
+      </>
     );
   }
 
   if (error || !template) {
     return (
-      <AppShell>
+      <>
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <AlertCircle className="size-12 text-red-400 mb-3" />
           <h2 className="text-lg font-semibold text-slate-900 mb-1">
@@ -390,7 +389,7 @@ export default function TemplateDetailPage({
             Kembali ke Daftar
           </Button>
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -401,7 +400,7 @@ export default function TemplateDetailPage({
     : 0;
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-4">
         {/* Back button */}
         <div className="flex items-center gap-2">
@@ -737,6 +736,6 @@ export default function TemplateDetailPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AppShell>
+    </>
   );
 }

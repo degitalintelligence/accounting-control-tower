@@ -1,42 +1,24 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { getAuthContext, canManageOrganization } from "@/lib/authorization";
 
 /**
  * GET /api/settings/members
  * Returns all members in the current user's organization.
  */
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const { admin, organizationId } = auth.context;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = createServiceRoleClient();
-
-  // Get user's organization_id
-  const { data: membership } = (await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle()) as unknown as {
-    data: { organization_id: string } | null;
-  };
-
-  if (!membership) {
-    return NextResponse.json([]);
+  if (!canManageOrganization(auth.context.memberships[0]?.role)) {
+    return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
   }
 
   // Fetch all active members in this org
   const { data: members } = (await admin
     .from("memberships")
     .select("id, role, is_active, created_at, profile_id")
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", organizationId)
     .eq("is_active", true)
     .order("created_at", { ascending: true })) as unknown as {
     data: {

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Link, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ClientSelect } from "@/components/shared/client-select";
 
 interface CreateProjectDialogProps {
   open: boolean;
@@ -122,8 +123,8 @@ export function CreateProjectDialog({
         setError("Judul wajib diisi.");
         return;
       }
-      if (!clientId.trim()) {
-        setError("Client ID wajib diisi.");
+      if (!clientId) {
+        setError("Client wajib dipilih.");
         return;
       }
     } else {
@@ -142,7 +143,7 @@ export function CreateProjectDialog({
       } else {
         body.title = title.trim();
         body.description = description.trim() || undefined;
-        body.client_id = clientId.trim();
+        body.client_id = clientId;
       }
 
       if (objective.trim()) body.objective = objective.trim();
@@ -291,20 +292,14 @@ export function CreateProjectDialog({
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="proj-client">
-                  Client ID <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="proj-client"
-                  placeholder="UUID klien terkait"
-                  value={clientId}
-                  onChange={(e) => {
-                    setClientId(e.currentTarget.value);
-                    setError(null);
-                  }}
-                />
-              </div>
+              <ClientSelect
+                id="proj-client"
+                value={clientId}
+                onChange={(value) => {
+                  setClientId(value);
+                  setError(null);
+                }}
+              />
             </>
           )}
 

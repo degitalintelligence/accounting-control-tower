@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, context: Context) {
     is_required: body.is_required ?? false,
     sort_order: body.sort_order ?? 0,
     validation_rules: body.validation_rules ?? {},
-  } as never).select().single();
+  } as never).select("id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at").single();
   const data = result as unknown as { data: unknown; error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal menambah item checklist." }, { status: 500 });
   return NextResponse.json({ data: data.data }, { status: 201 });
@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const body = parsed.data;
   const { item_id, ...update } = body;
-  const result = await auth.admin!.from("checklist_items").update(update as never).eq("id", item_id).eq("checklist_template_id", auth.id).select().single();
+  const result = await auth.admin!.from("checklist_items").update(update as never).eq("id", item_id).eq("checklist_template_id", auth.id).select("id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at").single();
   const data = result as unknown as { data: unknown; error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal mengubah item checklist." }, { status: 500 });
   return NextResponse.json({ data: data.data });

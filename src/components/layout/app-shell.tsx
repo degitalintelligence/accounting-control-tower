@@ -62,7 +62,7 @@ export function AppShell({ children }: AppShellProps) {
       <AppSidebar open={sidebarOpen} onClose={handleSidebarClose} />
 
       {/* Main content area */}
-      <div className="flex min-w-0 flex-1 flex-col lg:ml-[244px]">
+      <div className="flex min-w-0 flex-1 flex-col lg:ml-64">
         <AppHeader
           onMenuClick={handleMenuClick}
           onNewWorkItem={handleNewWorkItem}

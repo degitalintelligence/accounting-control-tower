@@ -27,27 +27,31 @@ export function Breadcrumb() {
   }));
 
   return (
-    <nav className="flex items-center gap-1 text-[12px] text-[#8b9492]">
-      <Link href="/dashboard" className="hover:text-[#18201f] transition-colors">
+    <nav aria-label="Breadcrumb" className="overflow-x-auto text-sm text-muted-foreground">
+      <ol className="flex min-w-max items-center gap-1">
+      <li>
+      <Link href="/dashboard" className="transition-colors hover:text-ink">
         Home
       </Link>
+      </li>
       {crumbs.map((crumb) => (
-        <span key={crumb.href} className="flex items-center gap-1">
-          <ChevronRight className="size-3" />
+        <li key={crumb.href} className="flex items-center gap-1">
+          <ChevronRight aria-hidden="true" className="size-3" />
           {crumb.isLast ? (
-            <span className="font-medium text-[#18201f] capitalize">
+            <span aria-current="page" className="font-medium capitalize text-ink">
               {crumb.label}
             </span>
           ) : (
             <Link
               href={crumb.href}
-              className="hover:text-[#18201f] transition-colors capitalize"
+              className="capitalize transition-colors hover:text-ink"
             >
               {crumb.label}
             </Link>
           )}
-        </span>
+        </li>
       ))}
+      </ol>
     </nav>
   );
 }

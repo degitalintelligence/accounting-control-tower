@@ -1,16 +1,18 @@
 "use client";
 
 import { Check, Clock3, MessageCircle, Users, X } from "lucide-react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { WaInboxItemData } from "@/hooks/use-wa-inbox";
+import { ClientSelect } from "@/components/shared/client-select";
 
 interface WaInboxItemProps {
   item: WaInboxItemData;
   busy?: boolean;
-  onConfirm: (id: string) => void;
+  onConfirm: (id: string, clientId?: string) => void;
   onReject: (id: string) => void;
 }
 
@@ -44,6 +46,7 @@ function ConfidenceBar({ value }: { value: number }) {
 
 export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInboxItemProps) {
   const isSuggestion = item.type === "suggestion";
+  const [clientId, setClientId] = useState(item.suggestedClientId);
 
   return (
     <Card className="border-slate-200 bg-white shadow-sm">
@@ -84,6 +87,7 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               <div><span className="block text-slate-400">Deadline</span><span className="font-medium text-slate-800">{formatDueAt(item.dueAt)}</span></div>
               <div><span className="block text-slate-400">Keyakinan AI</span><ConfidenceBar value={item.confidence} /></div>
             </div>
+            <ClientSelect id={`wa-client-${item.id}`} value={clientId || item.suggestedClientId} onChange={setClientId} />
           </div>
         ) : (
           <p className="text-sm text-slate-500">Pesan ini belum menghasilkan saran work item.</p>
@@ -94,7 +98,7 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
             <Button variant="outline" size="sm" disabled={busy} onClick={() => onReject(item.id)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
               <X /> Tolak
             </Button>
-            <Button size="sm" disabled={busy} onClick={() => onConfirm(item.id)} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <Button size="sm" disabled={busy || !(clientId || item.suggestedClientId)} onClick={() => onConfirm(item.id, clientId || item.suggestedClientId)} className="bg-emerald-600 text-white hover:bg-emerald-700">
               <Check /> Konfirmasi & buat tugas
             </Button>
           </div>

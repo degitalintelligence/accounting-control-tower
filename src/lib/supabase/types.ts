@@ -163,6 +163,12 @@ export interface Database {
           template_id: string | null;
           template_version_id: string | null;
           recurrence_instance_key: string | null;
+          checklist_template_id: string | null;
+          progress_percent: number;
+          health_flag: string;
+          is_rollup_parent: boolean;
+          requires_explicit_delivery: boolean;
+          approval_cycle: number;
           title: string;
           description: string | null;
           acceptance_criteria: string | null;
@@ -199,6 +205,12 @@ export interface Database {
           template_id?: string | null;
           template_version_id?: string | null;
           recurrence_instance_key?: string | null;
+          checklist_template_id?: string | null;
+          progress_percent?: number;
+          health_flag?: string;
+          is_rollup_parent?: boolean;
+          requires_explicit_delivery?: boolean;
+          approval_cycle?: number;
           title: string;
           description?: string | null;
           acceptance_criteria?: string | null;
@@ -328,6 +340,8 @@ export interface Database {
           max_retries: number;
           next_retry_at: string | null;
           processed_at: string | null;
+          claimed_at: string | null;
+          last_error: string | null;
           created_at: string;
         };
         Insert: {
@@ -340,6 +354,8 @@ export interface Database {
           max_retries?: number;
           next_retry_at?: string | null;
           processed_at?: string | null;
+          claimed_at?: string | null;
+          last_error?: string | null;
           created_at?: string;
         };
         Update: {
@@ -451,8 +467,51 @@ export interface Database {
         Returns: Json;
       };
       confirm_action_suggestion: {
-        Args: { p_suggestion_id: string; p_organization_id: string; p_confirmed_by: string };
+        Args: { p_suggestion_id: string; p_organization_id: string; p_confirmed_by: string; p_client_id?: string | null };
         Returns: { suggestion_id: string; work_item_id: string }[];
+      };
+      create_work_item_with_assignment: {
+        Args: {
+          p_title: string;
+          p_type: string;
+          p_organization_id: string;
+          p_client_id: string;
+          p_description: string | null;
+          p_acceptance_criteria: string | null;
+          p_priority: string;
+          p_risk_level: string;
+          p_due_at: string | null;
+          p_start_at: string | null;
+          p_project_id: string | null;
+          p_parent_id: string | null;
+          p_entity_id: string | null;
+          p_section_id: string | null;
+          p_created_by: string;
+          p_assignee_id: string;
+          p_assignee_role: string;
+        };
+        Returns: Database["acct_ctrl"]["Tables"]["work_items"]["Row"][];
+      };
+      transition_work_item: {
+        Args: {
+          p_work_item_id: string;
+          p_to_status: string;
+          p_actor_id: string;
+          p_reason?: string | null;
+        };
+        Returns: Json;
+      };
+      record_review_decision: {
+        Args: {
+          p_work_item_id: string;
+          p_actor_id: string;
+          p_kind: string;
+          p_decision: string;
+          p_comment?: string | null;
+          p_checklist_template_id?: string | null;
+          p_findings?: Json;
+        };
+        Returns: Json;
       };
       create_whatsapp_command_work_item: {
         Args: {
@@ -464,7 +523,7 @@ export interface Database {
           p_source_metadata: Json;
           p_created_by: string;
           p_maker_id: string;
-          p_checker_id: string | null;
+          p_checker_id?: string | null;
         };
         Returns: { id: string; title: string }[];
       };

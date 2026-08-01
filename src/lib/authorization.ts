@@ -67,6 +67,17 @@ export function canAccessClient(context: AuthContext, clientId: string | null | 
   return Boolean(clientId && (context.isOrgWide || context.clientIds.includes(clientId)));
 }
 
+export async function getAccessibleClients(context: AuthContext) {
+  let query = context.admin
+    .from("clients")
+    .select("id, name, slug, timezone, created_at, updated_at, deleted_at")
+    .eq("organization_id", context.organizationId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true });
+  if (!context.isOrgWide) query = query.in("id", context.clientIds);
+  return query;
+}
+
 export function canAccessOptionalClient(context: AuthContext, clientId: string | null | undefined) {
   return clientId == null || canAccessClient(context, clientId);
 }

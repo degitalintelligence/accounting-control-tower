@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     const projectId = searchParams.get("project_id");
     const search = searchParams.get("search");
     const overdueOnly = searchParams.get("overdue_only") === "true";
+    const filter = searchParams.get("filter");
 
     let query = admin
       .from("work_items")
@@ -72,6 +73,9 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       query = query.eq("status", status);
+    }
+    if (filter === "review") {
+      query = query.eq("status", "under_review");
     }
     if (type) {
       query = query.eq("type", type);
@@ -168,16 +172,34 @@ export async function POST(request: NextRequest) {
       created_by: userId,
     };
 
-    const insertResult = await admin
-      .from("work_items")
-      .insert(insertData as never)
-      .select()
-      .single();
+    const role = assigneeId ? assigneeRole ?? "maker" : null;
+    const insertResult = assigneeId
+      ? await admin.rpc("create_work_item_with_assignment", {
+          p_title: insertData.title,
+          p_type: insertData.type,
+          p_organization_id: insertData.organization_id,
+          p_client_id: insertData.client_id,
+          p_description: insertData.description,
+          p_acceptance_criteria: insertData.acceptance_criteria,
+          p_priority: insertData.priority,
+          p_risk_level: insertData.risk_level,
+          p_due_at: insertData.due_at,
+          p_start_at: insertData.start_at,
+          p_project_id: insertData.project_id,
+          p_parent_id: insertData.parent_id,
+          p_entity_id: insertData.entity_id,
+          p_section_id: insertData.section_id,
+          p_created_by: insertData.created_by,
+          p_assignee_id: assigneeId,
+          p_assignee_role: role,
+        } as never)
+      : await admin.from("work_items").insert(insertData as never).select().single();
 
-    const { data: workItem, error } = insertResult as unknown as {
-      data: (typeof insertData & { id: string }) | null;
+    const { data: rawWorkItem, error } = insertResult as unknown as {
+      data: (typeof insertData & { id: string }) | (typeof insertData & { id: string })[] | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
+    const workItem = Array.isArray(rawWorkItem) ? rawWorkItem[0] ?? null : rawWorkItem;
 
     if (error) {
       console.error("[POST /api/work-items] Supabase error:", {
@@ -190,29 +212,6 @@ export async function POST(request: NextRequest) {
         { error: "Gagal membuat work item." },
         { status: 500 }
       );
-    }
-
-    // Auto-assign jika assigneeId diberikan
-    if (assigneeId && workItem) {
-      const role = assigneeRole ?? "maker";
-      const assignResult = await admin.from("assignments").insert({
-        work_item_id: workItem.id,
-        profile_id: assigneeId,
-        role,
-        assigned_by: userId,
-      } as never);
-      const { error: assignError } = assignResult as unknown as {
-        error: { message: string; code: string; hint: string; details: string } | null;
-      };
-
-      if (assignError) {
-        console.error("[POST /api/work-items] Gagal auto-assign:", {
-          message: assignError.message,
-          code: assignError.code,
-          hint: assignError.hint,
-          details: assignError.details,
-        });
-      }
     }
 
     // Audit log

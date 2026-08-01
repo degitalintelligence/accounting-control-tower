@@ -13,6 +13,12 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
+
+for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
+  const match = line.match(/^([^#=]+)=(.*)$/);
+  if (match && !process.env[match[1]]) process.env[match[1]] = match[2];
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -54,8 +60,23 @@ const users = [
 async function seed() {
   console.log("Seeding test users...\n");
 
+  const { error: organizationError } = await admin
+    .schema("acct_ctrl")
+    .from("organizations")
+    .upsert(
+      {
+        id: ORG_ID,
+        name: "Kreasheet Accounting",
+        slug: "kreasheet",
+        settings: { timezone: "Asia/Jakarta", currency: "IDR" },
+      },
+      { onConflict: "id" }
+    );
+
+  if (organizationError) throw organizationError;
+
   for (const u of users) {
-    // Create auth user
+    let user;
     const { data, error } = await admin.auth.admin.createUser({
       email: u.email,
       password: u.password,
@@ -63,36 +84,62 @@ async function seed() {
       user_metadata: { full_name: u.full_name },
     });
 
-    if (error) {
-      if (error.message.includes("already been registered")) {
-        console.log(`  [skip] ${u.email} — already exists`);
-      } else {
-        console.error(`  [error] ${u.email}:`, error.message);
-      }
-      continue;
+    if (error?.message.includes("already been registered")) {
+      const { data: listed, error: listError } = await admin.auth.admin.listUsers({
+        perPage: 1000,
+      });
+      if (listError) throw listError;
+      user = listed.users.find((candidate) => candidate.email === u.email);
+      console.log(`  [existing] ${u.email} → ${user?.id ?? "not found"}`);
+    } else if (error) {
+      throw error;
+    } else {
+      user = data.user;
+      console.log(`  [created] ${u.email} → ${user.id}`);
     }
 
-    const userId = data.user.id;
-    console.log(`  [created] ${u.email} → ${userId}`);
+    if (!user) throw new Error(`Auth user not found: ${u.email}`);
 
-    // Update membership role (trigger created it as finance_staff)
-    if (u.role !== "finance_staff") {
-      const { error: updateError } = await admin
-        .schema("acct_ctrl")
-        .from("memberships")
-        .update({ role: u.role })
-        .eq("profile_id", userId)
-        .eq("organization_id", ORG_ID);
+    const { error: passwordError } = await admin.auth.admin.updateUserById(user.id, {
+      password: u.password,
+      email_confirm: true,
+      user_metadata: { full_name: u.full_name },
+    });
+    if (passwordError) throw passwordError;
 
-      if (updateError) {
-        console.error(
-          `    [warn] Could not update membership role to ${u.role}:`,
-          updateError.message
-        );
-      } else {
-        console.log(`    → role updated to ${u.role}`);
-      }
-    }
+    const { error: profileError } = await admin
+      .schema("acct_ctrl")
+      .from("profiles")
+      .upsert(
+        { id: user.id, display_name: u.full_name, email: u.email },
+        { onConflict: "id" }
+      );
+    if (profileError) throw profileError;
+
+    const { data: existingMembership, error: membershipLookupError } = await admin
+      .schema("acct_ctrl")
+      .from("memberships")
+      .select("id")
+      .eq("profile_id", user.id)
+      .eq("organization_id", ORG_ID)
+      .is("client_id", null)
+      .is("entity_id", null)
+      .limit(1)
+      .maybeSingle();
+    if (membershipLookupError) throw membershipLookupError;
+
+    const membershipPayload = {
+      profile_id: user.id,
+      organization_id: ORG_ID,
+      role: u.role,
+      is_active: true,
+    };
+    const membershipMutation = existingMembership
+      ? admin.schema("acct_ctrl").from("memberships").update(membershipPayload).eq("id", existingMembership.id)
+      : admin.schema("acct_ctrl").from("memberships").insert(membershipPayload);
+    const { error: membershipError } = await membershipMutation;
+    if (membershipError) throw membershipError;
+    console.log(`    → membership ensured (${u.role})`);
   }
 
   console.log("\nDone. Test accounts:");

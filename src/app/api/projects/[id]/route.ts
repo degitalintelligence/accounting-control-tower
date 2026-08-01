@@ -10,7 +10,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 async function getUserOrganizationId(
   admin: ReturnType<typeof createServiceRoleClient>,
   userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
+): Promise<{ organizationId: string | null; clientIds: string[]; isOrgWide: boolean; error: string | null }> {
   const result = await admin
     .from("memberships")
     .select("organization_id")
@@ -25,13 +25,11 @@ async function getUserOrganizationId(
   };
 
   if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
+    return { organizationId: null, clientIds: [], isOrgWide: false, error: membership.error?.message ?? "User tidak memiliki membership aktif." };
   }
-
-  return { organizationId: membership.data.organization_id, error: null };
+  const memberships = await admin.from("memberships").select("client_id").eq("profile_id", userId).eq("organization_id", membership.data.organization_id).eq("is_active", true);
+  const rows = (memberships.data ?? []) as { client_id: string | null }[];
+  return { organizationId: membership.data.organization_id, clientIds: [...new Set(rows.flatMap((row) => row.client_id ? [row.client_id] : []))], isOrgWide: rows.some((row) => row.client_id === null), error: null };
 }
 
 /**
@@ -52,7 +50,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const admin = createServiceRoleClient();
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
+    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       return NextResponse.json(
         { error: "Organisasi tidak ditemukan untuk user ini." },
@@ -61,7 +59,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     // Ambil project + work_item
-    const projResult = await admin
+    let projectQuery = admin
       .from("projects")
       .select(
         `
@@ -88,8 +86,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       )
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
-      .is("work_items.deleted_at", null)
-      .single();
+      .is("work_items.deleted_at", null);
+    if (!isOrgWide) projectQuery = projectQuery.in("work_items.client_id", clientIds);
+    const projResult = await projectQuery.single();
 
     const { data: project, error } = projResult as unknown as {
       data: {
@@ -144,13 +143,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
     };
 
     // Ambil child work items (project_id = this project, kecuali work_item utama)
-    const childrenResult = await admin
+    let childrenQuery = admin
       .from("work_items")
       .select("id, title, status, priority, due_at, is_optional, completed_at")
       .eq("project_id", id)
       .neq("id", project.work_item_id)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
+    if (!isOrgWide) childrenQuery = childrenQuery.in("client_id", clientIds);
+    const childrenResult = await childrenQuery.order("created_at", { ascending: true });
 
     const { data: children } = childrenResult as unknown as {
       data: Array<{
@@ -226,7 +227,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const admin = createServiceRoleClient();
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
+    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       return NextResponse.json(
         { error: "Organisasi tidak ditemukan untuk user ini." },
@@ -235,7 +236,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     // Ambil data lama untuk audit
-    const fetchResult = await admin
+    let fetchQuery = admin
       .from("projects")
       .select(
         `
@@ -251,8 +252,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       )
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
-      .is("work_items.deleted_at", null)
-      .single();
+      .is("work_items.deleted_at", null);
+    if (!isOrgWide) fetchQuery = fetchQuery.in("work_items.client_id", clientIds);
+    const fetchResult = await fetchQuery.single();
 
     const { data: existing, error: fetchError } = fetchResult as unknown as {
       data: {
@@ -304,7 +306,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .from("projects")
       .update(updateData as never)
       .eq("id", id)
-      .select()
+      .select("id, work_item_id, objective, success_criteria, start_date, target_date, budgeted_hours, created_at, updated_at")
       .single();
 
     const { data: updated, error: updateError } = updateResult as unknown as {
@@ -373,7 +375,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const admin = createServiceRoleClient();
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
+    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       return NextResponse.json(
         { error: "Organisasi tidak ditemukan untuk user ini." },
@@ -382,7 +384,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     // Ambil project + work_item_id
-    const fetchResult = await admin
+    let fetchQuery = admin
       .from("projects")
       .select(
         `
@@ -393,8 +395,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       )
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
-      .is("work_items.deleted_at", null)
-      .single();
+      .is("work_items.deleted_at", null);
+    if (!isOrgWide) fetchQuery = fetchQuery.in("work_items.client_id", clientIds);
+    const fetchResult = await fetchQuery.single();
 
     const { data: existing, error: fetchError } = fetchResult as unknown as {
       data: { id: string; work_item_id: string } | null;
@@ -412,7 +415,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const deleteResult = await admin
       .from("work_items")
       .update({ deleted_at: new Date().toISOString() } as never)
-      .eq("id", existing.work_item_id);
+      .eq("id", existing.work_item_id)
+      .eq("organization_id", organizationId);
 
     const { error: deleteError } = deleteResult as unknown as {
       error: { message: string; code: string; hint: string; details: string } | null;
