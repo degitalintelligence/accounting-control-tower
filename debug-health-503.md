@@ -17,7 +17,15 @@ Status: [OPEN]
 ## Evidence
 
 - Initial report: PowerShell `Invoke-WebRequest` received HTTP 503.
+- Live request returned `503` with `Content-Type: application/json` and `Server: cloudflare`.
+- Live response body was `{"status":"degraded","checks":{"env":"invalid","database":"not_checked"}}`.
+- The application route generated the response, so the issue is not a Cloudflare-only routing failure.
+- The database check was skipped because production environment validation failed first.
 
 ## Changes
 
 - No business logic changed.
+
+## Current Finding
+
+Hypothesis 1 is confirmed: at least one required production environment variable is missing or invalid in the running Coolify container. Hypotheses 2 and 3 are not the current cause; database access was not attempted and the application route responded normally.
