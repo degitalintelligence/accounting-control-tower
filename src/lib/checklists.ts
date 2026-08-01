@@ -68,15 +68,24 @@ export async function ensureChecklistResponses(
 }
 
 export async function getIncompleteRequiredChecklist(admin: AdminClient, workItemId: string) {
-  const result = await admin
-    .from("checklist_responses")
-    .select("id, value, file_id, checklist_items!inner(label, is_required)")
-    .eq("work_item_id", workItemId)
-    .eq("checklist_items.is_required", true);
-  const data = result as unknown as {
-    data: { id: string; value: string | null; file_id: string | null; checklist_items: { label: string } }[] | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-  if (data.error) throw data.error;
-  return (data.data ?? []).filter((response) => !response.value?.trim() && !response.file_id);
+  const workItemResult = await admin.from("work_items").select("checklist_template_id").eq("id", workItemId).single();
+  const workItem = workItemResult as unknown as { data: { checklist_template_id: string | null } | null; error: { message: string; code: string; hint: string; details: string } | null };
+  if (workItem.error) throw workItem.error;
+  if (!workItem.data?.checklist_template_id) return [];
+  const itemsResult = await admin
+    .from("checklist_items")
+    .select("id, label, is_required")
+    .eq("checklist_template_id", workItem.data.checklist_template_id)
+    .eq("is_required", true)
+    .is("deleted_at", null);
+  const items = itemsResult as unknown as { data: { id: string; label: string }[] | null; error: { message: string; code: string; hint: string; details: string } | null };
+  if (items.error) throw items.error;
+  const responseResult = await admin.from("checklist_responses").select("checklist_item_id, value, file_id").eq("work_item_id", workItemId);
+  const responses = responseResult as unknown as { data: { checklist_item_id: string; value: string | null; file_id: string | null }[] | null; error: { message: string; code: string; hint: string; details: string } | null };
+  if (responses.error) throw responses.error;
+  const byItem = new Map((responses.data ?? []).map((response) => [response.checklist_item_id, response]));
+  return (items.data ?? []).filter((item) => {
+    const response = byItem.get(item.id);
+    return !response?.value?.trim() && !response?.file_id;
+  }).map((item) => ({ id: item.id, value: null, file_id: null, checklist_items: { label: item.label } }));
 }

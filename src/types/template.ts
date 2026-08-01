@@ -40,6 +40,7 @@ export interface TemplateVersion {
   checker_rule: Json;
   approver_rule: Json;
   sop_version_id: string | null;
+  checklist_template_id: string | null;
   evidence_schema: Json;
   maker_deadline_rule: Json;
   checker_deadline_rule: Json;
@@ -83,6 +84,7 @@ export interface CreateTemplateInput {
     checker_rule?: Json;
     approver_rule?: Json;
     sop_version_id?: string;
+    checklist_template_id?: string;
     evidence_schema?: Json;
     maker_deadline_rule?: Json;
     checker_deadline_rule?: Json;
@@ -107,6 +109,7 @@ export interface CreateVersionInput {
   checker_rule?: Json;
   approver_rule?: Json;
   sop_version_id?: string;
+  checklist_template_id?: string;
   evidence_schema?: Json;
   maker_deadline_rule?: Json;
   checker_deadline_rule?: Json;

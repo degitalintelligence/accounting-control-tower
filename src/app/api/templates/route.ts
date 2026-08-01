@@ -280,6 +280,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert versi pertama
+    if (body.version.checklist_template_id) {
+      const checklistResult = await admin.from("checklist_templates").select("id").eq("id", body.version.checklist_template_id).eq("organization_id", organizationId).eq("is_active", true).is("deleted_at", null).single();
+      const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+      if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid." }, { status: 400 });
+    }
     const versionInsertData = {
       template_id: template!.id,
       version_number: 1,
@@ -290,6 +295,7 @@ export async function POST(request: NextRequest) {
       checker_rule: body.version.checker_rule ?? {},
       approver_rule: body.version.approver_rule ?? {},
       sop_version_id: body.version.sop_version_id ?? null,
+      checklist_template_id: body.version.checklist_template_id ?? null,
       evidence_schema: body.version.evidence_schema ?? [],
       maker_deadline_rule: body.version.maker_deadline_rule ?? {},
       checker_deadline_rule: body.version.checker_deadline_rule ?? {},

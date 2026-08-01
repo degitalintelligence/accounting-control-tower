@@ -44,7 +44,10 @@ export async function PATCH(request: NextRequest, context: Context) {
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const body = parsed.data;
   if (!auth.templateId) return NextResponse.json({ error: "Work item belum memiliki template checklist." }, { status: 400 });
-  const membership = await auth.admin!.from("memberships").select("role").eq("profile_id", auth.userId).eq("is_active", true).limit(1).maybeSingle();
+  const organizationId = await getUserOrganizationId(auth.admin!, auth.userId);
+  const membership = organizationId
+    ? await auth.admin!.from("memberships").select("role").eq("profile_id", auth.userId).eq("organization_id", organizationId).eq("is_active", true).limit(1).maybeSingle()
+    : { data: null, error: null };
   const membershipData = membership as unknown as { data: { role: string } | null };
   const templateRole = await auth.admin!.from("checklist_templates").select("target_role").eq("id", auth.templateId).single();
   const templateRoleData = templateRole as unknown as { data: { target_role: string } | null };
@@ -54,6 +57,11 @@ export async function PATCH(request: NextRequest, context: Context) {
   const item = await auth.admin!.from("checklist_items").select("id, input_type, validation_rules").eq("id", body.checklist_item_id).eq("checklist_template_id", auth.templateId).single();
   const itemData = item as unknown as { data: { id: string; input_type: string; validation_rules: Record<string, unknown> } | null; error: { message: string } | null };
   if (itemData.error || !itemData.data) return NextResponse.json({ error: "Item checklist tidak valid." }, { status: 400 });
+  if (body.file_id) {
+    const fileResult = await auth.admin!.from("work_item_files").select("file_id").eq("work_item_id", auth.id).eq("file_id", body.file_id).maybeSingle();
+    const fileData = fileResult as unknown as { data: { file_id: string } | null; error: { message: string } | null };
+    if (fileData.error || !fileData.data) return NextResponse.json({ error: "File tidak terhubung ke work item ini." }, { status: 400 });
+  }
   const value = body.value?.trim() ?? null;
   const rules = itemData.data.validation_rules ?? {};
   if (itemData.data.input_type === "number" && value !== null && (value === "" || !Number.isFinite(Number(value)))) return NextResponse.json({ error: "Nilai harus berupa angka." }, { status: 400 });

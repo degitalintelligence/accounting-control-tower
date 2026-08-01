@@ -57,11 +57,18 @@ export async function POST(request: NextRequest) {
   const items = (body.items ?? []).filter((item) => item.label?.trim()).map((item, index) => ({
     checklist_template_id: template.data!.id,
     label: item.label!.trim(),
-    input_type: ["checkbox", "text", "number", "date"].includes(item.input_type ?? "") ? item.input_type : "checkbox",
+    input_type: ["checkbox", "text", "number", "date", "file", "url", "confirmation"].includes(item.input_type ?? "") ? item.input_type : "checkbox",
     is_required: item.is_required ?? false,
     sort_order: item.sort_order ?? index,
     validation_rules: item.validation_rules ?? {},
   }));
-  if (items.length) await admin.from("checklist_items").insert(items as never);
+  if (items.length) {
+    const itemResult = await admin.from("checklist_items").insert(items as never);
+    const itemData = itemResult as unknown as { error: { message: string; code: string; hint: string; details: string } | null };
+    if (itemData.error) {
+      await admin.from("checklist_templates").update({ is_active: false, deleted_at: new Date().toISOString() } as never).eq("id", template.data.id);
+      return NextResponse.json({ error: "Gagal menyimpan item checklist." }, { status: 500 });
+    }
+  }
   return NextResponse.json({ data: { ...template.data, items } }, { status: 201 });
 }

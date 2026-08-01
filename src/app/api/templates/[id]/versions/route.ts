@@ -119,6 +119,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
+    if (body.checklist_template_id) {
+      const checklistResult = await admin.from("checklist_templates").select("id").eq("id", body.checklist_template_id).eq("organization_id", organizationId).eq("is_active", true).is("deleted_at", null).single();
+      const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+      if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid." }, { status: 400 });
+    }
 
     const insertData = {
       template_id: id,
@@ -130,6 +135,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       checker_rule: body.checker_rule ?? {},
       approver_rule: body.approver_rule ?? {},
       sop_version_id: body.sop_version_id ?? null,
+      checklist_template_id: body.checklist_template_id ?? null,
       evidence_schema: body.evidence_schema ?? [],
       maker_deadline_rule: body.maker_deadline_rule ?? {},
       checker_deadline_rule: body.checker_deadline_rule ?? {},

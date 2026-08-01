@@ -66,6 +66,7 @@ export const workItemCreateSchema = z.object({
   parent_id: nullableUuid,
   entity_id: nullableUuid,
   section_id: nullableUuid,
+  checklist_template_id: nullableUuid,
   assigneeId: uuid.optional(),
   assigneeRole: z.enum(["maker", "checker", "approver"]).optional(),
   business_period: z.string().trim().min(4).max(20).nullable().optional(),
@@ -88,6 +89,7 @@ export const workItemUpdateSchema = z.object({
   parent_id: nullableUuid,
   entity_id: nullableUuid,
   section_id: nullableUuid,
+  checklist_template_id: nullableUuid,
   weight: z.number().finite().min(0).max(100).optional(),
   is_optional: z.boolean().optional(),
 });

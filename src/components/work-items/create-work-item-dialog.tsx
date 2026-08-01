@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ interface FormData {
   priority: string;
   due_at: string;
   client_id: string;
+  checklist_template_id: string;
 }
 
 const INITIAL_FORM: FormData = {
@@ -45,6 +46,7 @@ const INITIAL_FORM: FormData = {
   priority: "medium",
   due_at: "",
   client_id: "",
+  checklist_template_id: "",
 };
 
 export function CreateWorkItemDialog({
@@ -57,6 +59,11 @@ export function CreateWorkItemDialog({
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateBusinessTaskCandidate[]>([]);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [checklistTemplates, setChecklistTemplates] = useState<{ id: string; name: string; target_role: string }[]>([]);
+
+  useEffect(() => {
+    void fetch("/api/checklist-templates").then((response) => response.ok ? response.json() : null).then((body) => setChecklistTemplates(body?.data ?? [])).catch(() => undefined);
+  }, []);
 
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -94,6 +101,7 @@ export function CreateWorkItemDialog({
       if (form.due_at) {
         body.due_at = new Date(form.due_at).toISOString();
       }
+      if (form.checklist_template_id) body.checklist_template_id = form.checklist_template_id;
 
       const res = await fetch("/api/work-items", {
         method: "POST",
@@ -216,6 +224,16 @@ export function CreateWorkItemDialog({
           </div>
 
           <ClientSelect id="wi-client" value={form.client_id} onChange={(value) => updateField("client_id", value)} />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="wi-checklist">Checklist SOP</Label>
+            <Select value={form.checklist_template_id || null} onValueChange={(value) => updateField("checklist_template_id", value ?? "")}>
+              <SelectTrigger id="wi-checklist" className="w-full"><SelectValue placeholder="Tanpa checklist" /></SelectTrigger>
+              <SelectContent>
+                {checklistTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name} · {template.target_role}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Error message */}
           {error && (

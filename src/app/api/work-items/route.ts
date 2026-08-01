@@ -185,6 +185,19 @@ export async function POST(request: NextRequest) {
       console.error("[POST /api/work-items] Duplicate check error:", { message: duplicateQuery.error.message, code: duplicateQuery.error.code, hint: duplicateQuery.error.hint, details: duplicateQuery.error.details });
       return NextResponse.json({ error: "Gagal memeriksa pekerjaan serupa." }, { status: 500 });
     }
+
+    if (workItemFields.checklist_template_id) {
+      const checklistResult = await admin
+        .from("checklist_templates")
+        .select("id")
+        .eq("id", workItemFields.checklist_template_id)
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .single();
+      const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+      if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid untuk organisasi ini." }, { status: 400 });
+    }
     const policy = amount === null ? null : await evaluateApprovalPolicy(admin, { organizationId, clientId: workItemFields.client_id, entityId: workItemFields.entity_id ?? null, workItemType: workItemFields.type, riskLevel: workItemFields.risk_level ?? "medium", priority: workItemFields.priority ?? "medium", amount, currencyCode });
     if (duplicateQuery.data?.length && duplicateAction !== "allow") {
       return NextResponse.json({ error: { code: "DUPLICATE_BUSINESS_TASK", message: "Ditemukan pekerjaan aktif dengan identitas bisnis yang sama." }, duplicates: duplicateQuery.data }, { status: 409 });
@@ -215,6 +228,7 @@ export async function POST(request: NextRequest) {
       approval_policy_id: policy?.policy_id ?? null,
       approval_policy_version: policy?.policy_version ?? null,
       policy_evaluated_at: policy ? new Date().toISOString() : null,
+      checklist_template_id: workItemFields.checklist_template_id ?? null,
     };
 
     const role = assigneeId ? assigneeRole ?? "maker" : null;
