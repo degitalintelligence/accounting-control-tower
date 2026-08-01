@@ -20,7 +20,7 @@ export default function DashboardPage() {
   return (
     <main className="flex-1 min-h-screen bg-canvas p-4 sm:p-6">
       <PageHeading
-        userName={user?.name?.split(" ")[0] || "User"}
+        userName={user?.name?.split(" ")[0] || ""}
         exceptionCount={stats?.critical_overdue ?? 0}
         goalPercent={stats?.on_time_rate ?? 0}
       />

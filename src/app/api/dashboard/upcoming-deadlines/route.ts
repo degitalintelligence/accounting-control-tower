@@ -40,7 +40,7 @@ export async function GET() {
   if (itemIds.length > 0) {
     const { data: assignments } = (await admin
       .from("assignments")
-      .select("work_item_id, profile_id, profiles(display_name)")
+      .select("work_item_id, profile_id, profiles!assignments_profile_id_fkey(display_name)")
       .in("work_item_id", itemIds)
       .eq("role", "maker")
       .is("unassigned_at", null)) as unknown as {

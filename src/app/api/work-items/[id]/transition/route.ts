@@ -6,6 +6,7 @@ import { publishNotificationEvent } from "@/lib/notification";
 import { getIncompleteRequiredChecklist } from "@/lib/checklists";
 import type { WorkItemStatus, AssignmentRole } from "@/types/work-item";
 import { transitionSchema, validationMessage } from "@/lib/validation/schemas";
+import { structuredSupabaseError } from "@/lib/supabase/error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     };
 
     if (activeAssignments.error) {
-      console.error("[POST /transition] Gagal mengambil penerima notifikasi:", activeAssignments.error.message);
+      console.error("[POST /transition] Gagal mengambil penerima notifikasi:", structuredSupabaseError(activeAssignments.error));
     } else {
       try {
         await publishNotificationEvent(admin, {
@@ -246,13 +247,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
           dedupKey: `status_changed:${id}:${toStatus}:${updated?.updated_at ?? new Date().toISOString()}`,
         });
       } catch (notificationError) {
-        console.error("[POST /transition] Gagal mempublikasikan event notifikasi:", notificationError);
+        console.error("[POST /transition] Gagal mempublikasikan event notifikasi:", {
+          message: notificationError instanceof Error ? notificationError.message : "Kesalahan tidak diketahui.",
+        });
       }
     }
 
     return NextResponse.json({ data: updated });
   } catch (err) {
-    console.error("[POST /transition] Unexpected error:", err);
+    console.error("[POST /transition] Unexpected error:", {
+      message: err instanceof Error ? err.message : "Kesalahan tidak diketahui.",
+    });
     return NextResponse.json(
       { error: "Terjadi kesalahan server." },
       { status: 500 }

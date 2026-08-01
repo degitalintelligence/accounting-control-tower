@@ -33,7 +33,6 @@ export async function GET() {
     } | null;
   };
 
-  // Fetch membership (active, primary)
   const { data: membership } = (await admin
     .from("memberships")
     .select("organization_id, role, client_id")
@@ -48,8 +47,11 @@ export async function GET() {
     } | null;
   };
 
-  // Fetch org name
-  let orgName = "Workspace";
+  if (!membership?.organization_id) {
+    return NextResponse.json({ error: "Membership aktif tidak ditemukan." }, { status: 403 });
+  }
+
+  let orgName = "";
   if (membership?.organization_id) {
     const { data: org } = (await admin
       .from("organizations")
@@ -66,10 +68,10 @@ export async function GET() {
       profile?.display_name ??
       user.user_metadata?.full_name ??
       user.email?.split("@")[0] ??
-      "User",
+      "",
     avatar_url: profile?.avatar_url ?? null,
-    role: membership?.role ?? "finance_staff",
-    organization_id: membership?.organization_id ?? "",
+    role: membership.role,
+    organization_id: membership.organization_id,
     organization_name: orgName,
   });
 }

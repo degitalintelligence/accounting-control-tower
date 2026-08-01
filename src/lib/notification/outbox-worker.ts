@@ -5,6 +5,7 @@ import { sendEmail, isEmailConfigured } from "./resend-client";
 import type { NotificationEvent } from "@/types/notification";
 import type { Json } from "@/lib/supabase/types";
 import { sendWahaText } from "@/lib/whatsapp/adapter";
+import { structuredSupabaseError } from "@/lib/supabase/error";
 
 type NotificationClient = Pick<SupabaseClient, "from">;
 
@@ -279,7 +280,7 @@ export async function runNotificationOutboxWorker(admin: NotificationClient) {
       failed += 1;
       console.error("[notification-outbox] Pemrosesan gagal:", {
         outboxId: row.id,
-        message: error instanceof Error ? error.message : "Kesalahan tidak diketahui.",
+        error: error instanceof Error ? { message: error.message } : structuredSupabaseError(error),
       });
     }
   }

@@ -84,7 +84,7 @@ export function useDashboard() {
         ["insight", insightsRes],
         ["bagian dashboard", sectionsRes],
       ];
-      const failedResponse = responses.find(([, response]) => !response.ok);
+      const failedResponse = responses.find(([name, response]) => name !== "insight" && !response.ok);
 
       if (failedResponse) {
         throw new Error(`Data ${failedResponse[0]} belum dapat dimuat.`);
@@ -101,7 +101,7 @@ export function useDashboard() {
       setStats(statsData);
       setDeadlines(deadlinesData);
       setActivity(activityData);
-      setInsights(insightsData.insights ?? null);
+      setInsights(insightsRes.ok ? insightsData.insights ?? null : null);
       setSections(sectionsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");

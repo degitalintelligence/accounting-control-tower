@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getUserOrganizationId } from "@/lib/checklists";
+import { getRequiredServerEnv } from "@/lib/server-env";
 
 type Context = { params: Promise<{ id: string; fileId: string }> };
 
@@ -21,7 +22,7 @@ export async function GET(_request: NextRequest, context: Context) {
   const relation = await admin.from("work_item_files").select("file_id, files(storage_path, filename)").eq("work_item_id", id).eq("file_id", fileId).single();
   const relationData = relation as unknown as { data: { file_id: string; files: { storage_path: string; filename: string } | null } | null; error: { message: string } | null };
   if (relationData.error || !relationData.data?.files) return NextResponse.json({ error: "File tidak ditemukan." }, { status: 404 });
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? "evidence";
+  const bucket = getRequiredServerEnv("SUPABASE_STORAGE_BUCKET");
   const signed = await admin.storage.from(bucket).createSignedUrl(relationData.data.files.storage_path, 300, { download: relationData.data.files.filename });
   if (signed.error || !signed.data?.signedUrl) return NextResponse.json({ error: "Gagal membuat signed URL." }, { status: 500 });
   return NextResponse.json({ data: { url: signed.data.signedUrl, expires_in: 300 } });

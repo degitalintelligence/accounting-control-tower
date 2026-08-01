@@ -30,7 +30,7 @@ export default function AdministrationPage() {
   useEffect(() => { void Promise.resolve().then(load); }, []);
 
   async function createConnection() {
-    const response = await fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "connection", session_id: session, status: "connected" }) });
+    const response = await fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "connection", session_id: session, status: "disconnected" }) });
     setMessage(response.ok ? "Connection tersimpan." : "Connection gagal disimpan.");
     if (response.ok) { setSession(""); await load(); }
   }

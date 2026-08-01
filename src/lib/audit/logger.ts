@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { structuredSupabaseError } from "@/lib/supabase/error";
 
 type AnySupabaseClient = Pick<SupabaseClient, "from">;
 
@@ -80,10 +81,8 @@ export async function getAuditTrail(
   };
 
   if (error) {
-    console.error("[audit-trail] Gagal query audit trail:", {
-      message: error.message,
-    });
-    return [];
+    console.error("[audit-trail] Gagal query audit trail:", structuredSupabaseError(error));
+    throw new Error("Gagal mengambil audit trail.");
   }
 
   return data ?? [];

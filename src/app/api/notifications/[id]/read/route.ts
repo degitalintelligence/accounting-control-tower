@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { structuredSupabaseError } from "@/lib/supabase/error";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -35,7 +36,7 @@ export async function PATCH(_request: Request, context: RouteContext) {
   };
 
   if (updated.error) {
-    console.error("[notifications/read] Update gagal:", updated.error);
+    console.error("[notifications/read] Update gagal:", structuredSupabaseError(updated.error));
     return NextResponse.json({ error: "Gagal menandai notifikasi." }, { status: 500 });
   }
   if (!updated.data) return NextResponse.json({ error: "Notifikasi tidak ditemukan." }, { status: 404 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { NotificationRecord } from "@/types/notification";
+import { structuredSupabaseError } from "@/lib/supabase/error";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
   };
 
   if (membership.error) {
-    console.error("[notifications] Membership query gagal:", membership.error);
+    console.error("[notifications] Membership query gagal:", structuredSupabaseError(membership.error));
     return NextResponse.json({ error: "Gagal memuat notifikasi." }, { status: 500 });
   }
   if (!membership.data) return NextResponse.json({ data: [], unread_count: 0 });
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
   };
 
   if (notifications.error) {
-    console.error("[notifications] Query gagal:", notifications.error);
+    console.error("[notifications] Query gagal:", structuredSupabaseError(notifications.error));
     return NextResponse.json({ error: "Gagal memuat notifikasi." }, { status: 500 });
   }
 
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
   const unread = unreadResult as unknown as { count: number | null; error: { message: string } | null };
 
   if (unread.error) {
-    console.error("[notifications] Unread count gagal:", unread.error);
+    console.error("[notifications] Unread count gagal:", structuredSupabaseError(unread.error));
     return NextResponse.json({ error: "Gagal menghitung notifikasi." }, { status: 500 });
   }
 

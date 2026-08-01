@@ -50,14 +50,20 @@ export async function GET() {
 
   const result = await admin
     .from("work_items")
-    .select("id, client_id, title, type, priority, status, risk_level, due_at, created_at, created_by, parent_id, progress_percent, health_flag, is_rollup_parent, assignments:assignments(profile_id, role, profiles(display_name))")
+    .select("id, client_id, title, type, priority, status, risk_level, due_at, created_at, created_by, parent_id, progress_percent, health_flag, is_rollup_parent, assignments:assignments(profile_id, role, profiles!assignments_profile_id_fkey(display_name))")
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .order("due_at", { ascending: true, nullsFirst: false })
     .limit(250);
   const rows = result as unknown as { data: WorkItem[] | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
   if (rows.error) {
-    console.error("[GET /api/dashboard/sections] Supabase error:", rows.error);
+    console.error("[GET /api/dashboard/sections] Supabase error:", {
+      code: rows.error.code,
+      message: rows.error.message,
+      hint: rows.error.hint,
+      details: rows.error.details,
+      relationship: "assignments -> profiles",
+    });
     return NextResponse.json({ error: "Gagal mengambil data dashboard." }, { status: 500 });
   }
 

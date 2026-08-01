@@ -31,17 +31,17 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { label: "Ringkasan", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Pekerjaan saya", href: "/work-items", icon: CheckSquare, badge: 7 },
+  { label: "Pekerjaan saya", href: "/work-items", icon: CheckSquare },
   { label: "Pekerjaan rutin", href: "/work-items?type=routine", icon: RotateCcw },
   { label: "Proyek", href: "/projects", icon: Grid3X3 },
   { label: "Laporan", href: "/reports", icon: FileText },
 ];
 
 const controlNav: NavItem[] = [
-  { label: "Antrean review", href: "/work-items?filter=review", icon: Eye, badge: 4 },
+  { label: "Antrean review", href: "/work-items?filter=review", icon: Eye },
   { label: "Audit SOP", href: "/templates", icon: Shield },
   { label: "Checklist", href: "/checklists", icon: CheckSquare },
-  { label: "Kotak masuk WhatsApp", href: "/wa-inbox", icon: MessageCircle, badge: 3, badgeVariant: "amber" },
+  { label: "Kotak masuk WhatsApp", href: "/wa-inbox", icon: MessageCircle, badgeVariant: "amber" },
 ];
 
 const manageNav: NavItem[] = [
@@ -111,9 +111,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <span className="block text-[8px] tracking-[.12em] text-[#9da6a4]">
               RUANG KERJA
             </span>
-            <strong className="block truncate text-[11px] font-semibold text-white">
-              {user?.organization_name || "Workspace"}
-            </strong>
+            {user?.organization_name && <strong className="block truncate text-[11px] font-semibold text-white">{user.organization_name}</strong>}
           </div>
           <ChevronDown className="size-3.5 text-[#9da6a4]" />
         </button>
@@ -154,27 +152,13 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           ))}
         </nav>
 
-        <div className="mt-auto rounded-lg bg-white/[.07] p-3">
-          <div className="flex items-center gap-[7px]">
-            <span className="size-[7px] rounded-full bg-[#4ec88d] shadow-[0_0_0_3px_rgba(78,200,141,.14)]" />
-            <strong className="text-xs font-medium">WhatsApp terhubung</strong>
-          </div>
-          <small className="ml-[14px] text-[10px] text-[#85908d]">
-            Sinkronisasi terakhir 2 menit lalu
-          </small>
-        </div>
-
         <div className="mt-3.5 flex items-center gap-[9px] border-t border-white/[.08] pt-3.5">
           <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-[#324542] text-[11px] font-bold text-white">
             {initials}
           </span>
           <div className="min-w-0 flex-1">
-            <strong className="block truncate text-[11px] font-medium text-white">
-              {user?.name || "User"}
-            </strong>
-            <small className="block text-[9px] text-[#85908d]">
-              {user?.role || "Member"}
-            </small>
+            {user?.name && <strong className="block truncate text-[11px] font-medium text-white">{user.name}</strong>}
+            {user?.role && <small className="block text-[9px] text-[#85908d]">{user.role}</small>}
           </div>
           <form action={logout}>
             <button

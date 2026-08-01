@@ -70,7 +70,7 @@ export class OpenRouterError extends Error {
 
 function getConfig() {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL;
+  const model = process.env.OPENROUTER_MODEL ?? process.env.OPENROUTER_TEXT_MODEL;
   if (!apiKey || !model) {
     throw new OpenRouterError("CONFIGURATION_ERROR", "OpenRouter belum dikonfigurasi.");
   }

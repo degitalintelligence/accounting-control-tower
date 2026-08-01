@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getUserOrganizationId } from "@/lib/checklists";
+import { getRequiredServerEnv } from "@/lib/server-env";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest, context: Context) {
   let mimeType = linkMimeType;
   let sizeBytes = linkSize ? Number(linkSize) : null;
   let uploaded = false;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? "evidence";
+  const bucket = getRequiredServerEnv("SUPABASE_STORAGE_BUCKET");
 
   if (file instanceof File && file.size > 0) {
     if (file.size > 50 * 1024 * 1024) return errorResponse("Ukuran file maksimal 50 MB.", 400);

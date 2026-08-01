@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { structuredSupabaseError } from "@/lib/supabase/error";
 
 export async function PATCH() {
   const supabase = await createClient();
@@ -26,7 +27,7 @@ export async function PATCH() {
     .select("id");
   const updated = result as unknown as { data: { id: string }[] | null; error: { message: string; code: string; hint: string; details: string } | null };
   if (updated.error) {
-    console.error("[notifications/read-all] Update gagal:", updated.error);
+    console.error("[notifications/read-all] Update gagal:", structuredSupabaseError(updated.error));
     return NextResponse.json({ error: "Gagal menandai notifikasi." }, { status: 500 });
   }
   return NextResponse.json({ updated_count: updated.data?.length ?? 0 });
