@@ -19,6 +19,33 @@ export interface WaInboxItemData {
   duplicateWarning?: { code: "DUPLICATE_BUSINESS_TASK"; message: string; duplicates: Array<{ id: string; title: string; status: string; due_at: string | null; business_period: string | null }> };
 }
 
+export interface WaConversationSummary {
+  groupId: string;
+  groupName: string;
+  clientId: string | null;
+  messageCount: number;
+  participantCount: number;
+  participants: string[];
+  latestReceivedAt: string;
+  latestMessage: string;
+  windowStart?: string;
+  windowEnd?: string;
+  deterministicSummary?: string;
+  aiSummary?: string | null;
+  actionSuggestions?: Array<{ title?: string; evidence?: string; confidence?: number; requires_human_review?: boolean }>;
+  summaryStatus?: string;
+}
+
+export interface WaConversationMessage {
+  id: string;
+  groupId: string;
+  groupName: string;
+  senderName: string;
+  content: string;
+  messageType: string;
+  receivedAt: string;
+}
+
 type SuggestionResponse = {
   id: string;
   source_reference_id: string | null;
@@ -35,6 +62,7 @@ type SuggestionResponse = {
 };
 
 type SuggestionsResponse = { data?: SuggestionResponse[] };
+type InboxResponse = { summaries?: WaConversationSummary[]; messages?: WaConversationMessage[] };
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, keys: string[]) {
   for (const key of keys) {
@@ -74,6 +102,8 @@ async function readError(response: Response, fallback: string) {
 
 export function useWaInbox() {
   const [items, setItems] = useState<WaInboxItemData[]>([]);
+  const [summaries, setSummaries] = useState<WaConversationSummary[]>([]);
+  const [messages, setMessages] = useState<WaConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,10 +112,19 @@ export function useWaInbox() {
     setError(null);
 
     try {
-      const response = await fetch("/api/wa-suggestions?status=pending&limit=100", { method: "GET", cache: "no-store" });
-      if (!response.ok) throw new Error(await readError(response, "Inbox WhatsApp belum dapat dimuat."));
-      const body = (await response.json()) as SuggestionsResponse;
-      setItems((body.data ?? []).map(toInboxItem));
+      const [suggestionsResponse, inboxResponse] = await Promise.all([
+        fetch("/api/wa-suggestions?status=pending&limit=100", { method: "GET", cache: "no-store" }),
+        fetch("/api/wa-inbox?limit=100", { method: "GET", cache: "no-store" }),
+      ]);
+      if (!suggestionsResponse.ok) throw new Error(await readError(suggestionsResponse, "Saran WhatsApp belum dapat dimuat."));
+      if (!inboxResponse.ok) throw new Error(await readError(inboxResponse, "Percakapan WhatsApp belum dapat dimuat."));
+      const [suggestionsBody, inboxBody] = await Promise.all([
+        suggestionsResponse.json() as Promise<SuggestionsResponse>,
+        inboxResponse.json() as Promise<InboxResponse>,
+      ]);
+      setItems((suggestionsBody.data ?? []).map(toInboxItem));
+      setSummaries(inboxBody.summaries ?? []);
+      setMessages(inboxBody.messages ?? []);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Inbox WhatsApp belum dapat dimuat.");
     } finally {
@@ -124,6 +163,8 @@ export function useWaInbox() {
 
   return {
     items,
+    summaries,
+    messages,
     loading,
     error,
     refetch: fetchItems,

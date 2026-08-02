@@ -1,5 +1,5 @@
 import "server-only";
-import { buildInsightsPrompt, buildReviewAssistantPrompt, buildTaskExtractionPrompt, INSIGHTS_SCHEMA, INSIGHTS_SYSTEM_PROMPT, REVIEW_ASSISTANT_SCHEMA, REVIEW_ASSISTANT_SYSTEM_PROMPT, TASK_EXTRACTION_SCHEMA, TASK_EXTRACTION_SYSTEM_PROMPT } from "./prompts";
+import { buildInsightsPrompt, buildReviewAssistantPrompt, buildTaskExtractionPrompt, buildWhatsAppSummaryPrompt, INSIGHTS_SCHEMA, INSIGHTS_SYSTEM_PROMPT, REVIEW_ASSISTANT_SCHEMA, REVIEW_ASSISTANT_SYSTEM_PROMPT, TASK_EXTRACTION_SCHEMA, TASK_EXTRACTION_SYSTEM_PROMPT, WHATSAPP_SUMMARY_SCHEMA, WHATSAPP_SUMMARY_SYSTEM_PROMPT } from "./prompts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -48,6 +48,7 @@ export type DashboardInsights = {
   priorities: string[];
   signals: string[];
 };
+export type WhatsAppSummaryResult = { summary: string; actions: { title: string; evidence: string; confidence: number }[] };
 
 export type OpenRouterErrorCode =
   | "CONFIGURATION_ERROR"
@@ -146,6 +147,16 @@ export function validateDashboardInsights(value: unknown): DashboardInsights {
     priorities: value.priorities.map((entry) => limitText(entry, MAX_INSIGHT_TEXT_LENGTH)).filter(Boolean),
     signals: value.signals.map((entry) => limitText(entry, MAX_INSIGHT_TEXT_LENGTH)).filter(Boolean),
   };
+}
+
+export function validateWhatsAppSummary(value: unknown): WhatsAppSummaryResult {
+  if (!isRecord(value) || typeof value.summary !== "string" || !Array.isArray(value.actions) || value.actions.length > 5) throw new OpenRouterError("INVALID_RESPONSE", "Output AI summary WhatsApp tidak sesuai schema.");
+  const actions = value.actions.filter(isRecord).map((action) => {
+    if (typeof action.title !== "string" || typeof action.evidence !== "string" || typeof action.confidence !== "number" || action.confidence < 0 || action.confidence > 1) throw new OpenRouterError("INVALID_RESPONSE", "Saran tindakan WhatsApp tidak valid.");
+    return { title: limitText(action.title, 240), evidence: limitText(action.evidence, 500), confidence: action.confidence };
+  });
+  if (actions.length !== value.actions.length) throw new OpenRouterError("INVALID_RESPONSE", "Saran tindakan WhatsApp tidak valid.");
+  return { summary: limitText(value.summary, 1200), actions };
 }
 
 function validateTask(value: unknown): SuggestedTask {
@@ -298,4 +309,10 @@ export async function generateDashboardInsights(context: string): Promise<Dashbo
   const cleanContext = limitText(context, 4_000);
   if (!cleanContext) throw new OpenRouterError("INVALID_RESPONSE", "Konteks insights kosong.");
   return validateDashboardInsights(await callOpenRouter(INSIGHTS_SYSTEM_PROMPT, buildInsightsPrompt(cleanContext), INSIGHTS_SCHEMA, "dashboard_insights"));
+}
+
+export async function generateWhatsAppSummary(context: string): Promise<WhatsAppSummaryResult> {
+  const cleanContext = limitText(context, 12_000);
+  if (!cleanContext) return { summary: "Tidak ada pesan operasional yang dapat diringkas.", actions: [] };
+  return validateWhatsAppSummary(await callOpenRouter(WHATSAPP_SUMMARY_SYSTEM_PROMPT, buildWhatsAppSummaryPrompt(cleanContext), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary"));
 }

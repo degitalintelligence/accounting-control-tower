@@ -6,6 +6,7 @@ import { Activity, CheckCircle2, ChevronRight, Cpu, Database, KeyRound, Loader2,
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { WhatsAppWhitelistWizard } from "@/components/whatsapp/whitelist-wizard";
 
 type Policy = { id: string; name: string; description: string | null; client_id: string | null; is_active: boolean };
 type Connection = { id: string; provider: string; session_id: string | null; status: string; retired_at?: string | null; last_health_check_at: string | null };
@@ -14,6 +15,7 @@ type Mapping = { id: string; wa_group_id: string; provider_participant_id: strin
 type DiscoveredGroup = { id?: string | { _serialized?: string; user?: string; server?: string }; name?: string; subject?: string; groupId?: string | { _serialized?: string; user?: string; server?: string }; groupMetadata?: { id?: { _serialized?: string; user?: string; server?: string }; subject?: string } };
 type DiscoveredParticipant = { id?: string | { _serialized?: string; user?: string; server?: string }; lid?: string | { _serialized?: string; user?: string; server?: string }; phone?: string; displayName?: string; name?: string };
 type Member = { profile_id: string; name: string; is_active: boolean };
+type Client = { id: string; name: string };
 type WhatsAppData = { connections: Connection[]; groups: Group[]; mappings: Mapping[] };
 type AuditData = { samples: { id: string; rating: string | null; sampled_at: string }[]; findings: { id: string; finding_type: string; severity: string; status: string }[] };
 type DeadLetter = { id: string; event_type: string; retry_count: number; created_at: string };
@@ -32,6 +34,7 @@ export default function AdministrationPage() {
   const [tab, setTab] = useState("whatsapp");
   const [wa, setWa] = useState<WhatsAppData>({ connections: [], groups: [], mappings: [] });
   const [members, setMembers] = useState<Member[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [aiPolicies, setAiPolicies] = useState<Policy[]>([]);
   const [audits, setAudits] = useState<AuditData>({ samples: [], findings: [] });
@@ -41,6 +44,7 @@ export default function AdministrationPage() {
   const [aiPolicyName, setAiPolicyName] = useState("");
   const [session, setSession] = useState("");
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,8 +62,8 @@ export default function AdministrationPage() {
 
   async function load() {
     setLoading(true);
-    const responses = await Promise.allSettled([fetch("/api/admin/whatsapp"), fetch("/api/admin/escalations"), fetch("/api/admin/audits"), fetch("/api/admin/dead-letters"), fetch("/api/admin/job-health"), fetch("/api/admin/ai-policies"), fetch("/api/settings/members")]);
-    const names = ["WhatsApp", "eskalasi", "audit", "antrean gagal", "kesehatan pekerjaan", "kebijakan AI", "anggota"];
+    const responses = await Promise.allSettled([fetch("/api/admin/whatsapp"), fetch("/api/admin/escalations"), fetch("/api/admin/audits"), fetch("/api/admin/dead-letters"), fetch("/api/admin/job-health"), fetch("/api/admin/ai-policies"), fetch("/api/settings/members"), fetch("/api/clients")]);
+    const names = ["WhatsApp", "eskalasi", "audit", "antrean gagal", "kesehatan pekerjaan", "kebijakan AI", "anggota", "client"];
     const failed = responses.flatMap((result, index) => result.status === "rejected" || !result.value.ok ? [names[index]] : []);
     setPartialFailures(failed);
     const body = await Promise.all(responses.map(async (result) => result.status === "fulfilled" && result.value.ok ? result.value.json() : null));
@@ -70,6 +74,7 @@ export default function AdministrationPage() {
     if (body[4]) setJobHealth(body[4].workers ?? []);
     if (body[5]) setAiPolicies(body[5]);
     if (body[6]) setMembers((body[6] as Member[]).filter((item) => item.is_active));
+    if (body[7]) setClients((body[7].data ?? []).map((item: Client) => ({ id: item.id, name: item.name })));
     setLoading(false);
   }
 
@@ -108,7 +113,7 @@ export default function AdministrationPage() {
 
   async function createGroup() {
     if (!selectedConnection || !providerGroupId.trim()) return notify("error", "Pilih koneksi dan isi ID grup WhatsApp.");
-    await action("group", () => fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "group", connection_id: selectedConnection, provider_group_id: providerGroupId.trim(), group_name: groupName.trim() || null, is_verified: true }) }), "Grup berhasil ditambahkan ke whitelist.");
+    await action("group", () => fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "group", connection_id: selectedConnection, client_id: selectedClientId, provider_group_id: providerGroupId.trim(), group_name: groupName.trim() || null, is_verified: true }) }), "Grup berhasil ditambahkan ke whitelist.");
     setProviderGroupId(""); setGroupName("");
   }
 
@@ -158,7 +163,7 @@ export default function AdministrationPage() {
     {partialFailures.length > 0 && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><span>Data belum tersedia: {partialFailures.join(", ")}.</span><Button size="sm" variant="outline" onClick={() => void load()} className="border-amber-300 bg-white">Coba lagi</Button></div>}
     {message && <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>{message.text}</div>}
     <div role="tablist" aria-label="Bagian administrasi" className="flex max-w-full gap-2 overflow-x-auto border-b border-slate-200 pb-2">{tabs.map(([value, label, Icon]) => <button key={value} id={`tab-${value}`} role="tab" aria-selected={tab === value} aria-controls={`panel-${value}`} onClick={() => setTab(value)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === value ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="size-4" />{label}</button>)}</div>
-    <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>{tab === "whatsapp" && <WhatsAppPanel data={wa} members={members} session={session} setSession={setSession} selected={selectedConnection} qrUrl={qrUrl} busy={busy} groupId={groupId} setGroupId={setGroupId} providerGroupId={providerGroupId} setProviderGroupId={setProviderGroupId} groupName={groupName} setGroupName={setGroupName} participantId={participantId} setParticipantId={setParticipantId} participantName={participantName} setParticipantName={setParticipantName} participantProfile={participantProfile} setParticipantProfile={setParticipantProfile} discoveredGroups={discoveredGroups} discoveredParticipants={discoveredParticipants} onDiscoverGroups={discoverGroups} onDiscoverParticipants={discoverParticipants} onCreate={createConnection} onSelect={(id) => { setSelectedConnection(id); setDiscoveredGroups([]); setDiscoveredParticipants([]); }} onQr={showQr} onHealth={(id) => action(`health-${id}`, () => fetch(`/api/admin/whatsapp?action=status&id=${id}`), "Status koneksi diperbarui.")} onStart={(id) => action(`start-${id}`, () => fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", id }) }), "Session WAHA dimulai. Silakan cek status koneksi.")} onRetire={setRetirementTarget} onAddGroup={createGroup} onAddMapping={createMapping} />}{tab === "escalation" && <PolicyPanel title="Kebijakan eskalasi" description="Atur aturan pengingat dan eskalasi pekerjaan berisiko." value={policyName} setValue={setPolicyName} policies={policies} busy={busy === "policy-escalation"} onAdd={() => void createPolicy("escalation")} />}{tab === "ai" && <PolicyPanel title="Kebijakan AI" description="AI hanya memberi saran; keputusan tetap membutuhkan konfirmasi manusia." value={aiPolicyName} setValue={setAiPolicyName} policies={aiPolicies} busy={busy === "policy-ai"} onAdd={() => void createPolicy("ai")} ai />}{tab === "audit" && <AuditPanel audits={audits} busy={busy} onSample={() => action("sample", () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "auto_sample" }) }), "Sampling audit berhasil dijalankan.")} onClose={(id) => action(`finding-${id}`, () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_finding", id, status: "closed", resolution: "Ditutup oleh administrator." }) }), "Finding ditutup.")} />}{tab === "dead" && <DeadPanel items={deadLetters} busy={busy} onRetry={(id) => action(`retry-${id}`, () => fetch("/api/admin/dead-letters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }), "Retry dicatat.")} />}{tab === "health" && <HealthPanel items={jobHealth} />}</div>
+    <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>{tab === "whatsapp" && <WhatsAppWhitelistWizard data={wa} members={members} clients={clients} session={session} setSession={setSession} selected={selectedConnection} selectedClientId={selectedClientId} onClientChange={setSelectedClientId} qrUrl={qrUrl} busy={busy} groupId={groupId} setGroupId={setGroupId} providerGroupId={providerGroupId} setProviderGroupId={setProviderGroupId} groupName={groupName} setGroupName={setGroupName} participantId={participantId} setParticipantId={setParticipantId} participantName={participantName} setParticipantName={setParticipantName} participantProfile={participantProfile} setParticipantProfile={setParticipantProfile} discoveredGroups={discoveredGroups} discoveredParticipants={discoveredParticipants} onDiscoverGroups={discoverGroups} onDiscoverParticipants={discoverParticipants} onCreate={createConnection} onSelect={(id) => { setSelectedConnection(id); setDiscoveredGroups([]); setDiscoveredParticipants([]); }} onQr={showQr} onHealth={(id) => action(`health-${id}`, () => fetch(`/api/admin/whatsapp?action=status&id=${id}`), "Status koneksi diperbarui.")} onStart={(id) => action(`start-${id}`, () => fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", id }) }), "Session WAHA dimulai. Silakan cek status koneksi.")} onRetire={setRetirementTarget} onAddGroup={createGroup} onAddMapping={createMapping} />}{tab === "escalation" && <PolicyPanel title="Kebijakan eskalasi" description="Atur aturan pengingat dan eskalasi pekerjaan berisiko." value={policyName} setValue={setPolicyName} policies={policies} busy={busy === "policy-escalation"} onAdd={() => void createPolicy("escalation")} />}{tab === "ai" && <PolicyPanel title="Kebijakan AI" description="AI hanya memberi saran; keputusan tetap membutuhkan konfirmasi manusia." value={aiPolicyName} setValue={setAiPolicyName} policies={aiPolicies} busy={busy === "policy-ai"} onAdd={() => void createPolicy("ai")} ai />}{tab === "audit" && <AuditPanel audits={audits} busy={busy} onSample={() => action("sample", () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "auto_sample" }) }), "Sampling audit berhasil dijalankan.")} onClose={(id) => action(`finding-${id}`, () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_finding", id, status: "closed", resolution: "Ditutup oleh administrator." }) }), "Finding ditutup.")} />}{tab === "dead" && <DeadPanel items={deadLetters} busy={busy} onRetry={(id) => action(`retry-${id}`, () => fetch("/api/admin/dead-letters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }), "Retry dicatat.")} />}{tab === "health" && <HealthPanel items={jobHealth} />}</div>
     <Dialog open={retirementTarget !== null} onOpenChange={(open) => { if (!open) setRetirementTarget(null); }}><DialogContent><DialogHeader><DialogTitle>Retire connection WhatsApp?</DialogTitle><DialogDescription>Connection {retirementTarget?.session_id || "ini"} akan dinonaktifkan permanen. Semua grup whitelist terkait ikut dinonaktifkan dan session tidak dapat diaktifkan kembali.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRetirementTarget(null)}>Batal</Button><Button variant="destructive" onClick={() => void retireConnection()} disabled={busy === `retire-${retirementTarget?.id}`}><XCircle className="size-4" />{busy === `retire-${retirementTarget?.id}` ? "Memproses..." : "Retire connection"}</Button></DialogFooter></DialogContent></Dialog>
   </div></main>;
 }

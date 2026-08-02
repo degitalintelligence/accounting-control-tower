@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extractTasksFromMessage } from "@/lib/ai/openrouter-client";
+import { extractTasksFromMessage, generateWhatsAppSummary } from "@/lib/ai/openrouter-client";
 import { resolveParticipant, resolveProfileName } from "@/lib/whatsapp/identity";
 import { parseExplicitCommand, parseExplicitWorkItemCommand, explicitCommandHelp } from "@/lib/whatsapp/commands";
 import { canTransition, getTransition } from "@/lib/work-engine/status-machine";
@@ -183,6 +183,30 @@ async function processAiIntake(admin: WorkerClient, row: JobRow) {
   if (updatedData.error) throw new Error(updatedData.error.message);
 }
 
+async function processConversationSummary(admin: WorkerClient, row: JobRow) {
+  const groupId = typeof row.payload.wa_group_id === "string" ? row.payload.wa_group_id : null;
+  const organizationId = row.organization_id;
+  const windowStart = typeof row.payload.window_start === "string" ? row.payload.window_start : null;
+  if (!groupId || !windowStart) throw new Error("Payload summary WhatsApp tidak lengkap.");
+  const start = new Date(windowStart);
+  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const groupResult = await admin.from("wa_groups").select("id, organization_id, is_active").eq("id", groupId).eq("organization_id", organizationId).eq("is_active", true).maybeSingle();
+  const group = groupResult as unknown as { data: { id: string; organization_id: string; is_active: boolean } | null; error: { message: string } | null };
+  if (group.error) throw new Error(group.error.message);
+  if (!group.data) throw new Error("Grup WhatsApp tidak ditemukan dalam tenant yang sesuai.");
+  const messagesResult = await admin.from("wa_messages").select("id, sender_participant_id, content, message_type, received_at").eq("wa_group_id", groupId).gte("received_at", start.toISOString()).lt("received_at", end.toISOString()).order("received_at", { ascending: true }).limit(200);
+  const messages = messagesResult as unknown as { data: { sender_participant_id: string | null; content: string | null; message_type: string; received_at: string }[] | null; error: { message: string } | null };
+  if (messages.error) throw new Error(messages.error.message);
+  const rows = messages.data ?? [];
+  const participants = [...new Set(rows.map((message) => message.sender_participant_id).filter((value): value is string => Boolean(value)))];
+  const deterministicSummary = `${rows.length} pesan dari ${participants.length} pengirim pada jendela 7 hari.`;
+  const context = rows.map((message) => `[${message.received_at}] ${message.sender_participant_id ?? "unknown"}: ${(message.content ?? `[${message.message_type}]`).slice(0, 500)}`).join("\n");
+  const ai = await generateWhatsAppSummary(context);
+  const upsert = await admin.from("whatsapp_conversation_summaries").upsert({ organization_id: organizationId, wa_group_id: groupId, window_start: start.toISOString(), window_end: end.toISOString(), message_count: rows.length, participant_count: participants.length, participants, latest_message_at: rows.at(-1)?.received_at ?? null, deterministic_summary: deterministicSummary, ai_summary: ai.summary, ai_action_suggestions: ai.actions.map((action) => ({ ...action, requires_human_review: true })), status: "completed", attempt_count: 1, last_error: null, updated_at: new Date().toISOString() }, { onConflict: "organization_id,wa_group_id,window_start" });
+  const result = upsert as unknown as { error: { message: string } | null };
+  if (result.error) throw new Error(result.error.message);
+}
+
 async function enqueueReply(admin: WorkerClient, organizationId: string, messageId: string, chatId: string, text: string) {
   const result = await admin.rpc("enqueue_whatsapp_reply" as never, {
     p_organization_id: organizationId,
@@ -290,6 +314,7 @@ async function processReply(admin: WorkerClient, row: JobRow) {
 
 export async function runAiExtractionWorker(admin: WorkerClient) {
   const workerId = `ai-extraction-${crypto.randomUUID()}`;
+  const summaryWorkerId = `whatsapp-summary-${crypto.randomUUID()}`;
   let processed = 0;
   let failed = 0;
   for (let index = 0; index < batchSize; index += 1) {
@@ -323,6 +348,12 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
       failed += 1;
       console.error("[ai-extraction-worker] Pemrosesan gagal:", { outboxId: row.id, message: errorMessage(error) });
     }
+  }
+  for (let index = 0; index < batchSize; index += 1) {
+    const row = await claimNext(admin, summaryWorkerId, "whatsapp_conversation_summary_requested");
+    if (!row) break;
+    try { await processConversationSummary(admin, row); await markCompleted(admin, row, summaryWorkerId); processed += 1; }
+    catch (error) { await markFailed(admin, row, summaryWorkerId, error); failed += 1; }
   }
   for (let index = 0; index < batchSize; index += 1) {
     const row = await claimNext(admin, workerId, "whatsapp_reply_requested");
