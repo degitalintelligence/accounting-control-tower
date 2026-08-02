@@ -8,6 +8,7 @@ export type MembershipAccess = {
   organization_id: string;
   client_id: string | null;
   role: string;
+  role_id: string | null;
 };
 
 export type AuthContext = {
@@ -30,7 +31,7 @@ export async function getAuthContext(): Promise<
   const admin = createServiceRoleClient();
   const result = await admin
     .from("memberships")
-    .select("organization_id, client_id, role")
+    .select("organization_id, client_id, role, role_id")
     .eq("profile_id", user.id)
     .eq("is_active", true);
   const memberships = result as unknown as {
@@ -89,17 +90,42 @@ export function hasRole(context: AuthContext, roles: string[]) {
 export async function getActiveMembership(admin: AdminClient, userId: string) {
   const result = await admin
     .from("memberships")
-    .select("organization_id, client_id, role")
+    .select("organization_id, client_id, role, role_id")
     .eq("profile_id", userId)
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
   const data = result as unknown as {
-    data: { organization_id: string; client_id: string | null; role: string } | null;
+    data: { organization_id: string; client_id: string | null; role: string; role_id: string | null } | null;
   };
   return data.data;
 }
 
 export function canManageOrganization(role: string | null | undefined) {
   return ["admin", "manager", "finance_manager", "accounting_manager"].includes(role ?? "");
+}
+
+export async function hasPermission(context: AuthContext, permissionKey: string) {
+  const { data, error } = await context.admin
+    .from("memberships")
+    .select("role_id, role, organization_id")
+    .eq("profile_id", context.userId)
+    .eq("organization_id", context.organizationId)
+    .eq("is_active", true);
+  if (error || !data?.length) return false;
+  const roleIds = data.map((membership) => (membership as { role_id?: string | null }).role_id).filter((id): id is string => Boolean(id));
+  if (roleIds.length) {
+    const result = await context.admin
+      .from("role_permissions")
+      .select("role_id, permission_catalog!inner(permission_key)")
+      .in("role_id", roleIds);
+    const permissionRows = (result.data ?? []) as unknown as { permission_catalog: { permission_key?: string } | null }[];
+    if (!result.error && permissionRows.some((item) => item.permission_catalog?.permission_key === permissionKey)) return true;
+  }
+  return false;
+}
+
+export async function requirePermission(context: AuthContext, permissionKey: string) {
+  if (await hasPermission(context, permissionKey)) return null;
+  return NextResponse.json({ error: "Anda tidak memiliki permission untuk aksi ini." }, { status: 403 });
 }

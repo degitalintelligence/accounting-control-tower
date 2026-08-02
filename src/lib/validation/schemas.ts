@@ -34,7 +34,7 @@ export const organizationUpdateSchema = z.object({
 export const memberCreateSchema = z.object({
   email: z.string().trim().email().max(320),
   display_name: z.string().trim().min(1).max(200),
-  role: z.enum(["admin", "finance_manager", "finance_staff"]),
+  role: z.string().trim().regex(/^[a-z][a-z0-9_]{1,49}$/),
   client_id: uuid.nullable().optional(),
   entity_id: uuid.nullable().optional(),
 }).strict();

@@ -56,6 +56,7 @@ export const quickActions = [
 export const settingsTabs = [
   { label: "Umum", href: "/settings", icon: Settings },
   { label: "Anggota", href: "/settings/members", icon: Users },
+  { label: "Peran & Permission", href: "/settings/roles", icon: Shield },
   { label: "Klien", href: "/settings/clients", icon: Building2 },
   { label: "Notifikasi", href: "/settings/notifications", icon: Bell },
 ];

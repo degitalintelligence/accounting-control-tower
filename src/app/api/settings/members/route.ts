@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthContext, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { memberCreateSchema, validationMessage } from "@/lib/validation/schemas";
 import { NextRequest } from "next/server";
 import { createPublicAuthClient } from "@/lib/supabase/server";
@@ -13,19 +13,19 @@ export async function GET() {
   if (auth.response) return auth.response;
   const { admin, organizationId } = auth.context;
 
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) {
-    return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
-  }
+  const denied = await requirePermission(auth.context, "members.view");
+  if (denied) return denied;
 
   // Fetch all members in this org
   const { data: members } = (await admin
     .from("memberships")
-    .select("id, role, is_active, created_at, profile_id")
+    .select("id, role, role_id, is_active, created_at, profile_id")
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: true })) as unknown as {
     data: {
       id: string;
       role: string;
+      role_id: string | null;
       is_active: boolean;
       created_at: string;
       profile_id: string;
@@ -85,9 +85,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) {
-    return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
-  }
+  const denied = await requirePermission(auth.context, "members.manage");
+  if (denied) return denied;
   const parsed = memberCreateSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const { admin, organizationId } = auth.context;
@@ -108,6 +107,9 @@ export async function POST(request: NextRequest) {
   }
 
   const email = parsed.data.email.toLowerCase();
+  const roleRecordResult = await admin.from("organization_roles").select("id").eq("organization_id", organizationId).eq("role_key", parsed.data.role).is("deleted_at", null).maybeSingle();
+  const roleRecord = roleRecordResult as unknown as { data: { id: string } | null; error: unknown };
+  if (roleRecord.error || !roleRecord.data) return NextResponse.json({ error: "Role workspace belum tersedia. Jalankan migration RBAC terlebih dahulu." }, { status: 400 });
   let user;
   for (let page = 1; ; page += 1) {
     const users = await admin.auth.admin.listUsers({ page, perPage: 1000 });
@@ -145,7 +147,7 @@ export async function POST(request: NextRequest) {
   if (existingMembership.error) return NextResponse.json({ error: "Membership gagal diverifikasi." }, { status: 500 });
 
   if (existingMembership.data) {
-    const updated = await admin.from("memberships").update({ is_active: true } as never).eq("id", existingMembership.data.id).eq("organization_id", organizationId).select("id, profile_id, role, client_id, entity_id, is_active, created_at").single() as unknown as { data: unknown; error: unknown };
+    const updated = await admin.from("memberships").update({ is_active: true, role_id: roleRecord.data.id } as never).eq("id", existingMembership.data.id).eq("organization_id", organizationId).select("id, profile_id, role, role_id, client_id, entity_id, is_active, created_at").single() as unknown as { data: unknown; error: unknown };
     if (updated.error || !updated.data) return NextResponse.json({ error: "Membership gagal diaktifkan." }, { status: 500 });
     if (!isNewUser) {
       const recovery = await createPublicAuthClient().auth.resetPasswordForEmail(email, {
@@ -162,6 +164,7 @@ export async function POST(request: NextRequest) {
     client_id: clientId,
     entity_id: entityId,
     role: parsed.data.role,
+    role_id: roleRecord.data.id,
     is_active: true,
   } as never).select("id, profile_id, role, client_id, entity_id, is_active, created_at").single() as unknown as { data: unknown; error: unknown };
   if (!insertedMembership.error && insertedMembership.data) {
@@ -174,7 +177,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: insertedMembership.data }, { status: 201 });
   }
 
-  const concurrent = admin.from("memberships").select("id, profile_id, role, client_id, entity_id, is_active, created_at").eq("profile_id", authUser.id).eq("organization_id", organizationId).eq("role", parsed.data.role);
+  const concurrent = admin.from("memberships").select("id, profile_id, role, role_id, client_id, entity_id, is_active, created_at").eq("profile_id", authUser.id).eq("organization_id", organizationId).eq("role", parsed.data.role);
   const concurrentQuery = clientId === null ? concurrent.is("client_id", null) : concurrent.eq("client_id", clientId);
   const concurrentMatch = entityId === null ? concurrentQuery.is("entity_id", null) : concurrentQuery.eq("entity_id", entityId);
   const retry = await concurrentMatch.maybeSingle();

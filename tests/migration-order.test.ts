@@ -10,13 +10,14 @@ describe("migration history policy", () => {
     expect(order).toContain("Do not rename, delete, or edit");
     const entries = [...order.matchAll(/^([0-9]{3}_[a-z0-9_]+\.sql)$/gm)].map(([entry]) => entry);
     expect(new Set(entries).size).toBe(entries.length);
-    expect(entries.slice(-6)).toEqual([
-      "053_grant_whatsapp_summary_access.sql",
-      "054_whatsapp_conversation_intelligence.sql",
+    expect(entries.slice(-7)).toEqual([
       "055_unify_whatsapp_summary_action_suggestions.sql",
       "056_whatsapp_suggestion_action_choice.sql",
       "057_whatsapp_outbound_delivery_tracking.sql",
       "058_whatsapp_reply_session_context.sql",
+      "059_workspace_rbac_permissions.sql",
+      "060_harden_rbac_authorization.sql",
+      "061_harden_membership_mutation_rls.sql",
     ]);
     const migrationFiles = readdirSync(resolve(__dirname, "..", "supabase/migrations"))
       .filter((file) => /^\d{3}_.+\.sql$/.test(file));

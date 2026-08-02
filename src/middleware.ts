@@ -22,7 +22,7 @@ const securityHeaders = {
   "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
 };
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const category = rateLimitCategory(pathname, request.method);
@@ -52,11 +52,20 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Jika env vars tidak ada di middleware, ini bisa menyebabkan 500.
+    // Kita return response dasar agar tidak crash.
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       db: { schema: "acct_ctrl" },
       cookies: {
