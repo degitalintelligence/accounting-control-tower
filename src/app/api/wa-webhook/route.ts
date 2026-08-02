@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Payload tidak valid." }, { status: 400 });
   }
 
-  if (payload.event !== "message" || !payload.payload || payload.payload.fromMe) {
+  if (!payload.event || !["message", "message.any"].includes(payload.event) || !payload.payload) {
     return NextResponse.json({ accepted: true });
   }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createServiceRoleClient();
-  const connectionResult = await admin.from("integration_connections").select("id, status").eq("provider", "waha").eq("session_id", payload.session).limit(1).maybeSingle();
+  const connectionResult = await admin.from("integration_connections").select("id, status").eq("provider", "waha").eq("session_id", payload.session).neq("status", "retired").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const connection = connectionResult as unknown as { data: { id: string; status: string } | null; error: { message: string } | null };
   if (connection.error || !connection.data) return NextResponse.json({ accepted: true });
   if (connection.data.status === "retired") return NextResponse.json({ accepted: true });
