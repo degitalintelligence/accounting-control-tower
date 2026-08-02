@@ -35,13 +35,24 @@ export type WahaConfig = {
 
 export type WahaGroup = {
   id?: string;
+  groupMetadata?: {
+    id?: WahaSerializedId;
+    subject?: string;
+    participants?: WahaParticipant[];
+  };
   name?: string;
   subject?: string;
   groupId?: string;
 };
 
+export type WahaSerializedId = {
+  user?: string;
+  server?: string;
+  _serialized?: string;
+};
+
 export type WahaParticipant = {
-  id?: string;
+  id?: string | WahaSerializedId;
   lid?: string;
   phone?: string;
   displayName?: string;
