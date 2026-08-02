@@ -11,6 +11,8 @@ export async function POST(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   const requestBody = await _request.json().catch(() => ({}));
   const requestedClientId = typeof requestBody.client_id === "string" ? requestBody.client_id : null;
+  const actionType = requestBody.action_type === "project" || requestBody.action_type === "update_existing" || requestBody.action_type === "information_only" ? requestBody.action_type : "work_item";
+  const targetWorkItemId = typeof requestBody.target_work_item_id === "string" ? requestBody.target_work_item_id : null;
   const duplicateAction = requestBody.duplicate_action === "allow" ? "allow" : "warn";
   const { user, organizationId, role, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,21 +49,23 @@ export async function POST(_request: Request, context: RouteContext) {
   const suggestion = suggestionQuery.data;
   if (!suggestion) return NextResponse.json({ error: "Suggestion tidak ditemukan atau sudah diproses." }, { status: 404 });
   const clientId = requestedClientId ?? suggestion.suggested_client_id;
-  if (!clientId || !z.string().uuid().safeParse(clientId).success) return NextResponse.json({ error: "Client wajib dipilih dan harus valid." }, { status: 400 });
+  if (actionType !== "information_only" && (!clientId || !z.string().uuid().safeParse(clientId).success)) return NextResponse.json({ error: "Client wajib dipilih dan harus valid." }, { status: 400 });
 
-  const clientResult = await admin
-    .from("clients")
-    .select("id")
-    .eq("id", clientId)
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .maybeSingle();
+  const clientResult = clientId
+    ? await admin
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    : { data: null, error: null };
   const client = clientResult as unknown as { data: { id: string } | null; error: unknown };
   if (client.error) {
     console.error("[POST /api/wa-suggestions/:id/confirm] Supabase error:", suggestionError(client.error));
     return NextResponse.json({ error: "Gagal memvalidasi client." }, { status: 500 });
   }
-  if (!client.data) return NextResponse.json({ error: "Client suggestion tidak ditemukan dalam organisasi." }, { status: 400 });
+  if (actionType !== "information_only" && !client.data) return NextResponse.json({ error: "Client suggestion tidak ditemukan dalam organisasi." }, { status: 400 });
 
   if (suggestion.suggested_section_id) {
     const sectionResult = await admin
@@ -109,14 +113,16 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Maker dan checker harus berbeda." }, { status: 400 });
   }
 
-  const result = await admin.rpc("confirm_action_suggestion", {
+  const result = await admin.rpc("confirm_action_suggestion_choice", {
     p_suggestion_id: id,
     p_organization_id: organizationId,
     p_confirmed_by: user.id,
     p_client_id: clientId,
+    p_action_type: actionType,
+    p_target_work_item_id: targetWorkItemId,
     p_duplicate_action: duplicateAction,
   } as never);
-  const confirmed = result as unknown as { data: { suggestion_id: string; work_item_id: string }[] | null; error: unknown };
+  const confirmed = result as unknown as { data: { suggestion_id: string; work_item_id: string | null; project_id: string | null }[] | null; error: unknown };
   if (confirmed.error || !confirmed.data?.[0]) {
     const error = confirmed.error as { message?: string; details?: string } | null;
     if (error?.message === "DUPLICATE_BUSINESS_TASK") {
@@ -128,6 +134,8 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Gagal mengonfirmasi suggestion." }, { status: 500 });
   }
   const workItemId = confirmed.data[0].work_item_id;
+  if (actionType === "information_only") return NextResponse.json({ data: { id, status: "confirmed", action_type: actionType } });
+  if (!workItemId) return NextResponse.json({ error: "Work item hasil konfirmasi tidak ditemukan." }, { status: 500 });
   const workItem = { id: workItemId, title: suggestion.suggested_title, status: "draft" };
 
   await logAudit(admin, {
@@ -141,11 +149,11 @@ export async function POST(_request: Request, context: RouteContext) {
   await logAudit(admin, {
     organizationId,
     actorId: user.id,
-    action: "work_item.created",
+    action: actionType === "update_existing" ? "work_item.updated" : "work_item.created",
     entityType: "work_item",
     entityId: workItem.id,
     newValue: workItem,
-    metadata: { source: "wa_suggestion", suggestion_id: id },
+    metadata: { source: "wa_suggestion", suggestion_id: id, action_type: actionType },
   });
 
   const recipients = [suggestion.suggested_maker_id, suggestion.suggested_checker_id].filter((profileId): profileId is string => Boolean(profileId));
@@ -167,5 +175,5 @@ export async function POST(_request: Request, context: RouteContext) {
     }
   }
 
-  return NextResponse.json({ data: { id, status: "confirmed", created_work_item_id: workItemId }, work_item: workItem });
+  return NextResponse.json({ data: { id, status: "confirmed", action_type: actionType, created_work_item_id: workItemId, project_id: confirmed.data[0].project_id }, work_item: workItem });
 }

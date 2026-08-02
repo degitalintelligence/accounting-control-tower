@@ -11,12 +11,12 @@ describe("migration history policy", () => {
     const entries = [...order.matchAll(/^([0-9]{3}_[a-z0-9_]+\.sql)$/gm)].map(([entry]) => entry);
     expect(new Set(entries).size).toBe(entries.length);
     expect(entries.slice(-6)).toEqual([
-      "045_whatsapp_connection_retirement.sql",
-      "046_complete_checklist_workflow.sql",
-      "046_grant_ai_policies_access.sql",
-      "047_grant_planned_leaves_access.sql",
-      "048_whatsapp_connection_retirement.sql",
-      "049_whatsapp_conversation_summaries.sql",
+      "053_grant_whatsapp_summary_access.sql",
+      "054_whatsapp_conversation_intelligence.sql",
+      "055_unify_whatsapp_summary_action_suggestions.sql",
+      "056_whatsapp_suggestion_action_choice.sql",
+      "057_whatsapp_outbound_delivery_tracking.sql",
+      "058_whatsapp_reply_session_context.sql",
     ]);
     const migrationFiles = readdirSync(resolve(__dirname, "..", "supabase/migrations"))
       .filter((file) => /^\d{3}_.+\.sql$/.test(file));

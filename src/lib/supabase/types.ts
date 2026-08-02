@@ -492,6 +492,42 @@ export interface Database {
           created_at?: string;
         };
       };
+      whatsapp_delivery_attempts: {
+        Relationships: [];
+        Row: {
+          id: string;
+          organization_id: string;
+          notification_id: string;
+          connection_id: string;
+          session_id: string;
+          provider: string;
+          chat_id: string;
+          attempt_number: number;
+          outcome: string;
+          provider_message_id: string | null;
+          provider_response: Json | null;
+          error_code: string | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          notification_id: string;
+          connection_id: string;
+          session_id: string;
+          provider: string;
+          chat_id: string;
+          attempt_number: number;
+          outcome: string;
+          provider_message_id?: string | null;
+          provider_response?: Json | null;
+          error_code?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: never;
+      };
       [key: string]: unknown;
     };
     Views: Record<string, unknown>;
@@ -605,7 +641,7 @@ export interface Database {
         Returns: { message_id: string; duplicate: boolean }[];
       };
       enqueue_whatsapp_reply: {
-        Args: { p_organization_id: string; p_message_id: string; p_chat_id: string; p_text: string };
+        Args: { p_organization_id: string; p_message_id: string; p_connection_id: string; p_session_id: string; p_provider: string; p_chat_id: string; p_text: string };
         Returns: string;
       };
       cleanup_whatsapp_retention: {

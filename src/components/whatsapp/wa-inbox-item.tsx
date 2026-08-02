@@ -1,18 +1,21 @@
 "use client";
 
 import { Check, Clock3, MessageCircle, Users, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { WaInboxItemData } from "@/hooks/use-wa-inbox";
 import { ClientSelect } from "@/components/shared/client-select";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ActionType } from "@/hooks/use-wa-inbox";
 
 interface WaInboxItemProps {
   item: WaInboxItemData;
   busy?: boolean;
-  onConfirm: (id: string, clientId?: string, duplicateAction?: "warn" | "allow") => Promise<{ duplicateWarning: WaInboxItemData["duplicateWarning"] }>;
+  onConfirm: (id: string, actionType: ActionType, clientId?: string, targetWorkItemId?: string, duplicateAction?: "warn" | "allow") => Promise<{ duplicateWarning: WaInboxItemData["duplicateWarning"] }>;
   onReject: (id: string) => void;
 }
 
@@ -48,6 +51,17 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
   const isSuggestion = item.type === "suggestion";
   const [clientId, setClientId] = useState(item.suggestedClientId);
   const [duplicateWarning, setDuplicateWarning] = useState(item.duplicateWarning);
+  const [actionType, setActionType] = useState<ActionType>(item.actionType ?? "work_item");
+  const [targetWorkItemId, setTargetWorkItemId] = useState(item.targetWorkItemId ?? "");
+  const [workItems, setWorkItems] = useState<Array<{ id: string; title: string; status: string }>>([]);
+
+  useEffect(() => {
+    if (actionType !== "update_existing" || !clientId) return;
+    void fetch(`/api/work-items?client_id=${encodeURIComponent(clientId)}&limit=50`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => setWorkItems(body?.data ?? []))
+      .catch(() => setWorkItems([]));
+  }, [actionType, clientId]);
 
   return (
     <Card className="border-slate-200 bg-white shadow-sm">
@@ -89,6 +103,19 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               <div><span className="block text-slate-400">Keyakinan AI</span><ConfidenceBar value={item.confidence} /></div>
             </div>
             <ClientSelect id={`wa-client-${item.id}`} value={clientId || item.suggestedClientId} onChange={setClientId} />
+            <div className="space-y-1.5">
+              <Label htmlFor={`wa-action-${item.id}`}>Tindakan</Label>
+              <Select value={actionType} onValueChange={(value) => setActionType((value ?? "work_item") as ActionType)}>
+                <SelectTrigger id={`wa-action-${item.id}`} className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="work_item">Work Item</SelectItem>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="update_existing">Update existing</SelectItem>
+                  <SelectItem value="information_only">Information only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {actionType === "update_existing" && <div className="space-y-1.5"><Label htmlFor={`wa-target-${item.id}`}>Work Item tujuan</Label><Select value={targetWorkItemId || null} onValueChange={(value) => setTargetWorkItemId(value ?? "")}><SelectTrigger id={`wa-target-${item.id}`} className="w-full"><SelectValue placeholder="Pilih work item..." /></SelectTrigger><SelectContent>{workItems.map((workItem) => <SelectItem key={workItem.id} value={workItem.id}>{workItem.title} · {workItem.status}</SelectItem>)}</SelectContent></Select></div>}
             {duplicateWarning && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="font-semibold">Pekerjaan aktif yang sama ditemukan</p><ul className="mt-2 list-disc pl-5">{duplicateWarning.duplicates.map((duplicate) => <li key={duplicate.id}>{duplicate.title} — {duplicate.status}</li>)}</ul></div>}
           </div>
         ) : (
@@ -100,8 +127,8 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
             <Button variant="outline" size="sm" disabled={busy} onClick={() => onReject(item.id)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
               <X /> Tolak
             </Button>
-              <Button size="sm" disabled={busy || !(clientId || item.suggestedClientId)} onClick={async () => { const result = await onConfirm(item.id, clientId || item.suggestedClientId, duplicateWarning ? "allow" : "warn"); setDuplicateWarning(result.duplicateWarning); }} className="bg-emerald-600 text-white hover:bg-emerald-700">
-              <Check /> {duplicateWarning ? "Tetap buat pekerjaan" : "Konfirmasi & buat tugas"}
+              <Button size="sm" disabled={busy || (actionType !== "information_only" && !(clientId || item.suggestedClientId)) || (actionType === "update_existing" && !targetWorkItemId)} onClick={async () => { const result = await onConfirm(item.id, actionType, clientId || item.suggestedClientId, targetWorkItemId || undefined, duplicateWarning ? "allow" : "warn"); setDuplicateWarning(result.duplicateWarning); }} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <Check /> {duplicateWarning ? "Tetap proses" : actionType === "information_only" ? "Tandai informasi" : actionType === "update_existing" ? "Konfirmasi update" : actionType === "project" ? "Konfirmasi & buat project" : "Konfirmasi & buat tugas"}
             </Button>
           </div>
         )}

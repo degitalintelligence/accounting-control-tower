@@ -16,6 +16,8 @@ export interface WaInboxItemData {
   suggestedClientId: string;
   confidence: number;
   type: "suggestion" | "message";
+  actionType: ActionType | null;
+  targetWorkItemId: string | null;
   duplicateWarning?: { code: "DUPLICATE_BUSINESS_TASK"; message: string; duplicates: Array<{ id: string; title: string; status: string; due_at: string | null; business_period: string | null }> };
 }
 
@@ -46,6 +48,8 @@ export interface WaConversationMessage {
   receivedAt: string;
 }
 
+export type ActionType = "work_item" | "project" | "update_existing" | "information_only";
+
 type SuggestionResponse = {
   id: string;
   source_reference_id: string | null;
@@ -58,6 +62,8 @@ type SuggestionResponse = {
   suggested_client_id: string | null;
   confidence: number | null;
   status: string;
+  decision_type?: ActionType | null;
+  target_work_item_id?: string | null;
   created_at: string;
 };
 
@@ -87,6 +93,8 @@ function toInboxItem(suggestion: SuggestionResponse): WaInboxItemData {
     dueAt: suggestion.suggested_due_at,
     suggestedClientId: suggestion.suggested_client_id ?? "",
     confidence: Math.round((suggestion.confidence ?? 0) * 100),
+    actionType: suggestion.decision_type ?? null,
+    targetWorkItemId: suggestion.target_work_item_id ?? null,
     type: "suggestion",
   };
 }
@@ -136,11 +144,11 @@ export function useWaInbox() {
     queueMicrotask(() => fetchItems());
   }, [fetchItems]);
 
-  const confirmSuggestion = useCallback(async (id: string, clientId?: string, duplicateAction: "warn" | "allow" = "warn") => {
+  const confirmSuggestion = useCallback(async (id: string, actionType: ActionType, clientId?: string, targetWorkItemId?: string, duplicateAction: "warn" | "allow" = "warn") => {
     const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...(clientId ? { client_id: clientId } : {}), duplicate_action: duplicateAction }),
+      body: JSON.stringify({ action_type: actionType, ...(clientId ? { client_id: clientId } : {}), ...(targetWorkItemId ? { target_work_item_id: targetWorkItemId } : {}), duplicate_action: duplicateAction }),
     });
     if (response.status === 409) {
       const body = await response.json().catch(() => null);

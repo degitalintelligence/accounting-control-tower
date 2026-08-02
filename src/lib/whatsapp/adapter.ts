@@ -2,6 +2,16 @@ import "server-only";
 import { getWahaConfig } from "./config";
 import type { WahaGroup, WahaParticipant } from "@/types/whatsapp";
 
+export type WhatsAppSession = {
+  connectionId: string;
+  sessionId: string;
+  provider: string;
+};
+
+export type WhatsAppSessionAdapter = {
+  sendText: (chatId: string, text: string) => Promise<{ id?: string; _data?: { id?: { _serialized?: string } }; [key: string]: unknown }>;
+};
+
 export class WahaRequestError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -65,11 +75,15 @@ export async function getWahaGroupParticipants(session: string, groupId: string)
   return wahaRequest<WahaParticipant[]>(`/api/${encodeURIComponent(session)}/groups/${encodeURIComponent(groupId)}/participants/v2`);
 }
 
-export async function sendWahaText(chatId: string, text: string) {
-  const config = getWahaConfig();
-  if (!config.session) throw new Error("WAHA_SESSION belum dikonfigurasi.");
-  return wahaRequest<{ id?: string }>("/api/sendText", {
+export async function sendWahaText(session: string, chatId: string, text: string) {
+  return wahaRequest<{ id?: string; _data?: { id?: { _serialized?: string } }; [key: string]: unknown }>("/api/sendText", {
     method: "POST",
-    body: JSON.stringify({ session: config.session, chatId, text }),
+    body: JSON.stringify({ session, chatId, text }),
   });
+}
+
+export function createWhatsAppSessionAdapter(session: WhatsAppSession): WhatsAppSessionAdapter {
+  if (session.provider !== "waha") throw new Error(`Provider WhatsApp tidak didukung: ${session.provider}`);
+  if (!session.connectionId || !session.sessionId) throw new Error("Koneksi WhatsApp tidak lengkap.");
+  return { sendText: (chatId, text) => sendWahaText(session.sessionId, chatId, text) };
 }

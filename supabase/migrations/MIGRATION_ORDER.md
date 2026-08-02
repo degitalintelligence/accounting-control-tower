@@ -77,6 +77,11 @@ The current repository order is lexical by complete filename. Dependencies that 
 051_allow_ai_intake_worker_claim.sql
 052_restore_queue_worker_allowlist.sql
 053_grant_whatsapp_summary_access.sql
+054_whatsapp_conversation_intelligence.sql
+055_unify_whatsapp_summary_action_suggestions.sql
+056_whatsapp_suggestion_action_choice.sql
+057_whatsapp_outbound_delivery_tracking.sql
+058_whatsapp_reply_session_context.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

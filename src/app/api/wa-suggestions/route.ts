@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
     let query = admin
       .from("action_suggestions")
-      .select("id, source_type, source_reference_id, source_metadata, suggested_title, suggested_description, suggested_maker_id, suggested_checker_id, suggested_due_at, suggested_client_id, suggested_section_id, confidence, status, created_at, updated_at, rejected_reason, created_work_item_id", hasPagination ? { count: "exact" } : undefined)
+      .select("id, source_type, source_reference_id, source_summary_id, source_metadata, evidence_message_ids, evidence_text, suggested_title, suggested_description, suggested_maker_id, suggested_checker_id, suggested_due_at, suggested_client_id, suggested_section_id, confidence, status, created_at, updated_at, rejected_reason, created_work_item_id, decision_type, target_work_item_id, decision_note", hasPagination ? { count: "exact" } : undefined)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false });
 

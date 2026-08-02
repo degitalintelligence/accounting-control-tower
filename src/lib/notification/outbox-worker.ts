@@ -232,25 +232,40 @@ async function deliverWhatsAppNotifications(admin: NotificationClient, event: No
   const profileResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end").in("id", notifications.map((notification) => notification.profile_id));
   const profiles = profileResult as unknown as { data: { id: string; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
   if (profiles.error) throw new Error(profiles.error.message);
-  const mappingsResult = await admin.from("wa_participant_mappings").select("profile_id, provider_participant_id, wa_group_id").in("profile_id", notifications.map((notification) => notification.profile_id)).eq("is_verified", true);
-  const mappings = mappingsResult as unknown as { data: { profile_id: string; provider_participant_id: string; wa_group_id: string }[] | null; error: { message: string } | null };
+  const mappingsResult = await admin.from("wa_participant_mappings").select("profile_id, provider_participant_id, wa_group_id, wa_groups!inner(connection_id, organization_id, integration_connections!inner(provider, session_id, status))").in("profile_id", notifications.map((notification) => notification.profile_id)).eq("is_verified", true);
+  const mappings = mappingsResult as unknown as { data: { profile_id: string; provider_participant_id: string; wa_group_id: string; wa_groups: { connection_id: string; organization_id: string; integration_connections: { provider: string; session_id: string | null; status: string } } }[] | null; error: { message: string } | null };
   if (mappings.error) throw new Error(mappings.error.message);
   for (const notification of notifications) {
     const profile = (profiles.data ?? []).find((candidate) => candidate.id === notification.profile_id);
     if (!profile || inQuietHours(new Date(), profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end)) continue;
     const mapping = (mappings.data ?? []).find((candidate) => candidate.profile_id === notification.profile_id);
     if (!mapping) continue;
-    const groupResult = await admin.from("wa_groups").select("provider_group_id").eq("id", mapping.wa_group_id).eq("is_active", true).maybeSingle();
-    const group = groupResult as unknown as { data: { provider_group_id: string } | null; error: { message: string } | null };
+    const groupResult = await admin.from("wa_groups").select("provider_group_id, connection_id, organization_id, integration_connections!inner(provider, session_id, status)").eq("id", mapping.wa_group_id).eq("organization_id", event.organizationId).eq("is_active", true).maybeSingle();
+    const group = groupResult as unknown as { data: { provider_group_id: string; connection_id: string; organization_id: string; integration_connections: { provider: string; session_id: string | null; status: string } } | null; error: { message: string } | null };
     if (group.error || !group.data) continue;
+    const connection = group.data.integration_connections;
+    const sessionId = connection.session_id;
+    if (connection.provider !== "waha" || !sessionId || !["connected", "ready"].includes(connection.status)) continue;
     const delivery = await admin.from("notification_deliveries").upsert({ notification_id: notification.id, channel: "whatsapp", status: "processing" }, { onConflict: "notification_id,channel", ignoreDuplicates: false }).select("id, status").maybeSingle();
     const row = delivery as unknown as { data: { id: string; status: string } | null; error: { message: string } | null };
     if (row.error) throw new Error(row.error.message);
     if (!row.data || row.data.status === "delivered") continue;
+    const attemptsResult = await admin.from("whatsapp_delivery_attempts").select("attempt_number").eq("notification_id", notification.id).order("attempt_number", { ascending: false }).limit(1).maybeSingle();
+    const attempts = attemptsResult as unknown as { data: { attempt_number: number } | null; error: { message: string } | null };
+    if (attempts.error) throw new Error(attempts.error.message);
+    const attemptNumber = (attempts.data?.attempt_number ?? 0) + 1;
+    const attempt = { organization_id: event.organizationId, notification_id: notification.id, connection_id: group.data.connection_id, session_id: sessionId, provider: connection.provider, chat_id: group.data.provider_group_id, attempt_number: attemptNumber };
+    const started = await admin.from("whatsapp_delivery_attempts").insert({ ...attempt, outcome: "started" });
+    if (started.error) throw new Error(started.error.message);
     try {
-      await sendWahaText(group.data.provider_group_id, [notification.title, notification.body].filter(Boolean).join("\n"));
-      await admin.from("notification_deliveries").update({ status: "delivered", delivered_at: new Date().toISOString(), provider_response: { channel: "waha" } }).eq("id", row.data.id);
+      const providerResponse = await sendWahaText(sessionId, group.data.provider_group_id, [notification.title, notification.body].filter(Boolean).join("\n"));
+      const providerMessageId = typeof providerResponse.id === "string" ? providerResponse.id : providerResponse._data?.id?._serialized;
+      const succeeded = await admin.from("whatsapp_delivery_attempts").insert({ ...attempt, outcome: "succeeded", provider_message_id: providerMessageId ?? null, provider_response: providerResponse });
+      if (succeeded.error) throw new Error(succeeded.error.message);
+      const delivered = await admin.from("notification_deliveries").update({ status: "delivered", delivered_at: new Date().toISOString(), provider_response: { channel: "waha", provider_message_id: providerMessageId ?? null, connection_id: group.data.connection_id, session_id: sessionId } }).eq("id", row.data.id);
+      if (delivered.error) throw new Error(delivered.error.message);
     } catch (error) {
+      await admin.from("whatsapp_delivery_attempts").insert({ ...attempt, outcome: "failed", error_message: error instanceof Error ? error.message.slice(0, 500) : "Pengiriman WhatsApp gagal." });
       await admin.from("notification_deliveries").update({ status: "failed", provider_response: { message: "Pengiriman WhatsApp gagal." } }).eq("id", row.data.id);
       throw error;
     }

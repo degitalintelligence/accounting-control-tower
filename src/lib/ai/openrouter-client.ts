@@ -48,7 +48,13 @@ export type DashboardInsights = {
   priorities: string[];
   signals: string[];
 };
-export type WhatsAppSummaryResult = { summary: string; actions: { title: string; evidence: string; confidence: number }[] };
+export type WhatsAppSummaryResult = {
+  summary: string;
+  actions: { title: string; evidence: string; message_ids: string[]; confidence: number; kind?: "work_item" | "project" | "update" }[];
+  topics?: { key: string; title: string; summary: string; classifications: string[]; message_ids: string[] }[];
+  facts?: { topic_key: string; key: string; value: string; message_ids: string[]; confidence: number }[];
+  decisions?: { topic_key: string; title: string; value: string; message_ids: string[]; confidence: number }[];
+};
 
 export type OpenRouterErrorCode =
   | "CONFIGURATION_ERROR"
@@ -152,11 +158,14 @@ export function validateDashboardInsights(value: unknown): DashboardInsights {
 export function validateWhatsAppSummary(value: unknown): WhatsAppSummaryResult {
   if (!isRecord(value) || typeof value.summary !== "string" || !Array.isArray(value.actions) || value.actions.length > 5) throw new OpenRouterError("INVALID_RESPONSE", "Output AI summary WhatsApp tidak sesuai schema.");
   const actions = value.actions.filter(isRecord).map((action) => {
-    if (typeof action.title !== "string" || typeof action.evidence !== "string" || typeof action.confidence !== "number" || action.confidence < 0 || action.confidence > 1) throw new OpenRouterError("INVALID_RESPONSE", "Saran tindakan WhatsApp tidak valid.");
-    return { title: limitText(action.title, 240), evidence: limitText(action.evidence, 500), confidence: action.confidence };
+    if (typeof action.title !== "string" || typeof action.evidence !== "string" || !Array.isArray(action.message_ids) || !action.message_ids.every((entry) => typeof entry === "string") || typeof action.confidence !== "number" || action.confidence < 0 || action.confidence > 1) throw new OpenRouterError("INVALID_RESPONSE", "Saran tindakan WhatsApp tidak valid.");
+    return { title: limitText(action.title, 240), evidence: limitText(action.evidence, 500), message_ids: action.message_ids.filter((entry): entry is string => typeof entry === "string").slice(0, 20), confidence: action.confidence };
   });
   if (actions.length !== value.actions.length) throw new OpenRouterError("INVALID_RESPONSE", "Saran tindakan WhatsApp tidak valid.");
-  return { summary: limitText(value.summary, 1200), actions };
+  const topics = Array.isArray(value.topics) ? value.topics.filter(isRecord).map((topic) => ({ key: limitText(String(topic.key ?? "general"), 120), title: limitText(String(topic.title ?? "Topik percakapan"), 240), summary: limitText(String(topic.summary ?? ""), 600), classifications: Array.isArray(topic.classifications) ? topic.classifications.filter((entry): entry is string => typeof entry === "string").slice(0, 9) : [], message_ids: Array.isArray(topic.message_ids) ? topic.message_ids.filter((entry): entry is string => typeof entry === "string").slice(0, 100) : [] })) : [];
+  const facts = Array.isArray(value.facts) ? value.facts.filter(isRecord).map((fact) => ({ topic_key: limitText(String(fact.topic_key ?? "general"), 120), key: limitText(String(fact.key ?? "detail"), 120), value: limitText(String(fact.value ?? ""), 500), message_ids: Array.isArray(fact.message_ids) ? fact.message_ids.filter((entry): entry is string => typeof entry === "string").slice(0, 20) : [], confidence: typeof fact.confidence === "number" ? Math.max(0, Math.min(1, fact.confidence)) : 0 } )) : [];
+  const decisions = Array.isArray(value.decisions) ? value.decisions.filter(isRecord).map((decision) => ({ topic_key: limitText(String(decision.topic_key ?? "general"), 120), title: limitText(String(decision.title ?? "Keputusan"), 240), value: limitText(String(decision.value ?? ""), 500), message_ids: Array.isArray(decision.message_ids) ? decision.message_ids.filter((entry): entry is string => typeof entry === "string").slice(0, 20) : [], confidence: typeof decision.confidence === "number" ? Math.max(0, Math.min(1, decision.confidence)) : 0 } )) : [];
+  return { summary: limitText(value.summary, 1200), actions, topics, facts, decisions };
 }
 
 function validateTask(value: unknown): SuggestedTask {
