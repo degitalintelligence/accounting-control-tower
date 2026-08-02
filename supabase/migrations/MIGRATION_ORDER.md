@@ -87,6 +87,8 @@ The current repository order is lexical by complete filename. Dependencies that 
 059_workspace_rbac_permissions.sql
 060_harden_rbac_authorization.sql
 061_harden_membership_mutation_rls.sql
+063_fix_ai_extraction_upsert_index.sql
+064_fix_action_suggestion_conflicts.sql
 062_granular_rbac_permissions.sql
 ```
 

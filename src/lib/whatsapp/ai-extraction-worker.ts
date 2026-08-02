@@ -191,12 +191,19 @@ async function processAiIntake(admin: WorkerClient, row: JobRow) {
   const claimed = await admin.from("ai_intake_items").update({ status: "processing", processing_started_at: new Date().toISOString(), attempt_count: (intake.data.attempt_count ?? 0) + 1, updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("organization_id", row.organization_id).eq("status", "queued");
   const claimedData = claimed as unknown as { error: { message: string } | null };
   if (claimedData.error) throw new Error(claimedData.error.message);
-  const extraction = await extractTasksFromMessage(intake.data.source_text);
-  const rows = extraction.tasks.map((task) => ({ organization_id: row.organization_id, intake_id: intakeId, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
-  if (rows.length) { const inserted = await admin.from("ai_draft_items").insert(rows as never); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
-  const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
-  const updatedData = updated as unknown as { error: { message: string } | null };
-  if (updatedData.error) throw new Error(updatedData.error.message);
+  try {
+    const extraction = await extractTasksFromMessage(intake.data.source_text);
+    const rows = extraction.tasks.map((task) => ({ organization_id: row.organization_id, intake_id: intakeId, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
+    if (rows.length) { const inserted = await admin.from("ai_draft_items").insert(rows as never); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
+    const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
+    const updatedData = updated as unknown as { error: { message: string } | null };
+    if (updatedData.error) throw new Error(updatedData.error.message);
+  } catch (error) {
+    const failed = await admin.from("ai_intake_items").update({ status: "failed", failed_at: new Date().toISOString(), error_message: errorMessage(error), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
+    const failedData = failed as unknown as { error: { message: string } | null };
+    if (failedData.error) throw new Error(failedData.error.message);
+    throw error;
+  }
 }
 
 async function processConversationSummary(admin: WorkerClient, row: JobRow) {

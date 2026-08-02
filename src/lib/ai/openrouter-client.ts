@@ -277,6 +277,19 @@ function parseProviderContent(value: unknown): unknown {
   throw new OpenRouterError("INVALID_RESPONSE", "Content OpenRouter tidak valid.");
 }
 
+export function parseOpenRouterPayload(payload: unknown): unknown {
+  if (!isRecord(payload) || !Array.isArray(payload.choices) || !isRecord(payload.choices[0])) {
+    throw new OpenRouterError("INVALID_RESPONSE", "Struktur respons OpenRouter tidak valid.");
+  }
+  const messagePayload = payload.choices[0].message;
+  if (!isRecord(messagePayload)) throw new OpenRouterError("INVALID_RESPONSE", "Content OpenRouter tidak valid.");
+  if (isRecord(messagePayload.parsed)) return messagePayload.parsed;
+  if (typeof messagePayload.refusal === "string" && messagePayload.refusal.trim()) {
+    throw new OpenRouterError("INVALID_RESPONSE", "OpenRouter menolak menghasilkan output terstruktur.");
+  }
+  return parseProviderContent(messagePayload.content);
+}
+
 function isAbortError(error: unknown): boolean {
   return isRecord(error) && error.name === "AbortError";
 }
@@ -322,12 +335,7 @@ export async function extractTasksFromMessage(message: string): Promise<TaskExtr
       throw new OpenRouterError("INVALID_RESPONSE", "Respons OpenRouter bukan JSON.");
     }
 
-    if (!isRecord(payload) || !Array.isArray(payload.choices) || !isRecord(payload.choices[0])) {
-      throw new OpenRouterError("INVALID_RESPONSE", "Struktur respons OpenRouter tidak valid.");
-    }
-    const messagePayload = payload.choices[0].message;
-    if (!isRecord(messagePayload)) throw new OpenRouterError("INVALID_RESPONSE", "Content OpenRouter tidak valid.");
-    return validateTaskExtraction(parseProviderContent(messagePayload.content));
+    return validateTaskExtraction(parseOpenRouterPayload(payload));
   } catch (error) {
     if (error instanceof OpenRouterError) throw error;
     if (isAbortError(error)) {
@@ -351,9 +359,13 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, schema: 
       body: JSON.stringify({ model: config.model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0, response_format: { type: "json_schema", json_schema: { name: schemaName, strict: true, schema } }, provider: { data_collection: "deny" } }),
     });
     if (!response.ok) throw new OpenRouterError("PROVIDER_ERROR", "OpenRouter mengembalikan error.", response.status);
-    const payload = await response.json() as unknown;
-    if (!isRecord(payload) || !Array.isArray(payload.choices) || !isRecord(payload.choices[0]) || !isRecord(payload.choices[0].message)) throw new OpenRouterError("INVALID_RESPONSE", "Struktur respons OpenRouter tidak valid.");
-    return parseProviderContent(payload.choices[0].message.content);
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new OpenRouterError("INVALID_RESPONSE", "Respons OpenRouter bukan JSON.");
+    }
+    return parseOpenRouterPayload(payload);
   } catch (error) {
     if (error instanceof OpenRouterError) throw error;
     if (isAbortError(error)) throw new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractJsonValue, OpenRouterError, validateTaskExtraction } from "@/lib/ai/openrouter-client";
+import { extractJsonValue, OpenRouterError, parseOpenRouterPayload, validateTaskExtraction } from "@/lib/ai/openrouter-client";
 
 describe("OpenRouter client", () => {
   it("mengekstrak JSON dari markdown fence dan teks pembuka", () => {
@@ -22,5 +22,14 @@ describe("OpenRouter client", () => {
     const error = new OpenRouterError("PROVIDER_ERROR", "OpenRouter mengembalikan error.", 429);
     expect(error.message).not.toContain("Bearer");
     expect(error.message).not.toContain("OPENROUTER_API_KEY");
+  });
+
+  it("membaca parsed output OpenRouter dan menolak refusal", () => {
+    expect(parseOpenRouterPayload({ choices: [{ message: { parsed: { classification: "noise", tasks: [] } } }] })).toEqual({ classification: "noise", tasks: [] });
+    expect(() => parseOpenRouterPayload({ choices: [{ message: { content: null, refusal: "Tidak dapat membantu" } }] })).toThrowError(/menolak/);
+  });
+
+  it("mengembalikan invalid response untuk content kosong", () => {
+    expect(() => parseOpenRouterPayload({ choices: [{ message: { content: null } }] })).toThrowError(OpenRouterError);
   });
 });
