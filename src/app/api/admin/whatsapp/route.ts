@@ -122,10 +122,16 @@ export async function POST(request: Request) {
   }
   if (body.action === "group") {
     if (!body.connection_id || !body.provider_group_id) return NextResponse.json({ error: "Connection dan provider group wajib diisi." }, { status: 400 });
+    if (body.client_id === null && !auth.context.isOrgWide) return NextResponse.json({ error: "Scope organisasi penuh diperlukan untuk group tanpa client." }, { status: 403 });
     if (!canAccessOptionalClient(auth.context, body.client_id)) return NextResponse.json({ error: "Client tidak dapat diakses." }, { status: 403 });
     const connection = await db.from("integration_connections").select("id, status").eq("id", body.connection_id).eq("organization_id", organizationId).maybeSingle();
     if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak dapat diakses." }, { status: 403 });
     if (connection.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat menerima whitelist baru." }, { status: 409 });
+    if (body.id) {
+      const existing = await db.from("wa_groups").select("id, client_id").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
+      if (existing.error || !existing.data) return NextResponse.json({ error: "Group tidak ditemukan." }, { status: 404 });
+      if (!canAccessOptionalClient(auth.context, existing.data.client_id)) return NextResponse.json({ error: "Group tidak dapat diakses." }, { status: 403 });
+    }
     const values = { connection_id: body.connection_id, organization_id: organizationId, client_id: body.client_id ?? null, provider_group_id: body.provider_group_id, group_name: body.group_name ?? null, is_active: body.is_verified === true, activated_by: body.is_verified === true ? userId : null, activated_at: body.is_verified === true ? new Date().toISOString() : null };
     const result = body.id ? await db.from("wa_groups").update(values).eq("id", body.id).eq("organization_id", organizationId).select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").single() : await db.from("wa_groups").insert(values).select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").single();
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });

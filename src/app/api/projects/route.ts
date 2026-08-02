@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 /**
  * Helper: ambil organization_id dari membership user.
@@ -46,6 +47,10 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.view");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -232,6 +237,10 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -275,6 +284,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      if (!canAccessClient(authContext.context, client_id)) return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });
 
       const clientResult = await admin.from("clients").select("id").eq("id", client_id).eq("organization_id", organizationId).is("deleted_at", null).maybeSingle();
       const client = clientResult as unknown as { data: { id: string } | null; error: unknown };
@@ -334,6 +344,7 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
+      if (!canAccessClient(authContext.context, existingWi.client_id)) return NextResponse.json({ error: "Project tidak berada dalam scope akses user." }, { status: 404 });
       if (client_id) {
         const clientResult = await admin.from("clients").select("id").eq("id", client_id).eq("organization_id", organizationId).is("deleted_at", null).maybeSingle();
         const client = clientResult as unknown as { data: { id: string } | null; error: unknown };

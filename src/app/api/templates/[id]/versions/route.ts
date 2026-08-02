@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import type { CreateVersionInput } from "@/types/template";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -76,14 +81,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const tplResult = await admin
       .from("task_templates")
-      .select("id, organization_id, name")
+      .select("id, organization_id, client_id, name")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .single();
 
     const { data: template, error: tplError } = tplResult as unknown as {
-      data: { id: string; organization_id: string; name: string } | null;
+      data: { id: string; organization_id: string; client_id: string | null; name: string } | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
 
@@ -124,6 +129,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
       if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid." }, { status: 400 });
     }
+    if (!canAccessClient(authContext.context, template.client_id)) return NextResponse.json({ error: "Template tidak ditemukan." }, { status: 404 });
 
     const insertData = {
       template_id: id,

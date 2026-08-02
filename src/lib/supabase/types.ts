@@ -571,6 +571,17 @@ export interface Database {
           p_created_by: string;
           p_assignee_id: string;
           p_assignee_role: string;
+          p_business_period?: string | null;
+          p_amount?: number | null;
+          p_currency_code?: string | null;
+          p_approval_requirement?: string;
+          p_required_approval_level?: number;
+          p_approval_policy_id?: string | null;
+          p_approval_policy_version?: number | null;
+          p_policy_evaluated_at?: string | null;
+          p_checklist_template_id?: string | null;
+          p_duplicate_warning_acknowledged_at?: string | null;
+          p_duplicate_warning_acknowledged_by?: string | null;
         };
         Returns: Database["acct_ctrl"]["Tables"]["work_items"]["Row"][];
       };

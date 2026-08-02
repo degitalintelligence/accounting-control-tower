@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestions";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export const runtime = "nodejs";
 
@@ -53,6 +54,10 @@ export async function GET(request: Request) {
   const { user, organizationId, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
 
   try {
     const searchParams = new URL(request.url).searchParams;
@@ -70,7 +75,7 @@ export async function GET(request: Request) {
     const groups = groupsResult as unknown as { data: GroupRow[] | null; error: unknown };
     if (groups.error) throw groups.error;
 
-    const groupRows = groups.data ?? [];
+    const groupRows = (groups.data ?? []).filter((group) => auth.context.isOrgWide || group.client_id === null || auth.context.clientIds.includes(group.client_id));
     const groupIds = groupRows.map((group) => group.id);
     if (!groupIds.length) return NextResponse.json({ since, summaries: [], messages: [] });
 

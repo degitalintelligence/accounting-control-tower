@@ -4,6 +4,7 @@ import { publishNotificationEvent } from "@/lib/notification/publisher";
 import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestions";
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { z } from "zod";
+import { canAccessClient } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -52,6 +53,7 @@ export async function POST(_request: Request, context: RouteContext) {
   const suggestion = suggestionQuery.data;
   if (!suggestion) return NextResponse.json({ error: "Suggestion tidak ditemukan atau sudah diproses." }, { status: 404 });
   const clientId = requestedClientId ?? suggestion.suggested_client_id;
+  if (actionType !== "information_only" && !canAccessClient(auth.context, clientId)) return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });
   if (actionType !== "information_only" && (!clientId || !z.string().uuid().safeParse(clientId).success)) return NextResponse.json({ error: "Client wajib dipilih dan harus valid." }, { status: 400 });
 
   const clientResult = clientId

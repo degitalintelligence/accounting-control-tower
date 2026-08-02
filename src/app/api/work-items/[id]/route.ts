@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import { validationMessage, workItemUpdateSchema } from "@/lib/validation/schemas";
-import { getAuthContext, hasPermission } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, hasPermission, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -181,6 +181,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const admin = createServiceRoleClient();
 
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
+
     const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       return NextResponse.json(
@@ -219,6 +224,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const parsed = workItemUpdateSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
     const updateData: Record<string, unknown> = parsed.data;
+
+    if (Object.prototype.hasOwnProperty.call(updateData, "client_id") && !canAccessClient(authContext.context, updateData.client_id as string | null)) {
+      return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });
+    }
 
     if (Object.prototype.hasOwnProperty.call(updateData, "checklist_template_id") && updateData.checklist_template_id !== existing.checklist_template_id) {
       const checklistTemplateId = updateData.checklist_template_id as string | null;
@@ -335,6 +344,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const admin = createServiceRoleClient();
 
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
+
     const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
       return NextResponse.json(
@@ -345,14 +359,14 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const delFetchResult = await admin
       .from("work_items")
-      .select("id, organization_id, status")
+      .select("id, organization_id, client_id, status")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .single();
 
     const { data: existing, error: fetchError } = delFetchResult as unknown as {
-      data: { id: string; organization_id: string; status: string } | null;
+      data: { id: string; organization_id: string; client_id: string | null; status: string } | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
 
@@ -362,18 +376,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
-    const clientScope = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
-    const clientScopeData = clientScope as unknown as { data: { client_id: string | null }[] | null };
-    const itemClient = await admin.from("work_items").select("client_id").eq("id", id).eq("organization_id", organizationId).single();
-    const itemClientData = itemClient as unknown as { data: { client_id: string } | null };
-    if (!itemClientData.data || !clientScopeData.data?.some((membership) => membership.client_id === null || membership.client_id === itemClientData.data?.client_id)) {
+    if (!canAccessClient(authContext.context, existing.client_id)) {
       return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
     }
 
     const deleteResult = await admin
       .from("work_items")
       .update({ deleted_at: new Date().toISOString() } as never)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
 
     const { error: deleteError } = deleteResult as unknown as {
       error: { message: string; code: string; hint: string; details: string } | null;

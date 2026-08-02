@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -49,6 +50,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.view");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -226,6 +231,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -416,7 +425,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .from("work_items")
       .update({ deleted_at: new Date().toISOString() } as never)
       .eq("id", existing.work_item_id)
-      .eq("organization_id", organizationId);
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
 
     const { error: deleteError } = deleteResult as unknown as {
       error: { message: string; code: string; hint: string; details: string } | null;

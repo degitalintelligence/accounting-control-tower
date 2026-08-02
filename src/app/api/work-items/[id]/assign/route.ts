@@ -7,6 +7,7 @@ import { ensureChecklistResponses } from "@/lib/checklists";
 import type { AssignmentRole } from "@/types/work-item";
 import { assignmentSchema, validationMessage } from "@/lib/validation/schemas";
 import { validateAssigneeAvailability } from "@/lib/work-engine/planned-leave";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -59,6 +60,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const admin = createServiceRoleClient();
+
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -121,6 +127,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       if (authority.error || !resolved?.authorized) return NextResponse.json({ error: "Assignee tidak memiliki kewenangan untuk nilai materialitas work item.", code: "INSUFFICIENT_APPROVAL_AUTHORITY" }, { status: 403 });
       authorization = resolved;
     }
+
+    if (!canAccessClient(authContext.context, workItem.client_id)) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
 
     const validation = await validateAssignment(id, profile_id, assignmentRole);
     if (!validation.valid) return NextResponse.json({ error: validation.error }, { status: 409 });
@@ -246,6 +254,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
     const { organizationId, error } = await getUserOrganizationId(admin, user.id);
     if (error || !organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
     const { id } = await context.params;

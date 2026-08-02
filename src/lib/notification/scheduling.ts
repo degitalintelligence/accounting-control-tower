@@ -56,10 +56,18 @@ export async function runBasicDigestSweep(admin: SchedulingClient) {
     const assignmentsResult = await admin.from("assignments").select("work_item_id, work_items!inner(id, organization_id, title, due_at, status)").eq("profile_id", profile.id).is("unassigned_at", null).not("work_items.status", "in", "(completed,cancelled)");
     const assignments = assignmentsResult as unknown as { data: { work_items: { id: string; organization_id: string; title: string; due_at: string | null; status: string } }[] | null; error: { message: string } | null };
     if (assignments.error || !assignments.data?.length) continue;
-    const first = assignments.data[0].work_items;
-    const body = `${assignments.data.length} work item aktif menunggu perhatian.`;
-    await publishNotificationEvent(admin, { eventType: "digest", organizationId: first.organization_id, aggregateType: "profile", aggregateId: profile.id, profileIds: [profile.id], title: "Ringkasan pekerjaan", body, data: { work_item_ids: assignments.data.map((row) => row.work_items.id) }, dedupKey: `digest:${profile.id}:${now.toISOString().slice(0, 10)}` });
-    scheduled += 1;
+    const byOrganization = new Map<string, typeof assignments.data>();
+    for (const assignment of assignments.data) {
+      const organizationId = assignment.work_items.organization_id;
+      const current = byOrganization.get(organizationId) ?? [];
+      current.push(assignment);
+      byOrganization.set(organizationId, current);
+    }
+    for (const [organizationId, scopedAssignments] of byOrganization) {
+      const body = `${scopedAssignments.length} work item aktif menunggu perhatian.`;
+      await publishNotificationEvent(admin, { eventType: "digest", organizationId, aggregateType: "profile", aggregateId: profile.id, profileIds: [profile.id], title: "Ringkasan pekerjaan", body, data: { work_item_ids: scopedAssignments.map((row) => row.work_items.id) }, dedupKey: `digest:${organizationId}:${profile.id}:${now.toISOString().slice(0, 10)}` });
+      scheduled += 1;
+    }
   }
   return { scheduled };
 }

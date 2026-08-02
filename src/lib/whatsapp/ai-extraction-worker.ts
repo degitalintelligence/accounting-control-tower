@@ -113,7 +113,12 @@ async function processJob(admin: WorkerClient, row: JobRow) {
   const existingResult = await admin.from("ai_extraction_runs").select("id, status").eq("wa_message_id", message.id).maybeSingle();
   const existing = existingResult as unknown as { data: { id: string; status: string } | null; error: { message: string } | null };
   if (existing.error) throw new Error(existing.error.message);
-  if (existing.data?.status === "completed") return;
+  if (existing.data?.status === "completed") {
+    const suggestions = await admin.from("action_suggestions").select("id").eq("extraction_run_id", existing.data.id).limit(1);
+    const suggestionData = suggestions as unknown as { data: { id: string }[] | null; error: { message: string } | null };
+    if (suggestionData.error) throw new Error(suggestionData.error.message);
+    if (suggestionData.data?.length) return;
+  }
 
   let runId = existing.data?.id;
   if (!runId) {
@@ -139,19 +144,6 @@ async function processJob(admin: WorkerClient, row: JobRow) {
 
   try {
     const extraction = await extractTasksFromMessage(message.content ?? "");
-    const extractionRunResult = await admin.from("ai_extraction_runs").update({
-      model: process.env.OPENROUTER_MODEL ?? null,
-      prompt_version: promptVersion,
-      extracted_fields: extraction,
-      classification: extraction.classification,
-      confidence: extraction.tasks.length ? Math.max(...extraction.tasks.map((task) => task.confidence)) : null,
-      processing_time_ms: null,
-      status: "completed",
-      error_message: null,
-    }).eq("id", runId);
-    const extractionRun = extractionRunResult as unknown as { error: { message: string } | null };
-    if (extractionRun.error) throw new Error(extractionRun.error.message);
-
     for (const task of extraction.tasks) {
       const maker = task.maker_name ? await resolveProfileName(admin, message.wa_group_id, task.maker_name) : null;
       const checker = task.checker_name ? await resolveProfileName(admin, message.wa_group_id, task.checker_name) : null;
@@ -175,6 +167,18 @@ async function processJob(admin: WorkerClient, row: JobRow) {
       const suggestion = suggestionResult as unknown as { error: { code?: string; message: string } | null };
       if (suggestion.error) throw new Error(suggestion.error.message);
     }
+    const extractionRunResult = await admin.from("ai_extraction_runs").update({
+      model: process.env.OPENROUTER_MODEL ?? null,
+      prompt_version: promptVersion,
+      extracted_fields: extraction,
+      classification: extraction.classification,
+      confidence: extraction.tasks.length ? Math.max(...extraction.tasks.map((task) => task.confidence)) : null,
+      processing_time_ms: null,
+      status: "completed",
+      error_message: null,
+    }).eq("id", runId);
+    const extractionRun = extractionRunResult as unknown as { error: { message: string } | null };
+    if (extractionRun.error) throw new Error(extractionRun.error.message);
   } catch (error) {
     await admin.from("ai_extraction_runs").update({ status: "failed", error_message: errorMessage(error) }).eq("id", runId);
     throw error;
@@ -188,13 +192,16 @@ async function processAiIntake(admin: WorkerClient, row: JobRow) {
   const intake = loaded as unknown as { data: AiIntake | null; error: { message: string } | null };
   if (intake.error) throw new Error(intake.error.message);
   if (!intake.data || intake.data.status === "draft") return;
-  const claimed = await admin.from("ai_intake_items").update({ status: "processing", processing_started_at: new Date().toISOString(), attempt_count: (intake.data.attempt_count ?? 0) + 1, updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("organization_id", row.organization_id).eq("status", "queued");
-  const claimedData = claimed as unknown as { error: { message: string } | null };
+  const claimed = intake.data.status === "processing"
+    ? { data: { id: intakeId }, error: null }
+    : await admin.from("ai_intake_items").update({ status: "processing", processing_started_at: new Date().toISOString(), attempt_count: (intake.data.attempt_count ?? 0) + 1, updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("organization_id", row.organization_id).eq("status", "queued").select("id").maybeSingle();
+  const claimedData = claimed as unknown as { data: { id: string } | null; error: { message: string } | null };
   if (claimedData.error) throw new Error(claimedData.error.message);
+  if (!claimedData.data) return;
   try {
     const extraction = await extractTasksFromMessage(intake.data.source_text);
-    const rows = extraction.tasks.map((task) => ({ organization_id: row.organization_id, intake_id: intakeId, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
-    if (rows.length) { const inserted = await admin.from("ai_draft_items").insert(rows as never); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
+    const rows = extraction.tasks.map((task, index) => ({ organization_id: row.organization_id, intake_id: intakeId, source_task_key: `${promptVersion}:${index}:${task.title.trim().toLowerCase()}:${task.source_context.trim().toLowerCase()}`, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
+    if (rows.length) { const inserted = await admin.from("ai_draft_items").upsert(rows as never, { onConflict: "intake_id,source_task_key", ignoreDuplicates: true }); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
     const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
     const updatedData = updated as unknown as { error: { message: string } | null };
     if (updatedData.error) throw new Error(updatedData.error.message);
@@ -217,7 +224,7 @@ async function processConversationSummary(admin: WorkerClient, row: JobRow) {
   const group = groupResult as unknown as { data: { id: string; organization_id: string; is_active: boolean } | null; error: { message: string } | null };
   if (group.error) throw new Error(group.error.message);
   if (!group.data) throw new Error("Grup WhatsApp tidak ditemukan dalam tenant yang sesuai.");
-  const messagesResult = await admin.from("wa_messages").select("id, sender_participant_id, content, message_type, received_at").eq("wa_group_id", groupId).gte("received_at", start.toISOString()).lt("received_at", end.toISOString()).order("received_at", { ascending: true }).limit(200);
+  const messagesResult = await admin.from("wa_messages").select("id, sender_participant_id, content, message_type, received_at, wa_groups!inner(organization_id)").eq("wa_group_id", groupId).eq("wa_groups.organization_id", organizationId).gte("received_at", start.toISOString()).lt("received_at", end.toISOString()).order("received_at", { ascending: true }).limit(200);
   const messages = messagesResult as unknown as { data: { id: string; sender_participant_id: string | null; content: string | null; message_type: string; received_at: string }[] | null; error: { message: string } | null };
   if (messages.error) throw new Error(messages.error.message);
   const rows = messages.data ?? [];
@@ -280,7 +287,7 @@ async function processConversationSummary(admin: WorkerClient, row: JobRow) {
   for (const decision of ai.decisions ?? []) {
     const topicId = topicIds.get(decision.topic_key);
     if (!topicId) continue;
-    const decisionResult = await admin.from("whatsapp_conversation_decisions").insert({ organization_id: organizationId, topic_id: topicId, title: decision.title, decision_value: decision.value, source_message_ids: decision.message_ids, confidence: decision.confidence, requires_confirmation: true });
+    const decisionResult = await admin.from("whatsapp_conversation_decisions").upsert({ organization_id: organizationId, topic_id: topicId, title: decision.title, decision_value: decision.value, source_message_ids: decision.message_ids, confidence: decision.confidence, requires_confirmation: true }, { onConflict: "topic_id,title,decision_value", ignoreDuplicates: true });
     const decisionError = decisionResult as unknown as { error: { message: string } | null };
     if (decisionError.error) throw new Error(decisionError.error.message);
   }

@@ -251,6 +251,17 @@ export async function POST(request: NextRequest) {
           p_created_by: insertData.created_by,
           p_assignee_id: assigneeId,
           p_assignee_role: role,
+          p_business_period: insertData.business_period,
+          p_amount: insertData.amount,
+          p_currency_code: insertData.currency_code,
+          p_approval_requirement: insertData.approval_requirement,
+          p_required_approval_level: insertData.required_approval_level,
+          p_approval_policy_id: insertData.approval_policy_id,
+          p_approval_policy_version: insertData.approval_policy_version,
+          p_policy_evaluated_at: insertData.policy_evaluated_at,
+          p_checklist_template_id: insertData.checklist_template_id,
+          p_duplicate_warning_acknowledged_at: duplicateAction === "allow" ? new Date().toISOString() : null,
+          p_duplicate_warning_acknowledged_by: duplicateAction === "allow" ? userId : null,
         } as never)
       : await admin.from("work_items").insert({ ...insertData, duplicate_warning_acknowledged_at: duplicateAction === "allow" ? new Date().toISOString() : null, duplicate_warning_acknowledged_by: duplicateAction === "allow" ? userId : null } as never).select().single();
 

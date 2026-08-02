@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import type { CreateTemplateInput } from "@/types/template";
 import type { WorkItemType } from "@/types/work-item";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 /**
  * Helper: ambil organization_id dari membership user.
@@ -50,6 +51,10 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.view");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -120,6 +125,7 @@ export async function GET(request: NextRequest) {
     if (type) {
       query = query.eq("type", type);
     }
+    if (clientId && !canAccessClient(authContext.context, clientId)) return NextResponse.json({ error: "Client tidak berada dalam scope user." }, { status: 403 });
     if (clientId) {
       query = query.eq("client_id", clientId);
     }
@@ -190,6 +196,10 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
 
     const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
     if (orgError || !organizationId) {
@@ -286,6 +296,7 @@ export async function POST(request: NextRequest) {
       const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
       if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid." }, { status: 400 });
     }
+    if (!canAccessClient(authContext.context, body.client_id)) return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });
     const versionInsertData = {
       template_id: template!.id,
       version_number: 1,

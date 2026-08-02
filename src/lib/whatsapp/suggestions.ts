@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { getAuthContext } from "@/lib/authorization";
 
 export async function getSuggestionContext() {
   const supabase = await createClient();
@@ -7,15 +8,10 @@ export async function getSuggestionContext() {
   if (!auth.user) return { user: null, organizationId: null, admin: null };
 
   const admin = createServiceRoleClient();
-  const result = await admin
-    .from("memberships")
-    .select("organization_id, role, role_id")
-    .eq("profile_id", auth.user.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-  const membership = result as unknown as { data: { organization_id: string; role: string; role_id: string | null } | null };
-  return { user: auth.user, organizationId: membership.data?.organization_id ?? null, role: membership.data?.role ?? null, roleId: membership.data?.role_id ?? null, admin };
+  const context = await getAuthContext();
+  if (context.response) return { user: auth.user, organizationId: null, role: null, roleId: null, admin: null };
+  const membership = context.context.memberships[0];
+  return { user: auth.user, organizationId: context.context.organizationId, clientIds: context.context.clientIds, isOrgWide: context.context.isOrgWide, role: membership?.role ?? null, roleId: membership?.role_id ?? null, admin };
 }
 
 export function suggestionError(error: unknown) {

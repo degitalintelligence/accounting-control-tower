@@ -65,7 +65,7 @@ export async function getAuthContext(): Promise<
 }
 
 export function canAccessClient(context: AuthContext, clientId: string | null | undefined) {
-  return Boolean(clientId && (context.isOrgWide || context.clientIds.includes(clientId)));
+  return clientId == null ? context.isOrgWide : context.isOrgWide || context.clientIds.includes(clientId);
 }
 
 export async function getAccessibleClients(context: AuthContext) {

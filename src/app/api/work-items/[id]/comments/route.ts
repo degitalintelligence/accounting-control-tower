@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import { publishNotificationEvent } from "@/lib/notification";
+import { canAccessClient, getAuthContext } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -73,18 +74,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // Verifikasi work item exists dan milik org yang sama
     const wiResult = await admin
       .from("work_items")
-      .select("id")
+      .select("id, client_id")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .single();
 
     const { data: workItem, error: wiError } = wiResult as unknown as {
-      data: { id: string } | null;
+      data: { id: string; client_id: string | null } | null;
       error: { message: string } | null;
     };
 
-    if (wiError || !workItem) {
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    if (wiError || !workItem || !canAccessClient(authContext.context, workItem.client_id)) {
       return NextResponse.json(
         { error: "Work item tidak ditemukan." },
         { status: 404 }
@@ -224,22 +227,29 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Verifikasi work item exists & milik org yang sama
     const wiResult = await admin
       .from("work_items")
-      .select("id, organization_id")
+      .select("id, organization_id, client_id")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .single();
 
     const { data: workItem, error: wiError } = wiResult as unknown as {
-      data: { id: string; organization_id: string } | null;
+      data: { id: string; organization_id: string; client_id: string | null } | null;
       error: { message: string } | null;
     };
 
-    if (wiError || !workItem) {
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    if (wiError || !workItem || !canAccessClient(authContext.context, workItem.client_id)) {
       return NextResponse.json(
         { error: "Work item tidak ditemukan." },
         { status: 404 }
       );
+    }
+
+    if (parent_comment_id) {
+      const parent = await admin.from("comments").select("id").eq("id", parent_comment_id).eq("work_item_id", id).is("deleted_at", null).maybeSingle();
+      if (parent.error || !parent.data) return NextResponse.json({ error: "Komentar induk tidak valid." }, { status: 400 });
     }
 
     const insertResult = await admin

@@ -14,9 +14,12 @@ async function authorize(context: Context) {
   const organizationId = await getUserOrganizationId(admin, user.id);
   if (!organizationId) return { response: NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 }) };
   const { id } = await context.params;
-  const workItem = await admin.from("work_items").select("id, checklist_template_id, assignments(profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
-  const data = workItem as unknown as { data: { id: string; checklist_template_id: string | null; assignments: { profile_id: string; role: string; unassigned_at: string | null }[] } | null; error: { message: string } | null };
+  const workItem = await admin.from("work_items").select("id, client_id, checklist_template_id, assignments(profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
+  const data = workItem as unknown as { data: { id: string; client_id: string | null; checklist_template_id: string | null; assignments: { profile_id: string; role: string; unassigned_at: string | null }[] } | null; error: { message: string } | null };
   if (data.error || !data.data) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
+  const auth = await getAuthContext();
+  if (auth.response) return { response: auth.response };
+  if (!auth.context.isOrgWide && (!data.data.client_id || !auth.context.clientIds.includes(data.data.client_id))) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
   return { admin, id, userId: user.id, templateId: data.data.checklist_template_id, assignments: data.data.assignments };
 }
 
@@ -41,6 +44,10 @@ export async function GET(_request: NextRequest, context: Context) {
 export async function PATCH(request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth.response) return auth.response;
+  const permissionContext = await getAuthContext();
+  if (permissionContext.response) return permissionContext.response;
+  const permissionDenied = await hasPermission(permissionContext.context, "work_items.manage");
+  if (!permissionDenied) return NextResponse.json({ error: "Anda tidak memiliki permission untuk aksi ini." }, { status: 403 });
   const parsed = checklistResponseSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const body = parsed.data;
@@ -48,10 +55,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   const templateRole = await auth.admin!.from("checklist_templates").select("target_role").eq("id", auth.templateId).single();
   const templateRoleData = templateRole as unknown as { data: { target_role: string } | null };
   const assigned = auth.assignments.some((entry) => entry.profile_id === auth.userId && !entry.unassigned_at && entry.role === templateRoleData.data?.target_role);
-  const permissionContext = await getAuthContext();
-  if (permissionContext.response) return permissionContext.response;
-  const manager = await hasPermission(permissionContext.context, "work_items.manage");
-  if (!assigned && !manager) return NextResponse.json({ error: "Anda tidak berwenang mengubah checklist ini." }, { status: 403 });
+  if (!assigned && !permissionDenied) return NextResponse.json({ error: "Anda tidak berwenang mengubah checklist ini." }, { status: 403 });
   const item = await auth.admin!.from("checklist_items").select("id, input_type, validation_rules").eq("id", body.checklist_item_id).eq("checklist_template_id", auth.templateId).single();
   const itemData = item as unknown as { data: { id: string; input_type: string; validation_rules: Record<string, unknown> } | null; error: { message: string } | null };
   if (itemData.error || !itemData.data) return NextResponse.json({ error: "Item checklist tidak valid." }, { status: 400 });
