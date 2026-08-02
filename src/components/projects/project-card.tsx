@@ -63,8 +63,8 @@ export function ProjectCard({
       type="button"
       onClick={() => router.push(`/projects/${id}`)}
       className={cn(
-        "w-full text-left rounded-xl bg-white p-4 transition-all",
-        "shadow-[0_1px_3px_rgba(0,0,0,.06)] hover:shadow-[0_4px_16px_rgba(0,0,0,.08)]",
+        "surface-card w-full rounded-xl p-5 text-left transition-all",
+        "hover:-translate-y-0.5 hover:shadow-md",
         "border border-slate-100 hover:border-slate-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
         "active:scale-[0.995]",
@@ -73,18 +73,18 @@ export function ProjectCard({
     >
       {/* Top row: status badge */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <Badge className="bg-blue-50 text-blue-600 text-[10px]">Proyek</Badge>
+        <Badge className="bg-blue-50 text-xs text-blue-700">Proyek</Badge>
         <StatusBadge status={status as WorkItemStatus} />
       </div>
 
       {/* Title */}
-      <h3 className="text-sm font-medium text-slate-900 line-clamp-2 mb-1">
+      <h3 className="mb-1 line-clamp-2 text-base font-semibold text-slate-900">
         {title}
       </h3>
 
       {/* Objective (truncated) */}
       {objective && (
-        <p className="text-[12px] text-slate-500 line-clamp-2 mb-3">
+        <p className="mb-3 line-clamp-2 text-sm text-slate-500">
           {objective}
         </p>
       )}
@@ -93,8 +93,8 @@ export function ProjectCard({
       {total > 0 && (
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] text-slate-400">Milestone</span>
-            <span className="text-[11px] font-medium text-slate-600">
+            <span className="text-xs text-slate-500">Milestone</span>
+            <span className="text-xs font-semibold text-slate-700">
               {completed}/{total}
             </span>
           </div>
@@ -115,7 +115,7 @@ export function ProjectCard({
         {targetInfo ? (
           <div
             className={cn(
-              "flex items-center gap-1 text-[11px]",
+              "flex items-center gap-1 text-xs",
               targetInfo.isPast ? "text-red-500 font-medium" : "text-slate-400"
             )}
           >
@@ -127,7 +127,7 @@ export function ProjectCard({
             {targetInfo.label}
           </div>
         ) : (
-          <span className="text-[11px] text-slate-300">Tanpa tenggat</span>
+          <span className="text-xs text-slate-400">Tanpa tenggat</span>
         )}
       </div>
     </button>

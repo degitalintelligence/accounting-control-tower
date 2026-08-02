@@ -100,16 +100,17 @@ function TemplatesPageContent() {
     <>
       <div className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">Template</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FileText className="size-4" /> Control Library</div>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Template pekerjaan</h1>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
               Kelola blueprint pekerjaan yang bisa digunakan berulang
             </p>
           </div>
           <Button
             onClick={() => setCreateDialogOpen(true)}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-bold shrink-0"
+            className="cta-primary shrink-0"
           >
             <Plus className="size-4" />
             Buat Template
@@ -117,7 +118,7 @@ function TemplatesPageContent() {
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="surface-card flex flex-col gap-2 rounded-xl p-3 sm:flex-row">
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
             <Input
@@ -128,7 +129,7 @@ function TemplatesPageContent() {
                 const value = e.currentTarget.value;
                 searchTimeoutRef.current = window.setTimeout(() => updateParam("search", value), 350);
               }}
-              className="pl-8 h-8 text-sm bg-white"
+              className="h-10 bg-white pl-9 text-sm"
             />
           </div>
 
@@ -136,7 +137,7 @@ function TemplatesPageContent() {
             value={type || null}
             onValueChange={(val) => updateParam("type", (val as string) ?? "")}
           >
-            <SelectTrigger className="h-8 text-sm bg-white min-w-[140px]">
+            <SelectTrigger className="h-10 min-w-[160px] bg-white text-sm">
               <SelectValue placeholder="Semua Jenis" />
             </SelectTrigger>
             <SelectContent>
@@ -154,7 +155,7 @@ function TemplatesPageContent() {
 
         {/* Results count */}
         {!loading && (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm font-medium text-slate-500">
             {total} template ditemukan
           </p>
         )}
@@ -190,7 +191,7 @@ function TemplatesPageContent() {
             </p>
             <Button
               onClick={() => setCreateDialogOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold"
+              className="cta-primary"
             >
               Buat Template
             </Button>

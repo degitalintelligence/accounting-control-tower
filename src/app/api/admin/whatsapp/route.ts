@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthContext, canAccessOptionalClient, canManageOrganization } from "@/lib/authorization";
-import { getWahaQr, getWahaSessionStatus, startWahaSession } from "@/lib/whatsapp/adapter";
+import { getWahaGroupParticipants, getWahaGroups, getWahaQr, getWahaSessionStatus, startWahaSession, WahaRequestError } from "@/lib/whatsapp/adapter";
 import { logAudit } from "@/lib/audit/logger";
 
 const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
@@ -17,9 +17,35 @@ export async function GET(request: Request) {
   const connectionId = url.searchParams.get("id");
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
   const db = admin as unknown as SupabaseClient;
+  if (action === "discover-groups" && connectionId) {
+    const connection = await db.from("integration_connections").select("id, provider, session_id, status").eq("id", connectionId).eq("organization_id", organizationId).maybeSingle();
+    if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (connection.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat digunakan." }, { status: 409 });
+    if (connection.data.provider !== "waha" || !connection.data.session_id) return NextResponse.json({ error: "Connection WAHA belum memiliki session." }, { status: 400 });
+    try {
+      const groups = await getWahaGroups(connection.data.session_id);
+      return NextResponse.json({ groups });
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof WahaRequestError ? "WAHA tidak dapat memuat daftar grup." : "Discovery grup gagal." }, { status: error instanceof WahaRequestError ? 502 : 500 });
+    }
+  }
+  if (action === "discover-participants" && connectionId) {
+    const providerGroupId = url.searchParams.get("group_id");
+    const connection = await db.from("integration_connections").select("id, provider, session_id, status").eq("id", connectionId).eq("organization_id", organizationId).maybeSingle();
+    if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (connection.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat digunakan." }, { status: 409 });
+    if (connection.data.provider !== "waha" || !connection.data.session_id || !providerGroupId) return NextResponse.json({ error: "Connection WAHA dan group ID wajib diisi." }, { status: 400 });
+    try {
+      const participants = await getWahaGroupParticipants(connection.data.session_id, providerGroupId);
+      return NextResponse.json({ participants });
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof WahaRequestError ? "WAHA tidak dapat memuat peserta grup." : "Discovery peserta gagal." }, { status: error instanceof WahaRequestError ? 502 : 500 });
+    }
+  }
   if ((action === "status" || action === "qr") && connectionId) {
     const connection = await db.from("integration_connections").select("id, provider, session_id, status").eq("id", connectionId).eq("organization_id", organizationId).maybeSingle();
     if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (connection.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat digunakan." }, { status: 409 });
     if (connection.data.provider !== "waha" || !connection.data.session_id) return NextResponse.json({ error: "Connection WAHA belum memiliki session." }, { status: 400 });
     try {
       if (action === "qr") {
@@ -32,9 +58,11 @@ export async function GET(request: Request) {
       if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 400 });
       return NextResponse.json({ ...updated.data, remote_status: remote.status ?? null });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "WAHA tidak dapat dihubungi.";
+      const upstreamStatus = error instanceof WahaRequestError ? error.status : undefined;
+      const isSessionStateError = upstreamStatus === 422;
+      if (action === "qr") return NextResponse.json({ id: connectionId, status: connection.data.status, error: isSessionStateError ? "Session WAHA belum siap untuk mengambil QR." : "WAHA tidak dapat dihubungi.", action: isSessionStateError ? "Pastikan session sudah dimulai, lalu coba tampilkan QR kembali." : undefined }, { status: isSessionStateError ? 422 : 502 });
       const updated = await db.from("integration_connections").update({ status: "disconnected", last_health_check_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", connectionId).eq("organization_id", organizationId).select("id, status, last_health_check_at").single();
-      return NextResponse.json({ ...updated.data, error: message }, { status: 502 });
+      return NextResponse.json({ ...updated.data, error: isSessionStateError ? "Session WAHA belum siap untuk mengambil QR." : "WAHA tidak dapat dihubungi.", action: isSessionStateError ? "Pastikan session sudah dimulai, lalu coba tampilkan QR kembali." : undefined }, { status: isSessionStateError ? 422 : 502 });
     }
   }
   const connections = await db.from("integration_connections").select("id, provider, session_id, status, config, last_health_check_at, created_at, updated_at").eq("organization_id", organizationId).order("created_at", { ascending: false });
@@ -50,7 +78,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!auth.context.memberships.some((item) => managerRoles.includes(item.role))) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const organizationManager = auth.context.memberships.find((item) => item.client_id === null);
+  if (!organizationManager || !managerRoles.includes(organizationManager.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
   const body = await request.json() as { action?: string; id?: string; connection_id?: string; wa_group_id?: string; client_id?: string | null; provider?: string; session_id?: string | null; status?: string; provider_group_id?: string; group_name?: string | null; provider_participant_id?: string; phone?: string | null; display_name?: string | null; profile_id?: string | null; is_verified?: boolean };
   const { admin, organizationId, userId } = auth.context;
   const db = admin as unknown as SupabaseClient;
@@ -77,13 +106,14 @@ export async function POST(request: Request) {
       if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
       return NextResponse.json(result.data);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "WAHA gagal memulai session.";
-      return NextResponse.json({ error: message }, { status: 502 });
+      const status = error instanceof WahaRequestError ? error.status : undefined;
+      return NextResponse.json({ error: status === 422 ? "Session WAHA belum siap untuk dimulai." : "WAHA tidak dapat dihubungi.", action: status === 422 ? "Pastikan session tersedia dan konfigurasi WAHA benar." : undefined }, { status: status === 422 ? 422 : 502 });
     }
   }
   if (body.action === "connection") {
     const provider = body.provider?.trim() || "waha";
     const sessionId = body.session_id?.trim() || null;
+    if (body.status === "retired") return NextResponse.json({ error: "Status retired hanya dapat ditetapkan melalui proses retire." }, { status: 400 });
     const values = { organization_id: organizationId, provider, session_id: sessionId, status: body.status ?? "disconnected", config: {}, updated_at: new Date().toISOString() };
     if (!body.id && !sessionId) return NextResponse.json({ error: "Session ID wajib diisi." }, { status: 400 });
     if (body.id) {
@@ -98,8 +128,9 @@ export async function POST(request: Request) {
   if (body.action === "group") {
     if (!body.connection_id || !body.provider_group_id) return NextResponse.json({ error: "Connection dan provider group wajib diisi." }, { status: 400 });
     if (!canAccessOptionalClient(auth.context, body.client_id)) return NextResponse.json({ error: "Client tidak dapat diakses." }, { status: 403 });
-    const connection = await db.from("integration_connections").select("id").eq("id", body.connection_id).eq("organization_id", organizationId).maybeSingle();
+    const connection = await db.from("integration_connections").select("id, status").eq("id", body.connection_id).eq("organization_id", organizationId).maybeSingle();
     if (connection.error || !connection.data) return NextResponse.json({ error: "Connection tidak dapat diakses." }, { status: 403 });
+    if (connection.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat menerima whitelist baru." }, { status: 409 });
     const values = { connection_id: body.connection_id, organization_id: organizationId, client_id: body.client_id ?? null, provider_group_id: body.provider_group_id, group_name: body.group_name ?? null, is_active: body.is_verified === true, activated_by: body.is_verified === true ? userId : null, activated_at: body.is_verified === true ? new Date().toISOString() : null };
     const result = body.id ? await db.from("wa_groups").update(values).eq("id", body.id).eq("organization_id", organizationId).select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").single() : await db.from("wa_groups").insert(values).select("id, connection_id, client_id, provider_group_id, group_name, is_active, activated_at, created_at").single();
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
@@ -116,6 +147,9 @@ export async function POST(request: Request) {
     return NextResponse.json(result.data, { status: body.id ? 200 : 201 });
   }
   if (body.action === "health" && body.id) {
+    const current = await db.from("integration_connections").select("status").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
+    if (current.error || !current.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
+    if (current.data.status === "retired") return NextResponse.json({ error: "Connection sudah retired dan tidak dapat diperbarui." }, { status: 409 });
     const result = await db.from("integration_connections").update({ last_health_check_at: new Date().toISOString(), status: body.status ?? "connected", updated_at: new Date().toISOString() }).eq("id", body.id).eq("organization_id", organizationId).select("id, status, last_health_check_at").single();
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
     return NextResponse.json(result.data);

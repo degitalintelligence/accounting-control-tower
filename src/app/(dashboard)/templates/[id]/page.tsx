@@ -388,16 +388,15 @@ export default function TemplateDetailPage({
 
   if (loading) {
     return (
-      <>
+      <main className="page-canvas">
         <DetailSkeleton />
-      </>
+      </main>
     );
   }
 
   if (error || !template) {
     return (
-      <>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+      <main className="page-canvas"><div className="mx-auto flex min-h-[60vh] w-full max-w-6xl flex-col items-center justify-center text-center">
           <AlertCircle className="size-12 text-red-400 mb-3" />
           <h2 className="text-lg font-semibold text-slate-900 mb-1">
             {error ?? "Template tidak ditemukan."}
@@ -407,10 +406,9 @@ export default function TemplateDetailPage({
             <ArrowLeft className="size-4" />
             Kembali ke Daftar
           </Button>
-        </div>
-      </>
-    );
-  }
+        </div></main>
+      );
+    }
 
   const versions = template.template_versions ?? [];
   const latestVersion = versions[0] ?? null;
@@ -420,8 +418,7 @@ export default function TemplateDetailPage({
     : 0;
 
   return (
-    <>
-      <div className="space-y-4">
+    <main className="page-canvas text-slate-900"><div className="mx-auto w-full max-w-6xl space-y-6">
         {/* Back button */}
         <div className="flex items-center gap-2">
           <Button
@@ -442,7 +439,7 @@ export default function TemplateDetailPage({
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-xl font-semibold text-slate-900">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
               {template.name}
             </h1>
             <div className="flex items-center gap-2 flex-wrap">
@@ -495,7 +492,7 @@ export default function TemplateDetailPage({
 
         {/* Tabs */}
         <Tabs defaultValue="detail">
-          <TabsList>
+          <TabsList className="w-full justify-start overflow-x-auto sm:grid sm:grid-cols-4">
             <TabsTrigger value="detail">Detail</TabsTrigger>
             <TabsTrigger value="versions">
               Versi
@@ -772,6 +769,6 @@ export default function TemplateDetailPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </main>
   );
 }

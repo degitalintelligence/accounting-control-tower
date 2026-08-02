@@ -26,14 +26,79 @@ export function RecurrenceEditor({ templateId }: { templateId: string }) {
   const [holidayHandling, setHolidayHandling] = useState("skip");
   const [leadDays, setLeadDays] = useState("0");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => { fetch(`/api/templates/${templateId}/recurrence`).then((response) => response.json()).then((body) => { if (!body.data) return; const nextRule = body.data as Rule; setRule(nextRule); setCustom(nextRule.rrule); setTimezone(nextRule.timezone); setSkipWeekends(nextRule.skip_weekends); setHolidayHandling(nextRule.holiday_handling); setLeadDays(String(nextRule.generation_lead_days)); setPreview(body.preview ?? []); const frequency = nextRule.rrule.match(/(?:^|;)FREQ=([^;]+)/)?.[1]; if (frequency === "WEEKLY") setMode("weekly"); else if (frequency === "MONTHLY") setMode("monthly"); else if (frequency === "YEARLY") setMode("yearly"); const byDay = nextRule.rrule.match(/(?:^|;)BYDAY=([^;]+)/)?.[1]?.split(","); if (byDay?.length) setDays(byDay); const byMonthDay = nextRule.rrule.match(/(?:^|;)BYMONTHDAY=([^;]+)/)?.[1]; if (byMonthDay) setMonthDay(byMonthDay); const byMonth = nextRule.rrule.match(/(?:^|;)BYMONTH=([^;]+)/)?.[1]; if (byMonth) setMonth(byMonth); }); }, [templateId]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setMessage(null);
+    fetch(`/api/templates/${templateId}/recurrence`)
+      .then(async (response) => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(body?.error || "Gagal memuat aturan pengulangan.");
+        return body;
+      })
+      .then((body) => {
+        if (!active || !body.data) return;
+        const nextRule = body.data as Rule;
+        setRule(nextRule);
+        setCustom(nextRule.rrule);
+        setTimezone(nextRule.timezone);
+        setSkipWeekends(nextRule.skip_weekends);
+        setHolidayHandling(nextRule.holiday_handling);
+        setLeadDays(String(nextRule.generation_lead_days));
+        setPreview(body.preview ?? []);
+        const frequency = nextRule.rrule.match(/(?:^|;)FREQ=([^;]+)/)?.[1];
+        if (frequency === "WEEKLY") setMode("weekly");
+        else if (frequency === "MONTHLY") setMode("monthly");
+        else if (frequency === "YEARLY") setMode("yearly");
+        const byDay = nextRule.rrule.match(/(?:^|;)BYDAY=([^;]+)/)?.[1]?.split(",");
+        if (byDay?.length) setDays(byDay);
+        const byMonthDay = nextRule.rrule.match(/(?:^|;)BYMONTHDAY=([^;]+)/)?.[1];
+        if (byMonthDay) setMonthDay(byMonthDay);
+        const byMonth = nextRule.rrule.match(/(?:^|;)BYMONTH=([^;]+)/)?.[1];
+        if (byMonth) setMonth(byMonth);
+      })
+      .catch((error: unknown) => {
+        if (active) setMessage(error instanceof Error ? error.message : "Gagal memuat aturan pengulangan.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [templateId]);
   function toggleDay(day: string) { setDays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day]); }
   function buildRule() { if (mode === "custom") return custom.trim(); const base = `FREQ=${mode === "daily" ? "DAILY" : mode.toUpperCase()};INTERVAL=${Math.max(1, Number(interval) || 1)}`; if (mode === "weekly") return `${base};BYDAY=${days.join(",")}`; if (mode === "monthly") return `${base};BYMONTHDAY=${Math.min(31, Math.max(1, Number(monthDay) || 1))}`; if (mode === "yearly") return `${base};BYMONTH=${Math.min(12, Math.max(1, Number(month) || 1))};BYMONTHDAY=${Math.min(31, Math.max(1, Number(monthDay) || 1))}`; return base; }
-  async function save() { setBusy(true); setMessage(null); const response = await fetch(`/api/templates/${templateId}/recurrence`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rrule: buildRule(), timezone, generation_lead_days: Number(leadDays) || 0, holiday_handling: holidayHandling, skip_weekends: skipWeekends }) }); const body = await response.json().catch(() => null); setMessage(response.ok ? "Aturan pengulangan tersimpan." : body?.error || "Gagal menyimpan."); if (response.ok) { setRule(body.data); setPreview(body.preview ?? []); } setBusy(false); }
-  async function remove() { setBusy(true); const response = await fetch(`/api/templates/${templateId}/recurrence`, { method: "DELETE" }); setMessage(response.ok ? "Aturan pengulangan dihapus." : "Gagal menghapus aturan."); if (response.ok) { setRule(null); setPreview([]); } setBusy(false); }
-  return <Card className="space-y-4"><div><h3 className="text-sm font-semibold text-slate-900">Pengulangan</h3><p className="text-xs text-slate-500">Atur jadwal rutin dengan timezone dan perilaku hari libur yang jelas.</p></div><div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5"><Label>Periode</Label><Select value={mode} onValueChange={(value) => { if (value) setMode(value as Mode); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="daily">Harian</SelectItem><SelectItem value="weekly">Mingguan</SelectItem><SelectItem value="monthly">Bulanan</SelectItem><SelectItem value="yearly">Tahunan</SelectItem><SelectItem value="custom">Custom RRULE</SelectItem></SelectContent></Select></label><label className="space-y-1.5"><Label>Timezone</Label><Select value={timezone} onValueChange={(value) => { if (value) setTimezone(value); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TIMEZONES.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select></label></div>{mode !== "custom" ? <div className="space-y-3"><label className="block space-y-1.5"><Label>Interval</Label><Input type="number" min="1" max="365" value={interval} onChange={(event) => setInterval(event.currentTarget.value)} /></label>{mode === "weekly" && <div className="flex flex-wrap gap-2">{DAYS.map(([value, label]) => <Button key={value} type="button" variant={days.includes(value) ? "default" : "outline"} size="sm" onClick={() => toggleDay(value)}>{label}</Button>)}</div>}{(mode === "monthly" || mode === "yearly") && <label className="block space-y-1.5"><Label>Tanggal dalam bulan</Label><Input type="number" min="1" max="31" value={monthDay} onChange={(event) => setMonthDay(event.currentTarget.value)} /></label>}{mode === "yearly" && <label className="block space-y-1.5"><Label>Bulan</Label><Input type="number" min="1" max="12" value={month} onChange={(event) => setMonth(event.currentTarget.value)} /></label>}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={skipWeekends} onChange={(event) => setSkipWeekends(event.currentTarget.checked)} /> Lewati akhir pekan</label></div> : <label className="space-y-1.5"><Label>RRULE</Label><Input value={custom} onChange={(event) => setCustom(event.currentTarget.value)} placeholder="FREQ=DAILY;INTERVAL=1" /><p className="text-xs text-slate-500">Gunakan FREQ, INTERVAL, BYDAY, BYMONTH, BYMONTHDAY, COUNT, atau UNTIL.</p></label>}<div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5"><Label>Hari libur</Label><Select value={holidayHandling} onValueChange={(value) => { if (value) setHolidayHandling(value); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="skip">Lewati occurrence</SelectItem><SelectItem value="next_working_day">Pindah ke hari kerja berikutnya</SelectItem><SelectItem value="allow">Tetap buat</SelectItem></SelectContent></Select></label><label className="space-y-1.5"><Label>Generate sebelum tenggat (hari)</Label><Input type="number" min="0" max="365" value={leadDays} onChange={(event) => setLeadDays(event.currentTarget.value)} /></label></div><div className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-700">Preview occurrence berikutnya</p>{preview.length ? <ul className="mt-2 space-y-1 text-sm text-slate-600">{preview.map((item) => <li key={`${item.date}-${item.adjusted_from ?? "original"}`}>{new Date(`${item.date}T00:00:00Z`).toLocaleDateString("id-ID", { dateStyle: "full", timeZone: timezone })}{item.adjusted_from ? ` · dipindah dari ${item.adjusted_from}` : ""}</li>)}</ul> : <p className="mt-2 text-xs text-slate-500">Simpan aturan untuk melihat preview.</p>}</div><div className="flex gap-2"><Button onClick={save} disabled={busy}>Simpan</Button>{rule && <Button variant="outline" onClick={remove} disabled={busy}>Hapus</Button>}</div>{message && <p className="text-sm text-slate-600">{message}</p>}</Card>;
+  async function save() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/templates/${templateId}/recurrence`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rrule: buildRule(), timezone, generation_lead_days: Number(leadDays) || 0, holiday_handling: holidayHandling, skip_weekends: skipWeekends }) });
+      const body = await response.json().catch(() => null);
+      setMessage(response.ok ? "Aturan pengulangan tersimpan." : body?.error || "Gagal menyimpan.");
+      if (response.ok) { setRule(body.data); setPreview(body.preview ?? []); }
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : "Gagal menyimpan.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/templates/${templateId}/recurrence`, { method: "DELETE" });
+      setMessage(response.ok ? "Aturan pengulangan dihapus." : "Gagal menghapus aturan.");
+      if (response.ok) { setRule(null); setPreview([]); }
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : "Gagal menghapus aturan.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (loading) return <Card className="surface-card space-y-2 rounded-xl p-5"><h3 className="text-base font-semibold text-slate-900">Pengulangan</h3><p className="text-sm text-slate-500">Memuat aturan pengulangan...</p></Card>;
+  return <Card className="surface-card space-y-4 rounded-xl p-5"><div><h3 className="text-base font-semibold text-slate-900">Pengulangan</h3><p className="text-sm text-slate-500">Atur jadwal rutin dengan timezone dan perilaku hari libur yang jelas.</p></div><div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5"><Label>Periode</Label><Select value={mode} onValueChange={(value) => { if (value) setMode(value as Mode); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="daily">Harian</SelectItem><SelectItem value="weekly">Mingguan</SelectItem><SelectItem value="monthly">Bulanan</SelectItem><SelectItem value="yearly">Tahunan</SelectItem><SelectItem value="custom">Custom RRULE</SelectItem></SelectContent></Select></label><label className="space-y-1.5"><Label>Timezone</Label><Select value={timezone} onValueChange={(value) => { if (value) setTimezone(value); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TIMEZONES.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select></label></div>{mode !== "custom" ? <div className="space-y-3"><label className="block space-y-1.5"><Label>Interval</Label><Input type="number" min="1" max="365" value={interval} onChange={(event) => setInterval(event.currentTarget.value)} /></label>{mode === "weekly" && <div className="flex flex-wrap gap-2">{DAYS.map(([value, label]) => <Button key={value} type="button" variant={days.includes(value) ? "default" : "outline"} size="sm" onClick={() => toggleDay(value)}>{label}</Button>)}</div>}{(mode === "monthly" || mode === "yearly") && <label className="block space-y-1.5"><Label>Tanggal dalam bulan</Label><Input type="number" min="1" max="31" value={monthDay} onChange={(event) => setMonthDay(event.currentTarget.value)} /></label>}{mode === "yearly" && <label className="block space-y-1.5"><Label>Bulan</Label><Input type="number" min="1" max="12" value={month} onChange={(event) => setMonth(event.currentTarget.value)} /></label>}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={skipWeekends} onChange={(event) => setSkipWeekends(event.currentTarget.checked)} /> Lewati akhir pekan</label></div> : <label className="space-y-1.5"><Label>RRULE</Label><Input value={custom} onChange={(event) => setCustom(event.currentTarget.value)} placeholder="FREQ=DAILY;INTERVAL=1" /><p className="text-xs text-slate-500">Gunakan FREQ, INTERVAL, BYDAY, BYMONTH, BYMONTHDAY, COUNT, atau UNTIL.</p></label>}<div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5"><Label>Hari libur</Label><Select value={holidayHandling} onValueChange={(value) => { if (value) setHolidayHandling(value); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="skip">Lewati occurrence</SelectItem><SelectItem value="next_working_day">Pindah ke hari kerja berikutnya</SelectItem><SelectItem value="allow">Tetap buat</SelectItem></SelectContent></Select></label><label className="space-y-1.5"><Label>Generate sebelum tenggat (hari)</Label><Input type="number" min="0" max="365" value={leadDays} onChange={(event) => setLeadDays(event.currentTarget.value)} /></label></div><div className="rounded-lg bg-slate-50 p-3"><p className="text-sm font-semibold text-slate-700">Preview occurrence berikutnya</p>{preview.length ? <ul className="mt-2 space-y-1 text-sm text-slate-600">{preview.map((item) => <li key={`${item.date}-${item.adjusted_from ?? "original"}`}>{new Date(`${item.date}T00:00:00Z`).toLocaleDateString("id-ID", { dateStyle: "full", timeZone: timezone })}{item.adjusted_from ? ` · dipindah dari ${item.adjusted_from}` : ""}</li>)}</ul> : <p className="mt-2 text-sm text-slate-500">Simpan aturan untuk melihat preview.</p>}</div><div className="flex gap-2"><Button onClick={save} disabled={busy}>Simpan</Button>{rule && <Button variant="outline" onClick={remove} disabled={busy}>Hapus</Button>}</div>{message && <p className="text-sm text-slate-600">{message}</p>}</Card>;
 }
 
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) { return <div className={`rounded-xl border border-slate-100 bg-white p-4 shadow-sm ${className}`}>{children}</div>; }
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) { return <div className={className}>{children}</div>; }

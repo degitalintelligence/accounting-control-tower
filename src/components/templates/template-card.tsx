@@ -58,8 +58,8 @@ export function TemplateCard({
       type="button"
       onClick={() => router.push(`/templates/${id}`)}
       className={cn(
-        "w-full text-left rounded-xl bg-white p-4 transition-all",
-        "shadow-[0_1px_3px_rgba(0,0,0,.06)] hover:shadow-[0_4px_16px_rgba(0,0,0,.08)]",
+        "surface-card w-full rounded-xl p-5 text-left transition-all",
+        "hover:-translate-y-0.5 hover:shadow-md",
         "border border-slate-100 hover:border-slate-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
         "active:scale-[0.995]"
@@ -67,10 +67,10 @@ export function TemplateCard({
     >
       {/* Top row: badges */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <Badge className={cn(typeConfig.className, "text-[10px]")}>
+        <Badge className={cn(typeConfig.className, "text-xs")}>
           {typeConfig.label}
         </Badge>
-        <span className={cn("inline-flex items-center gap-1.5 text-[11px] font-medium", priorityConfig.textClass)}>
+        <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", priorityConfig.textClass)}>
           <span className={cn("size-1.5 rounded-full shrink-0", priorityConfig.dotClass)} />
           {priorityConfig.label}
         </span>
@@ -79,14 +79,14 @@ export function TemplateCard({
       {/* Name */}
       <div className="flex items-start gap-2 mb-1.5">
         <FileText className="size-4 text-slate-400 mt-0.5 shrink-0" />
-        <h3 className="text-sm font-medium text-slate-900 line-clamp-2">
+        <h3 className="text-base font-semibold text-slate-900 line-clamp-2">
           {name}
         </h3>
       </div>
 
       {/* Description */}
       {description && (
-        <p className="text-[12px] text-slate-500 line-clamp-2 mb-3 ml-6">
+        <p className="mb-3 ml-6 line-clamp-2 text-sm text-slate-500">
           {description}
         </p>
       )}
@@ -96,13 +96,13 @@ export function TemplateCard({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {stepCount > 0 && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+            <div className="flex items-center gap-1 text-xs text-slate-500">
               <Clock className="size-3 shrink-0" />
               {stepCount} langkah
             </div>
           )}
           {latest_version && (
-            <span className="text-[11px] text-slate-300">
+            <span className="text-xs text-slate-400">
               v{latest_version.version_number}
             </span>
           )}
@@ -113,7 +113,7 @@ export function TemplateCard({
             <Button
               variant="ghost"
               size="sm"
-              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-7 px-2 text-[11px]"
+              className="h-8 px-2 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
               onClick={(e) => {
                 e.stopPropagation();
                 onInstantiate(id);

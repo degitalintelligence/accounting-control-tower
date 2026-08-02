@@ -32,3 +32,20 @@ export type WahaConfig = {
   apiKey?: string;
   session?: string;
 };
+
+export type WahaGroup = {
+  id?: string;
+  name?: string;
+  subject?: string;
+  groupId?: string;
+};
+
+export type WahaParticipant = {
+  id?: string;
+  lid?: string;
+  phone?: string;
+  displayName?: string;
+  name?: string;
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
+};

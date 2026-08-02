@@ -44,9 +44,10 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createServiceRoleClient();
-  const connectionResult = await admin.from("integration_connections").select("id").eq("provider", "waha").eq("session_id", payload.session).limit(1).maybeSingle();
-  const connection = connectionResult as unknown as { data: { id: string } | null; error: { message: string } | null };
+  const connectionResult = await admin.from("integration_connections").select("id, status").eq("provider", "waha").eq("session_id", payload.session).limit(1).maybeSingle();
+  const connection = connectionResult as unknown as { data: { id: string; status: string } | null; error: { message: string } | null };
   if (connection.error || !connection.data) return NextResponse.json({ accepted: true });
+  if (connection.data.status === "retired") return NextResponse.json({ accepted: true });
 
   const groupResult = await admin.from("wa_groups").select("id, organization_id").eq("connection_id", connection.data.id).eq("provider_group_id", groupId).eq("is_active", true).maybeSingle();
   const group = groupResult as unknown as { data: { id: string; organization_id: string } | null; error: { message: string } | null };

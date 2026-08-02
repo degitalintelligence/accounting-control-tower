@@ -22,7 +22,6 @@ export async function GET() {
     .from("memberships")
     .select("id, role, is_active, created_at, profile_id")
     .eq("organization_id", organizationId)
-    .eq("is_active", true)
     .order("created_at", { ascending: true })) as unknown as {
     data: {
       id: string;
@@ -76,6 +75,7 @@ export async function GET() {
       role: m.role,
       initials,
       joined_at: m.created_at,
+      is_active: m.is_active,
     };
   });
 

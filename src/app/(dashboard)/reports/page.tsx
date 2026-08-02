@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, ClipboardList, FileBarChart, RefreshCw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +13,7 @@ type ReportData = {
 };
 
 const stageLabels: Record<string, string> = {
-  draft: "Draft", prepared: "Disiapkan", submitted: "Dikirim", accepted: "Diterima", rejected: "Ditolak", delivered: "Delivered",
+  draft: "Draft", prepared: "Disiapkan", submitted: "Dikirim", accepted: "Diterima", rejected: "Ditolak", delivered: "Terkirim",
 };
 
 export default function ReportsPage() {
@@ -46,18 +46,15 @@ export default function ReportsPage() {
   ] as const : [];
 
   return (
-    <main className="page-canvas">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-ink">Laporan</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Ringkasan performa pekerjaan dan kontrol operasional</p>
-      </div>
+    <main className="page-canvas text-slate-900"><div className="mx-auto w-full max-w-6xl space-y-6">
+      <header><div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FileBarChart className="size-4" /> Performance Center</div><h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Laporan operasional</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Pantau performa pekerjaan, alur deliverable, dan ketepatan waktu workspace.</p></header>
 
       {error && <div role="alert" className="mb-4 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Laporan belum dapat dimuat.</p><p className="mt-1">{error}</p></div><Button type="button" variant="outline" onClick={() => void loadReports()} className="w-fit gap-2 border-red-200 bg-white text-red-700 hover:bg-red-100"><RefreshCw className="size-4" />Coba lagi</Button></div>}
       {!data && !error ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl" />)}</div> : data && (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {summaryCards.map(([Icon, label, value, iconColor, iconBg]) => (
-              <Card key={label} className="gap-2 border-0 shadow-sm">
+              <Card key={label} className="surface-card gap-2 rounded-xl shadow-none">
                 <CardContent className="flex items-center gap-3 p-4">
                   <span className={`grid size-10 place-items-center rounded-lg ${iconBg}`}><Icon aria-hidden="true" className={`size-5 ${iconColor}`} /></span>
                   <div><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-semibold text-slate-900">{value}</p></div>
@@ -67,16 +64,18 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Tahap laporan</CardTitle></CardHeader><CardContent className="space-y-3">{data.lifecycle.length ? data.lifecycle.map((item) => <div key={item.stage} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{stageLabels[item.stage] ?? item.stage}</span><span className="font-semibold text-slate-900">{item.total}</span></div>) : <EmptyState text="Belum ada data tahap laporan." />}</CardContent></Card>
-            <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Versi template</CardTitle></CardHeader><CardContent className="space-y-3">{data.versions.length ? data.versions.map((item) => <div key={item.version} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{item.version}</span><span className="shrink-0 font-semibold text-slate-900">{item.completed}/{item.total}</span></div>) : <EmptyState text="Belum ada versi template." />}</CardContent></Card>
+            <Card className="surface-card rounded-xl shadow-none"><CardHeader><CardTitle>Tahap laporan</CardTitle></CardHeader><CardContent className="space-y-3">{data.lifecycle.length ? data.lifecycle.map((item) => <div key={item.stage} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{stageLabels[item.stage] ?? item.stage}</span><span className="font-semibold text-slate-900">{item.total}</span></div>) : <EmptyState text="Belum ada data tahap laporan." />}</CardContent></Card>
+            <Card className="surface-card rounded-xl shadow-none"><CardHeader><CardTitle>Versi template</CardTitle></CardHeader><CardContent className="space-y-3">{data.versions.length ? data.versions.map((item) => <div key={item.version} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 text-sm"><span className="truncate text-slate-600">{item.version}</span><span className="shrink-0 font-semibold text-slate-900">{item.completed}/{item.total}</span></div>) : <EmptyState text="Belum ada versi template." />}</CardContent></Card>
           </div>
-          <Card className="border-0 shadow-sm"><CardHeader><CardTitle>Pengiriman</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span>Terkirim: <strong>{data.summary.delivered}</strong></span><span>Menunggu pengiriman: <strong>{data.summary.pending_delivery}</strong></span><span>Tepat waktu: <strong>{data.summary.on_time_rate}%</strong></span></CardContent></Card>
+          <Card className="surface-card rounded-xl shadow-none"><CardHeader><CardTitle className="flex items-center gap-2"><Send className="size-4 text-purple-600" /> Pengiriman</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-3"><Metric label="Terkirim" value={`${data.summary.delivered}`} /><Metric label="Menunggu pengiriman" value={`${data.summary.pending_delivery}`} /><Metric label="Tepat waktu" value={`${data.summary.on_time_rate}%`} /></CardContent></Card>
         </div>
       )}
-    </main>
+    </div></main>
   );
 }
 
 function EmptyState({ text }: { text: string }) {
   return <p className="py-3 text-sm text-slate-500">{text}</p>;
 }
+
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-slate-50 px-4 py-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-lg font-bold text-slate-900">{value}</p></div>; }

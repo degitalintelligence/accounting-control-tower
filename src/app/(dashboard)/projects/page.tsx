@@ -106,16 +106,17 @@ function ProjectsPageContent() {
       <div className="space-y-4">
         {/* Header & Filters */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <h1 className="text-lg font-semibold text-slate-900">Proyek</h1>
-              <p className="text-sm text-slate-500 mt-0.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FolderKanban className="size-4" /> Work Management</div>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Proyek</h1>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 Kelola proyek dan lacak progresnya
               </p>
             </div>
             <Button
               onClick={() => setCreateDialogOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold shrink-0"
+              className="cta-primary shrink-0"
             >
               <Plus className="size-4" />
               Buat Proyek
@@ -123,7 +124,7 @@ function ProjectsPageContent() {
           </div>
 
           {/* Filter bar */}
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="surface-card flex flex-col gap-2 rounded-xl p-3 sm:flex-row">
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
               <Input
@@ -134,14 +135,14 @@ function ProjectsPageContent() {
                   const value = e.currentTarget.value;
                   searchTimeoutRef.current = window.setTimeout(() => updateParam("search", value), 350);
                 }}
-                className="pl-8 h-8 text-sm bg-white"
+              className="h-10 bg-white pl-9 text-sm"
               />
             </div>
             <Select
               value={status || null}
               onValueChange={(val) => updateParam("status", (val as string) ?? "")}
             >
-              <SelectTrigger className="h-8 text-sm bg-white min-w-[140px]">
+              <SelectTrigger className="h-10 min-w-[160px] bg-white text-sm">
                 <SelectValue placeholder="Semua Status" />
               </SelectTrigger>
               <SelectContent>
@@ -160,14 +161,14 @@ function ProjectsPageContent() {
 
         {/* Results count */}
         {!loading && (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm font-medium text-slate-500">
             {total} proyek ditemukan
           </p>
         )}
 
         {/* Error */}
         {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-center">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
             <p className="text-sm text-red-600">{error}</p>
             <Button
               variant="outline"
@@ -196,7 +197,7 @@ function ProjectsPageContent() {
             </p>
             <Button
               onClick={() => setCreateDialogOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold"
+              className="cta-primary"
             >
               Buat Proyek
             </Button>
