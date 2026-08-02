@@ -82,9 +82,12 @@ The current repository order is lexical by complete filename. Dependencies that 
 056_whatsapp_suggestion_action_choice.sql
 057_whatsapp_outbound_delivery_tracking.sql
 058_whatsapp_reply_session_context.sql
+059_fix_action_suggestion_upsert_constraint.sql
+060_fix_legacy_ai_suggestion_upsert.sql
 059_workspace_rbac_permissions.sql
 060_harden_rbac_authorization.sql
 061_harden_membership_mutation_rls.sql
+062_granular_rbac_permissions.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

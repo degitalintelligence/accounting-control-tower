@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestions";
-import { canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { suggestionRejectSchema, validationMessage } from "@/lib/validation/schemas";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const { user, organizationId, role, admin } = await getSuggestionContext();
+  const { user, organizationId, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
-  if (!canManageOrganization(role)) return NextResponse.json({ error: "Hanya manager yang dapat menolak suggestion." }, { status: 403 });
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
 
   const parsed = suggestionRejectSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });

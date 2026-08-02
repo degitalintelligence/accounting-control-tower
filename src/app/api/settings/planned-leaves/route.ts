@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, hasPermission } from "@/lib/authorization";
 import type { AuthContext } from "@/lib/authorization";
 import { plannedLeaveCreateSchema, validationMessage } from "@/lib/validation/schemas";
-
-const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
 
 async function canAccessProfile(admin: AuthContext["admin"], organizationId: string, profileId: string, isOrgWide: boolean, clientIds: string[]) {
   const membership = await admin.from("memberships").select("profile_id, client_id").eq("organization_id", organizationId).eq("profile_id", profileId).eq("is_active", true);
@@ -15,6 +13,7 @@ export async function GET(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
   const { admin, organizationId, userId, isOrgWide, clientIds } = auth.context;
+  const canManage = await hasPermission(auth.context, "planned_leaves.manage");
   const profileId = request.nextUrl.searchParams.get("profile_id");
   const status = request.nextUrl.searchParams.get("status");
   let query = admin.from("planned_leaves").select("id, organization_id, profile_id, start_date, end_date, status, reason, rejection_reason, created_by, approved_by, approved_at, created_at, updated_at").eq("organization_id", organizationId).is("deleted_at", null).order("start_date", { ascending: true });
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
   const visible = [];
   for (const row of rows) {
     if (row.profile_id !== userId && !(await canAccessProfile(admin, organizationId, row.profile_id, isOrgWide, clientIds))) continue;
-    visible.push({ ...row, can_edit: row.created_by === userId || canManageOrganization(auth.context.memberships[0]?.role), can_approve: managerRoles.includes(auth.context.memberships[0]?.role ?? ""), can_cancel: row.created_by === userId || canManageOrganization(auth.context.memberships[0]?.role) });
+    visible.push({ ...row, can_edit: row.created_by === userId || canManage, can_approve: canManage, can_cancel: row.created_by === userId || canManage });
   }
   return NextResponse.json({ data: visible });
 }
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
   const parsed = plannedLeaveCreateSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const { profile_id, start_date, end_date, reason } = parsed.data;
-  if (profile_id !== userId && !canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Tidak dapat membuat leave untuk user lain." }, { status: 403 });
+  if (profile_id !== userId && !(await hasPermission(auth.context, "planned_leaves.manage"))) return NextResponse.json({ error: "Tidak dapat membuat leave untuk user lain." }, { status: 403 });
   if (start_date > end_date || !(await canAccessProfile(admin, organizationId, profile_id, isOrgWide, clientIds))) return NextResponse.json({ error: "Profile atau periode planned leave tidak valid." }, { status: 400 });
   const conflicts = await admin.from("planned_leaves").select("id, start_date, end_date, status").eq("organization_id", organizationId).eq("profile_id", profile_id).in("status", ["pending", "approved"]).is("deleted_at", null).lte("start_date", end_date).gte("end_date", start_date);
   if (conflicts.error) return NextResponse.json({ error: "Validasi planned leave gagal." }, { status: 500 });

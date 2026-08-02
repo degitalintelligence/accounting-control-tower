@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extractTasksFromMessage, generateWhatsAppSummary } from "@/lib/ai/openrouter-client";
+import { extractTasksFromMessage, generateWhatsAppSummary, OpenRouterError } from "@/lib/ai/openrouter-client";
 import { resolveParticipant, resolveProfileName } from "@/lib/whatsapp/identity";
 import { parseExplicitCommand, parseExplicitWorkItemCommand, explicitCommandHelp } from "@/lib/whatsapp/commands";
 import { canTransition, getTransition } from "@/lib/work-engine/status-machine";
@@ -38,7 +38,16 @@ const batchSize = 10;
 const promptVersion = "task-extraction-v1";
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : "Kesalahan tidak diketahui.";
+  if (error instanceof OpenRouterError) {
+    return `${error.code}${error.status ? ` (HTTP ${error.status})` : ""}: ${error.message}`.slice(0, 500);
+  }
+  if (error instanceof Error) {
+    return error.message
+      .replace(/Bearer\s+[\w.+\-/_=]+/gi, "Bearer [REDACTED]")
+      .replace(/https?:\/\/[^\s]+/gi, "[URL REDACTED]")
+      .slice(0, 500);
+  }
+  return "Kesalahan tidak diketahui.";
 }
 
 async function claimNext(admin: WorkerClient, workerId: string, eventType: string): Promise<JobRow | null> {

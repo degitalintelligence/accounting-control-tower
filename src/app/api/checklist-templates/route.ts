@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { getUserOrganizationId } from "@/lib/checklists";
-import { canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import type { AssignmentRole } from "@/types/work-item";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const admin = createServiceRoleClient();
-  const organizationId = await getUserOrganizationId(admin, user.id);
-  if (!organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
-  const memberships = await admin.from("memberships").select("role").eq("organization_id", organizationId).eq("profile_id", user.id).eq("is_active", true);
-  const membershipData = memberships as unknown as { data: { role?: string }[] | null };
-  if (!canManageOrganization(membershipData.data?.[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "checklists.view");
+  if (denied) return denied;
+  const admin = auth.context.admin;
+  const organizationId = auth.context.organizationId;
   const result = await admin
     .from("checklist_templates")
     .select("id, organization_id, name, description, target_role, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)")
@@ -28,15 +23,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const admin = createServiceRoleClient();
-  const organizationId = await getUserOrganizationId(admin, user.id);
-  if (!organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
-  const memberships = await admin.from("memberships").select("role").eq("organization_id", organizationId).eq("profile_id", user.id).eq("is_active", true);
-  const membershipData = memberships as unknown as { data: { role?: string }[] | null };
-  if (!canManageOrganization(membershipData.data?.[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "checklists.manage");
+  if (denied) return denied;
+  const admin = auth.context.admin;
+  const organizationId = auth.context.organizationId;
   const body = await request.json() as {
     name?: string;
     description?: string | null;

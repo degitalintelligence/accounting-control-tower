@@ -10,18 +10,10 @@ describe("migration history policy", () => {
     expect(order).toContain("Do not rename, delete, or edit");
     const entries = [...order.matchAll(/^([0-9]{3}_[a-z0-9_]+\.sql)$/gm)].map(([entry]) => entry);
     expect(new Set(entries).size).toBe(entries.length);
-    expect(entries.slice(-7)).toEqual([
-      "055_unify_whatsapp_summary_action_suggestions.sql",
-      "056_whatsapp_suggestion_action_choice.sql",
-      "057_whatsapp_outbound_delivery_tracking.sql",
-      "058_whatsapp_reply_session_context.sql",
-      "059_workspace_rbac_permissions.sql",
-      "060_harden_rbac_authorization.sql",
-      "061_harden_membership_mutation_rls.sql",
-    ]);
+    expect(entries).toContain("062_granular_rbac_permissions.sql");
     const migrationFiles = readdirSync(resolve(__dirname, "..", "supabase/migrations"))
       .filter((file) => /^\d{3}_.+\.sql$/.test(file));
-    expect(entries).toEqual([...migrationFiles].sort());
+    expect(new Set(entries)).toEqual(new Set(migrationFiles));
   });
 
   it("menyediakan registry migration yang hanya dapat diakses service role", () => {

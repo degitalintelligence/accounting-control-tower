@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: NextRequest, route: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "sop.manage");
+  if (denied) return denied;
   const { id } = await route.params;
   const body = await request.json() as { name?: string; description?: string | null; content?: string; version_number?: number; status?: string };
   const owner = await auth.context.admin.from("sop_templates").select("id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null).single();
@@ -23,7 +24,8 @@ export async function PATCH(request: NextRequest, route: Context) {
 export async function DELETE(_: NextRequest, route: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "sop.manage");
+  if (denied) return denied;
   const { id } = await route.params;
   const result = await auth.context.admin.from("sop_templates").update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null);
   const data = result as unknown as { error: { message: string } | null };

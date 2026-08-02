@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { canAccessOptionalClient, canManageOrganization, getAuthContext } from "@/lib/authorization";
+import { canAccessOptionalClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 const fields = "id, organization_id, client_id, name, provider, model, is_active, require_human_confirmation, allow_sensitive_data, no_training_required, retention_days, created_at, updated_at";
 
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
   const db = auth.context.admin as unknown as SupabaseClient;
   let query = db.from("ai_policies").select(fields).eq("organization_id", auth.context.organizationId).order("client_id").order("name");
   if (!auth.context.isOrgWide) query = query.in("client_id", auth.context.clientIds);
@@ -19,7 +20,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
   const body = await request.json() as { id?: string; client_id?: string | null; name?: string; provider?: string; model?: string | null; is_active?: boolean; require_human_confirmation?: boolean; allow_sensitive_data?: boolean; no_training_required?: boolean; retention_days?: number };
   if (!body.name?.trim() || !canAccessOptionalClient(auth.context, body.client_id)) return NextResponse.json({ error: "Nama dan client yang valid wajib diisi." }, { status: 400 });
   const retentionDays = body.retention_days ?? 90;

@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAuthContext, canAccessOptionalClient, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, canAccessOptionalClient, requirePermission } from "@/lib/authorization";
 import { getWahaGroupParticipants, getWahaGroups, getWahaQr, getWahaSessionStatus, startWahaSession, WahaRequestError } from "@/lib/whatsapp/adapter";
 import { logAudit } from "@/lib/audit/logger";
-
-const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
 
 export async function GET(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) {
-    return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
-  }
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
   const connectionId = url.searchParams.get("id");
@@ -78,15 +75,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  const organizationManager = auth.context.memberships.find((item) => item.client_id === null);
-  if (!organizationManager || !managerRoles.includes(organizationManager.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
   const body = await request.json() as { action?: string; id?: string; connection_id?: string; wa_group_id?: string; client_id?: string | null; provider?: string; session_id?: string | null; status?: string; provider_group_id?: string; group_name?: string | null; provider_participant_id?: string; phone?: string | null; display_name?: string | null; profile_id?: string | null; is_verified?: boolean };
   const { admin, organizationId, userId } = auth.context;
   const db = admin as unknown as SupabaseClient;
   if (body.action === "retire") {
     if (!body.id) return NextResponse.json({ error: "Connection wajib dipilih." }, { status: 400 });
-    const orgManager = auth.context.memberships.find((item) => item.client_id === null);
-    if (!canManageOrganization(orgManager?.role)) return NextResponse.json({ error: "Retire connection hanya tersedia untuk manager organisasi." }, { status: 403 });
     const existing = await db.from("integration_connections").select("id, provider, session_id, status, retired_at").eq("id", body.id).eq("organization_id", organizationId).maybeSingle();
     if (existing.error || !existing.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
     const result = await db.rpc("retire_whatsapp_connection" as never, { p_connection_id: body.id, p_organization_id: organizationId, p_actor_id: userId } as never);

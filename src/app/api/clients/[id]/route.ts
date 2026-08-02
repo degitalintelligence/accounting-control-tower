@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getAuthContext, canAccessClient, hasRole } from "@/lib/authorization";
+import { getAuthContext, canAccessClient, requirePermission } from "@/lib/authorization";
 import { shouldUpdateClientSlug, slugifyClientName } from "@/lib/clients";
 import { clientUpdateSchema, validationMessage } from "@/lib/validation/schemas";
 
-const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
 
 async function getClientContext(id: string) {
   const auth = await getAuthContext();
   if (auth.response) return { response: auth.response } as const;
   if (!canAccessClient(auth.context, id)) return { response: NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 }) } as const;
-  if (!hasRole(auth.context, managerRoles)) return { response: NextResponse.json({ error: "Akses hanya tersedia untuk manager atau admin." }, { status: 403 }) } as const;
+  const denied = await requirePermission(auth.context, "clients.manage");
+  if (denied) return { response: denied } as const;
   return { context: auth.context } as const;
 }
 

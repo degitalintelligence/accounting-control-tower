@@ -9,13 +9,13 @@ export async function getSuggestionContext() {
   const admin = createServiceRoleClient();
   const result = await admin
     .from("memberships")
-    .select("organization_id, role")
+    .select("organization_id, role, role_id")
     .eq("profile_id", auth.user.id)
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
-  const membership = result as unknown as { data: { organization_id: string; role: string } | null };
-  return { user: auth.user, organizationId: membership.data?.organization_id ?? null, role: membership.data?.role ?? null, admin };
+  const membership = result as unknown as { data: { organization_id: string; role: string; role_id: string | null } | null };
+  return { user: auth.user, organizationId: membership.data?.organization_id ?? null, role: membership.data?.role ?? null, roleId: membership.data?.role_id ?? null, admin };
 }
 
 export function suggestionError(error: unknown) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getUserOrganizationId } from "@/lib/checklists";
 import { checklistItemCreateSchema, checklistItemUpdateSchema, validationMessage } from "@/lib/validation/schemas";
-import { canManageOrganization, getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -19,7 +19,8 @@ async function authorize(context: Context) {
   if (templateData.error || !templateData.data) return { response: NextResponse.json({ error: "Template checklist tidak ditemukan." }, { status: 404 }) };
   const auth = await getAuthContext();
   if (auth.response) return { response: auth.response };
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) return { response: NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 }) };
+  const denied = await requirePermission(auth.context, "checklists.manage");
+  if (denied) return { response: denied };
   return { admin, id };
 }
 

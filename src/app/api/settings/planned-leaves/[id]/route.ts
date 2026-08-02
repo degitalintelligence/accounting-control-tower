@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, hasPermission, requirePermission } from "@/lib/authorization";
 import { plannedLeaveRejectSchema, plannedLeaveUpdateSchema, validationMessage } from "@/lib/validation/schemas";
 
 type Context = { params: Promise<{ id: string }> };
-const managerRoles = ["admin", "manager", "finance_manager", "accounting_manager"];
-
 export async function PATCH(request: NextRequest, context: Context) {
   const auth = await getAuthContext(); if (auth.response) return auth.response;
   const { id } = await context.params; const { admin, organizationId, userId } = auth.context;
@@ -14,7 +12,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   const existing = existingResult as unknown as { data: { id: string; profile_id: string; created_by: string; status: string } | null; error: { message: string } | null };
   if (!existing.data) return NextResponse.json({ error: "Planned leave tidak ditemukan." }, { status: 404 });
   if (!["pending", "rejected"].includes(existing.data.status)) return NextResponse.json({ error: "Approved leave tidak dapat diedit langsung.", code: "INVALID_PLANNED_LEAVE_TRANSITION" }, { status: 409 });
-  if (existing.data.created_by !== userId && !canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Tidak memiliki akses." }, { status: 403 });
+  if (existing.data.created_by !== userId && !(await hasPermission(auth.context, "planned_leaves.manage"))) return NextResponse.json({ error: "Tidak memiliki akses." }, { status: 403 });
   const update = { ...parsed.data, status: existing.data.status === "rejected" ? "pending" : existing.data.status, rejection_reason: null, updated_at: new Date().toISOString() };
   if (update.start_date && update.end_date && update.start_date > update.end_date) return NextResponse.json({ error: "Periode planned leave tidak valid." }, { status: 400 });
   const result = await admin.from("planned_leaves").update(update as never).eq("id", id).eq("organization_id", organizationId).select("id, organization_id, profile_id, start_date, end_date, status, reason, rejection_reason, created_by, approved_by, approved_at, created_at, updated_at").single();
@@ -28,7 +26,7 @@ export async function DELETE(request: NextRequest, context: Context) {
   const existingResult = await admin.from("planned_leaves").select("id, created_by, status").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).maybeSingle();
   const existing = existingResult as unknown as { data: { id: string; created_by: string; status: string } | null; error: { message: string } | null };
   if (!existing.data) return NextResponse.json({ error: "Planned leave tidak ditemukan." }, { status: 404 });
-  if (existing.data.created_by !== userId && !canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Tidak memiliki akses." }, { status: 403 });
+  if (existing.data.created_by !== userId && !(await hasPermission(auth.context, "planned_leaves.manage"))) return NextResponse.json({ error: "Tidak memiliki akses." }, { status: 403 });
   const body = existing.data.status === "approved" ? await request.json().catch(() => ({})) as { reason?: string } : {};
   if (existing.data.status === "approved" && !body.reason?.trim()) return NextResponse.json({ error: "Alasan pembatalan leave approved wajib diisi." }, { status: 400 });
   const result = await admin.rpc("cancel_planned_leave", { p_leave_id: id, p_actor_id: userId, p_reason: body.reason ?? null } as never);
@@ -39,6 +37,8 @@ export async function DELETE(request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   const auth = await getAuthContext(); if (auth.response) return auth.response;
   const { id } = await context.params; const { admin, userId } = auth.context;
+  const denied = await requirePermission(auth.context, "planned_leaves.approve");
+  if (denied) return denied;
   const action = request.nextUrl.searchParams.get("action");
   const args = { p_leave_id: id, p_actor_id: userId };
   if (action === "approve") { const result = await admin.rpc("approve_planned_leave", args as never); if (result.error) return NextResponse.json({ error: result.error.message, code: result.error.message }, { status: 409 }); return NextResponse.json({ data: result.data }); }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canManageOrganization, getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { organizationUpdateSchema, validationMessage } from "@/lib/validation/schemas";
 
 export async function GET() {
@@ -13,7 +13,8 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "organization.manage");
+  if (denied) return denied;
   const parsed = organizationUpdateSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const { timezone, currency, ...fields } = parsed.data;

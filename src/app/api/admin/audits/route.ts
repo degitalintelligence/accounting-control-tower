@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAuthContext, canAccessClient, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, canAccessClient, requirePermission } from "@/lib/authorization";
 
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "audit.view");
+  if (denied) return denied;
   const samples = (auth.context.admin as unknown as SupabaseClient).from("audit_samples").select("id, organization_id, auditor_id, work_item_id, rating, notes, sampled_at").eq("organization_id", auth.context.organizationId).order("sampled_at", { ascending: false });
   const result = await samples;
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
@@ -17,7 +18,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "audit.manage");
+  if (denied) return denied;
   const body = await request.json() as { action?: "sample" | "finding" | "auto_sample" | "update_finding"; id?: string; work_item_id?: string; rating?: string | null; notes?: string | null; audit_sample_id?: string; finding_type?: string; severity?: string; description?: string; evidence?: string | null; root_cause?: string | null; owner_id?: string | null; due_date?: string | null; corrective_task_id?: string | null; sample_size?: number; status?: string; resolution?: string | null };
   const admin = auth.context.admin;
   const db = admin as unknown as SupabaseClient;

@@ -3,6 +3,7 @@ import { assistReview } from "@/lib/ai/openrouter-client";
 import { logAudit } from "@/lib/audit/logger";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { aiReviewSchema, validationMessage, workItemIdQuerySchema } from "@/lib/validation/schemas";
+import { getAuthContext, hasPermission } from "@/lib/authorization";
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
 type Assignment = { profile_id: string; role: string; unassigned_at: string | null };
@@ -29,7 +30,7 @@ async function authorize(id: string): Promise<AuthContext | NextResponse> {
 
 function canUseAssistant(auth: AuthContext) {
   const assigned = auth.item.assignments.some((entry) => entry.profile_id === auth.userId && !entry.unassigned_at && ["checker", "approver"].includes(entry.role));
-  return assigned || ["admin", "manager", "finance_manager", "accounting_manager"].includes(auth.membershipRole);
+  return assigned;
 }
 
 function contextFor(auth: AuthContext, checklist: { label: string; is_required: boolean; value: string | null; file_id: string | null }[]) {
@@ -50,7 +51,9 @@ export async function GET(request: NextRequest) {
   const id = parsed.data.work_item_id;
   const auth = await authorize(id);
   if (auth instanceof NextResponse) return auth;
-  if (!canUseAssistant(auth)) return NextResponse.json({ error: "Anda tidak berwenang melihat AI Notes." }, { status: 403 });
+  const permissionContext = await getAuthContext();
+  if (permissionContext.response) return permissionContext.response;
+  if (!canUseAssistant(auth) && !(await hasPermission(permissionContext.context, "ai_review.view"))) return NextResponse.json({ error: "Anda tidak berwenang melihat AI Notes." }, { status: 403 });
   const result = await auth.admin.from("ai_review_notes").select("id, status, result, generated_by, reviewed_by, created_at, reviewed_at").eq("work_item_id", id).eq("organization_id", auth.organizationId).eq("client_id", auth.item.client_id).order("created_at", { ascending: false }).limit(10);
   const data = result as unknown as { data: unknown[] | null; error: ErrorShape | null };
   if (data.error) return NextResponse.json({ error: "Gagal mengambil AI Notes." }, { status: 500 });
@@ -64,9 +67,11 @@ export async function POST(request: NextRequest) {
   const id = body.work_item_id;
   const auth = await authorize(id);
   if (auth instanceof NextResponse) return auth;
-  if (!canUseAssistant(auth)) return NextResponse.json({ error: "Anda tidak berwenang menggunakan AI review assistant." }, { status: 403 });
+  const permissionContext = await getAuthContext();
+  if (permissionContext.response) return permissionContext.response;
+  if (!canUseAssistant(auth) && !(await hasPermission(permissionContext.context, "ai_review.use"))) return NextResponse.json({ error: "Anda tidak berwenang menggunakan AI review assistant." }, { status: 403 });
   if (body.action === "accept" || body.action === "reject") {
-    if (!["admin", "manager", "finance_manager", "accounting_manager"].includes(auth.membershipRole)) return NextResponse.json({ error: "Hanya manager yang dapat menerima atau menolak AI Notes." }, { status: 403 });
+    if (!(await hasPermission(permissionContext.context, "ai_review.decide"))) return NextResponse.json({ error: "Anda tidak memiliki permission untuk menyelesaikan AI Notes." }, { status: 403 });
     if (!body.note_id) return NextResponse.json({ error: "note_id wajib diisi." }, { status: 400 });
     const status = body.action === "accept" ? "accepted" : "rejected";
     const update = await auth.admin.from("ai_review_notes").update({ status, reviewed_by: auth.userId, reviewed_at: new Date().toISOString() } as never).eq("id", body.note_id).eq("work_item_id", id).eq("organization_id", auth.organizationId).eq("client_id", auth.item.client_id).eq("status", "pending").select("id, status").single();

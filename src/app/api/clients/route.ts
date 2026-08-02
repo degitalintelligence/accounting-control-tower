@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthContext, getAccessibleClients, hasRole } from "@/lib/authorization";
+import { getAuthContext, getAccessibleClients, requirePermission } from "@/lib/authorization";
 import { slugifyClientName } from "@/lib/clients";
 import { clientCreateSchema, validationMessage } from "@/lib/validation/schemas";
 
@@ -28,9 +28,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!hasRole(auth.context, ["admin", "manager", "finance_manager", "accounting_manager"])) {
-    return NextResponse.json({ error: "Akses hanya tersedia untuk manager atau admin." }, { status: 403 });
-  }
+  const denied = await requirePermission(auth.context, "clients.manage");
+  if (denied) return denied;
 
   const body = await request.json().catch(() => null);
   const parsed = clientCreateSchema.safeParse(body);

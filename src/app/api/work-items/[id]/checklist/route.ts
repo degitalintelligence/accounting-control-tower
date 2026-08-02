@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getUserOrganizationId } from "@/lib/checklists";
 import { checklistResponseSchema, validationMessage } from "@/lib/validation/schemas";
+import { getAuthContext, hasPermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -44,15 +45,12 @@ export async function PATCH(request: NextRequest, context: Context) {
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const body = parsed.data;
   if (!auth.templateId) return NextResponse.json({ error: "Work item belum memiliki template checklist." }, { status: 400 });
-  const organizationId = await getUserOrganizationId(auth.admin!, auth.userId);
-  const membership = organizationId
-    ? await auth.admin!.from("memberships").select("role").eq("profile_id", auth.userId).eq("organization_id", organizationId).eq("is_active", true).limit(1).maybeSingle()
-    : { data: null, error: null };
-  const membershipData = membership as unknown as { data: { role: string } | null };
   const templateRole = await auth.admin!.from("checklist_templates").select("target_role").eq("id", auth.templateId).single();
   const templateRoleData = templateRole as unknown as { data: { target_role: string } | null };
   const assigned = auth.assignments.some((entry) => entry.profile_id === auth.userId && !entry.unassigned_at && entry.role === templateRoleData.data?.target_role);
-  const manager = ["admin", "manager", "finance_manager", "accounting_manager"].includes(membershipData.data?.role ?? "");
+  const permissionContext = await getAuthContext();
+  if (permissionContext.response) return permissionContext.response;
+  const manager = await hasPermission(permissionContext.context, "work_items.manage");
   if (!assigned && !manager) return NextResponse.json({ error: "Anda tidak berwenang mengubah checklist ini." }, { status: 403 });
   const item = await auth.admin!.from("checklist_items").select("id, input_type, validation_rules").eq("id", body.checklist_item_id).eq("checklist_template_id", auth.templateId).single();
   const itemData = item as unknown as { data: { id: string; input_type: string; validation_rules: Record<string, unknown> } | null; error: { message: string } | null };

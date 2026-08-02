@@ -217,13 +217,68 @@ export function validateTaskExtraction(value: unknown): TaskExtraction {
   };
 }
 
-function parseProviderContent(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    throw new OpenRouterError("INVALID_RESPONSE", "Provider mengembalikan JSON yang tidak valid.");
+function extractBalancedJson(text: string): string | null {
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{" && text[start] !== "[") continue;
+    const stack: string[] = [];
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < text.length; index += 1) {
+      const character = text[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') {
+        inString = true;
+        continue;
+      }
+      if (character === "{" || character === "[") {
+        stack.push(character);
+        continue;
+      }
+      if (character !== "}" && character !== "]") continue;
+      const expected = character === "}" ? "{" : "[";
+      if (stack.pop() !== expected) break;
+      if (!stack.length) return text.slice(start, index + 1);
+    }
   }
+  return null;
+}
+
+export function extractJsonValue(value: string): unknown {
+  const text = value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const balanced = extractBalancedJson(text);
+    if (!balanced) throw new OpenRouterError("INVALID_RESPONSE", "Provider mengembalikan JSON yang tidak valid.");
+    try {
+      return JSON.parse(balanced);
+    } catch {
+      throw new OpenRouterError("INVALID_RESPONSE", "Provider mengembalikan JSON yang tidak valid.");
+    }
+  }
+}
+
+function parseProviderContent(value: unknown): unknown {
+  if (typeof value === "string") return extractJsonValue(value);
+  if (Array.isArray(value)) {
+    const text = value
+      .filter(isRecord)
+      .map((part) => part.text)
+      .filter((part): part is string => typeof part === "string")
+      .join("\n");
+    if (text) return extractJsonValue(text);
+  }
+  if (isRecord(value)) return value;
+  throw new OpenRouterError("INVALID_RESPONSE", "Content OpenRouter tidak valid.");
+}
+
+function isAbortError(error: unknown): boolean {
+  return isRecord(error) && error.name === "AbortError";
 }
 
 export async function extractTasksFromMessage(message: string): Promise<TaskExtraction> {
@@ -275,7 +330,7 @@ export async function extractTasksFromMessage(message: string): Promise<TaskExtr
     return validateTaskExtraction(parseProviderContent(messagePayload.content));
   } catch (error) {
     if (error instanceof OpenRouterError) throw error;
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (isAbortError(error)) {
       throw new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.");
     }
     throw new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
@@ -301,7 +356,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, schema: 
     return parseProviderContent(payload.choices[0].message.content);
   } catch (error) {
     if (error instanceof OpenRouterError) throw error;
-    if (error instanceof DOMException && error.name === "AbortError") throw new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.");
+    if (isAbortError(error)) throw new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.");
     throw new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
   } finally {
     clearTimeout(timeout);

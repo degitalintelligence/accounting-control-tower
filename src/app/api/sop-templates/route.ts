@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET() {
   const auth = await getAuthContext();
@@ -13,7 +13,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships[0]?.role)) return NextResponse.json({ error: "Akses hanya tersedia untuk manager." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "sop.manage");
+  if (denied) return denied;
   const body = await request.json() as { name?: string; description?: string | null; content?: string; effective_from?: string | null; review_date?: string | null };
   if (!body.name?.trim() || !body.content?.trim()) return NextResponse.json({ error: "name dan content wajib diisi." }, { status: 400 });
   const template = await auth.context.admin.from("sop_templates").insert({ organization_id: auth.context.organizationId, name: body.name.trim(), description: body.description ?? null } as never).select("id, organization_id, name, description, created_at, updated_at").single();

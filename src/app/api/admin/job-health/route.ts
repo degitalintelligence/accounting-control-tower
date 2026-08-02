@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { canManageOrganization, getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
-  if (!canManageOrganization(auth.context.memberships.find((item) => item.client_id === null)?.role)) return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+  const denied = await requirePermission(auth.context, "job_health.view");
+  if (denied) return denied;
   const db = auth.context.admin as unknown as SupabaseClient;
   const [outbox, dead, recurrence] = await Promise.all([
     db.from("outbox_events").select("status, event_type, retry_count, created_at, processed_at, last_error").eq("organization_id", auth.context.organizationId).order("created_at", { ascending: false }).limit(500),

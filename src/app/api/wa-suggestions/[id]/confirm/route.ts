@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { logAudit } from "@/lib/audit/logger";
 import { publishNotificationEvent } from "@/lib/notification/publisher";
 import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestions";
-import { canManageOrganization } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,10 +14,13 @@ export async function POST(_request: Request, context: RouteContext) {
   const actionType = requestBody.action_type === "project" || requestBody.action_type === "update_existing" || requestBody.action_type === "information_only" ? requestBody.action_type : "work_item";
   const targetWorkItemId = typeof requestBody.target_work_item_id === "string" ? requestBody.target_work_item_id : null;
   const duplicateAction = requestBody.duplicate_action === "allow" ? "allow" : "warn";
-  const { user, organizationId, role, admin } = await getSuggestionContext();
+  const { user, organizationId, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
-  if (!canManageOrganization(role)) return NextResponse.json({ error: "Hanya manager yang dapat mengonfirmasi suggestion." }, { status: 403 });
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "integrations.manage");
+  if (denied) return denied;
 
   const suggestionResult = await admin
     .from("action_suggestions")
