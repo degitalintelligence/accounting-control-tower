@@ -62,10 +62,8 @@ export async function login(formData: FormData) {
     return { error: "Email atau password salah." };
   }
 
-  if (!(await hasActiveMembership((await supabase.auth.getUser()).data.user?.id ?? ""))) {
-    await supabase.auth.signOut();
-    return { error: "Email atau password salah." };
-  }
+  const signedInUser = (await supabase.auth.getUser()).data.user;
+  if (!(await hasActiveMembership(signedInUser?.id ?? ""))) redirect("/onboarding/organization");
 
   revalidatePath("/", "layout");
   redirect("/dashboard");
@@ -108,10 +106,8 @@ export async function verifyEmailOtp(_previousState: AuthActionState, formData: 
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
-  if (error || !data.user || !(await hasActiveMembership(data.user.id))) {
-    if (data.user) await supabase.auth.signOut();
-    return { error: GENERIC_AUTH_ERROR, email };
-  }
+  if (error || !data.user) return { error: GENERIC_AUTH_ERROR, email };
+  if (!(await hasActiveMembership(data.user.id))) redirect("/onboarding/organization");
 
   revalidatePath("/", "layout");
   redirect(next);

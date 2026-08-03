@@ -1,9 +1,10 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import {
-  ChevronDown,
+  ChevronDown, Loader2,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,10 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const [switching, setSwitching] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const router = useRouter();
 
   const initials = user?.name
     ? user.name
@@ -65,7 +70,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           <span className="font-heading text-xl font-extrabold">OpsControl</span>
         </div>
 
-        <button type="button" className="control-interactive mb-3.5 flex w-full items-center gap-[9px] rounded-[10px] border border-white/10 bg-white/[.07] p-2.5 text-left hover:bg-white/10 focus-visible:outline-white">
+        <button type="button" onClick={() => setWorkspaceOpen((open) => !open)} aria-expanded={workspaceOpen} className="control-interactive mb-1 flex w-full items-center gap-[9px] rounded-[10px] border border-white/10 bg-white/[.07] p-2.5 text-left hover:bg-white/10 focus-visible:outline-white">
           <span className="flex size-[34px] shrink-0 items-center justify-center rounded-lg bg-[#c98f29] text-[11px] font-bold text-white">
             {orgInitials}
           </span>
@@ -75,8 +80,9 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             </span>
             {user?.organization_name && <strong className="block truncate text-[11px] font-semibold text-white">{user.organization_name}</strong>}
           </div>
-          <ChevronDown className="size-3.5 text-[#9da6a4]" />
+          {switching ? <Loader2 className="size-3.5 animate-spin text-[#9da6a4]" /> : <ChevronDown className="size-3.5 text-[#9da6a4]" />}
         </button>
+        {workspaceOpen && <div className="mb-3 rounded-lg border border-white/10 bg-slate-800 p-1.5">{user?.organizations?.map((organization) => <button key={organization.id} type="button" disabled={switching || organization.is_active} onClick={async () => { setSwitching(true); const organizationId = String(organization.id).trim(); const response = await fetch("/api/auth/organization", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organization_id: organizationId }) }); if (response.ok) { const profile = await fetch("/api/auth/me", { cache: "no-store" }); if (profile.ok) setUser(await profile.json()); window.dispatchEvent(new Event("workspace-changed")); router.refresh(); setWorkspaceOpen(false); } setSwitching(false); }} className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-white/10 disabled:cursor-default disabled:opacity-60"><span className="truncate">{organization.name}</span>{organization.is_active && <span className="ml-2 text-[10px] text-emerald-300">Aktif</span>}</button>)}</div>}
 
         {/* Navigation */}
         <nav className="scrollbar-subtle flex flex-1 flex-col gap-0.5 overflow-y-auto">

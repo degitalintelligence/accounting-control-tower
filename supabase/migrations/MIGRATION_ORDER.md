@@ -91,6 +91,8 @@ The current repository order is lexical by complete filename. Dependencies that 
 064_fix_action_suggestion_conflicts.sql
 062_granular_rbac_permissions.sql
 065_complete_work_item_ai_retry_isolation.sql
+066_organization_onboarding.sql
+067_multi_organization_context.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

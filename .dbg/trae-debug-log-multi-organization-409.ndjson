@@ -1,0 +1,1 @@
+{"sessionId": "multi-organization-409", "runId": "pre-fix", "hypothesisId": "A", "location": "src/app/api/organizations/route.ts:POST", "msg": "[DEBUG] Organization creation auth state", "data": {"authenticated": true}, "ts": 1785738354799}

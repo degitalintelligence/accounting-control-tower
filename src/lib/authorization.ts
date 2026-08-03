@@ -1,6 +1,9 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+
+const ACTIVE_ORGANIZATION_COOKIE = "acct_ctrl_active_organization";
 
 type AdminClient = ReturnType<typeof createServiceRoleClient>;
 
@@ -46,10 +49,8 @@ export async function getAuthContext(): Promise<
   }
 
   const organizationIds = [...new Set(memberships.data.map((membership) => membership.organization_id))];
-  if (organizationIds.length !== 1) {
-    return { response: NextResponse.json({ error: "User memiliki lebih dari satu organisasi aktif dan perlu memilih organisasi." }, { status: 409 }) };
-  }
-  const organizationId = organizationIds[0];
+  const selectedOrganizationId = (await cookies()).get(ACTIVE_ORGANIZATION_COOKIE)?.value;
+  const organizationId = selectedOrganizationId && organizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : organizationIds[0];
   const organizationMemberships = memberships.data.filter((membership) => membership.organization_id === organizationId);
   const clientIds = [...new Set(organizationMemberships.flatMap((membership) => membership.client_id ? [membership.client_id] : []))];
   return {

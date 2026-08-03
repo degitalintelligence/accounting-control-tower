@@ -8,6 +8,7 @@ export interface AuthUser {
   role: string; // membership role: admin | finance_manager | finance_staff
   organization_id: string;
   organization_name: string;
+  organizations: Array<{ id: string; name: string; slug: string; is_active: boolean }>;
 }
 
 interface AuthState {
