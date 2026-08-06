@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       const groups = await getWahaGroups(connection.data.session_id);
       return NextResponse.json({ groups });
     } catch (error) {
-      return NextResponse.json({ error: error instanceof WahaRequestError ? "WAHA tidak dapat memuat daftar grup." : "Discovery grup gagal." }, { status: error instanceof WahaRequestError ? 502 : 500 });
+      return NextResponse.json({ error: error instanceof WahaRequestError ? error.message : "Discovery grup gagal." }, { status: error instanceof WahaRequestError ? error.status : 500 });
     }
   }
   if (action === "discover-participants" && connectionId) {
@@ -86,8 +86,14 @@ export async function POST(request: Request) {
     if (existing.error || !existing.data) return NextResponse.json({ error: "Connection tidak ditemukan." }, { status: 404 });
     if (existing.data.provider === "waha" && existing.data.session_id) {
       try {
+        // #region debug-point A:delete-remote
+        void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "whatsapp-disconnected-delete", runId: "pre-fix", hypothesisId: "A", location: "route.ts:88", msg: "[DEBUG] Before WAHA session delete", data: { localStatus: existing.data.status, hasSessionId: Boolean(existing.data.session_id) } }) }).catch(() => {});
+        // #endregion
         await deleteWahaSession(existing.data.session_id);
       } catch (error) {
+        // #region debug-point B:delete-error
+        void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "whatsapp-disconnected-delete", runId: "pre-fix", hypothesisId: "B", location: "route.ts:93", msg: "[DEBUG] WAHA session delete failed", data: { upstreamStatus: error instanceof WahaRequestError ? error.status : "unknown", ignoredNotFound: error instanceof WahaRequestError && error.status === 404 } }) }).catch(() => {});
+        // #endregion
         if (!(error instanceof WahaRequestError && error.status === 404)) {
           return NextResponse.json({ error: "Session WAHA gagal dihapus. Connection belum dinonaktifkan." }, { status: 502 });
         }

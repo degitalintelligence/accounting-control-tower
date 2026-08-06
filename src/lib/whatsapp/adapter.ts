@@ -24,7 +24,17 @@ export async function wahaRequest<T>(path: string, init?: RequestInit): Promise<
   const headers = new Headers(init?.headers);
   headers.set("content-type", "application/json");
   if (config.apiKey) headers.set("x-api-key", config.apiKey);
-  const response = await fetch(`${config.baseUrl}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw new WahaRequestError(504, "WAHA tidak merespons dalam 15 detik.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) {
     const detail = await readWahaError(response);
     // #region debug-point A:waha-response
@@ -39,7 +49,17 @@ export async function wahaBinaryRequest(path: string, init?: RequestInit) {
   const config = getWahaConfig();
   const headers = new Headers(init?.headers);
   if (config.apiKey) headers.set("x-api-key", config.apiKey);
-  const response = await fetch(`${config.baseUrl}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw new WahaRequestError(504, "WAHA tidak merespons dalam 15 detik.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) {
     const detail = await readWahaError(response);
     throw new WahaRequestError(response.status, detail || `WAHA request gagal: ${response.status}`);
