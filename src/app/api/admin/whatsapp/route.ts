@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         // #region debug-point B:delete-error
         void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "whatsapp-disconnected-delete", runId: "pre-fix", hypothesisId: "B", location: "route.ts:93", msg: "[DEBUG] WAHA session delete failed", data: { upstreamStatus: error instanceof WahaRequestError ? error.status : "unknown", ignoredNotFound: error instanceof WahaRequestError && error.status === 404 } }) }).catch(() => {});
         // #endregion
-        if (!(error instanceof WahaRequestError && error.status === 404)) {
+        if (!(error instanceof WahaRequestError && error.status === 404) && existing.data.status !== "disconnected") {
           return NextResponse.json({ error: "Session WAHA gagal dihapus. Connection belum dinonaktifkan." }, { status: 502 });
         }
       }
