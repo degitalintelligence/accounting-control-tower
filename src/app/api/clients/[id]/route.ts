@@ -1,22 +1,31 @@
 import { NextResponse } from "next/server";
 import { getAuthContext, canAccessClient, requirePermission } from "@/lib/authorization";
+import { logAudit } from "@/lib/audit/logger";
 import { shouldUpdateClientSlug, slugifyClientName } from "@/lib/clients";
-import { clientUpdateSchema, validationMessage } from "@/lib/validation/schemas";
+import { clientArchiveSchema, clientUpdateSchema, validationMessage } from "@/lib/validation/schemas";
 
 
 async function getClientContext(id: string) {
   const auth = await getAuthContext();
   if (auth.response) return { response: auth.response } as const;
   if (!canAccessClient(auth.context, id)) return { response: NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 }) } as const;
+  return { context: auth.context } as const;
+}
+
+async function requireClientManager(id: string) {
+  const auth = await getClientContext(id);
+  if (auth.response) return auth;
   const denied = await requirePermission(auth.context, "clients.manage");
   if (denied) return { response: denied } as const;
-  return { context: auth.context } as const;
+  return auth;
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "clients.view");
+  if (denied) return denied;
   if (!canAccessClient(auth.context, id)) return NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 });
 
   const clients = auth.context.admin.from("clients") as unknown as {
@@ -42,20 +51,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   if (!Object.keys(parsed.data).length) return NextResponse.json({ error: "Tidak ada perubahan." }, { status: 400 });
 
-  let values: Record<string, unknown> = parsed.data;
-  if (parsed.data.name) {
-    const current = auth.context.admin.from("clients") as unknown as {
+  const current = auth.context.admin.from("clients") as unknown as {
       select: (fields: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { is: (column: string, value: null) => { maybeSingle: () => Promise<unknown> } } } };
-    };
-    const currentResult = await (current
+  };
+  const currentResult = await (current
       .select("name, slug")
       .eq("organization_id", auth.context.organizationId)
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle() as unknown as Promise<unknown>);
-    const currentData = currentResult as unknown as { data: { name: string; slug: string } | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
-    if (currentData.error) return NextResponse.json({ error: "Gagal memuat client." }, { status: 500 });
-    if (!currentData.data) return NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 });
+  const currentData = currentResult as unknown as { data: { name: string; slug: string } | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
+  if (currentData.error) return NextResponse.json({ error: "Gagal memuat client." }, { status: 500 });
+  if (!currentData.data) return NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 });
+  let values: Record<string, unknown> = parsed.data;
+  if (parsed.data.name) {
     if (shouldUpdateClientSlug(currentData.data.slug, currentData.data.name)) {
       values = { ...values, slug: slugifyClientName(parsed.data.name) };
     }
@@ -77,13 +86,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: data.error.code === "23505" ? "Slug client sudah digunakan." : "Gagal memperbarui client." }, { status: data.error.code === "23505" ? 409 : 500 });
   }
   if (!data.data) return NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 });
+  await logAudit(auth.context.admin, {
+    organizationId: auth.context.organizationId,
+    actorId: auth.context.userId,
+    action: "client.updated",
+    entityType: "client",
+    entityId: id,
+    oldValue: currentData.data,
+    newValue: data.data as Record<string, unknown>,
+  });
   return NextResponse.json({ data: data.data });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await getClientContext(id);
+  const auth = await requireClientManager(id);
   if (auth.response) return auth.response;
+  const body = await _request.json().catch(() => null);
+  const parsed = clientArchiveSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
+  const current = await auth.context.admin.from("clients").select("id, name, slug, timezone, deleted_at").eq("organization_id", auth.context.organizationId).eq("id", id).is("deleted_at", null).maybeSingle();
+  const currentData = current as unknown as { data: Record<string, unknown> | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
+  if (currentData.error) return NextResponse.json({ error: "Gagal memuat client." }, { status: 500 });
+  if (!currentData.data) return NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 });
   const clients = auth.context.admin.from("clients") as unknown as {
     update: (values: Record<string, unknown>) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { is: (column: string, value: null) => { select: (fields: string) => { maybeSingle: () => Promise<unknown> } } } } };
   };
@@ -97,5 +122,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const data = result as unknown as { data: unknown; error: { message: string; code?: string; hint?: string; details?: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal mengarsipkan client." }, { status: 500 });
   if (!data.data) return NextResponse.json({ error: "Client tidak ditemukan." }, { status: 404 });
+  await logAudit(auth.context.admin, {
+    organizationId: auth.context.organizationId,
+    actorId: auth.context.userId,
+    action: "client.archived",
+    entityType: "client",
+    entityId: id,
+    oldValue: currentData.data,
+    newValue: { deleted_at: new Date().toISOString(), reason: parsed.data.reason },
+  });
   return NextResponse.json({ data: data.data });
 }

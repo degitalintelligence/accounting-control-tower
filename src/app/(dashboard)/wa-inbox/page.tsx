@@ -1,6 +1,8 @@
 "use client";
 
-import { Inbox, MessageCircle, RefreshCw, Users } from "lucide-react";
+import { Inbox, MessageCircle, RefreshCw, Users, AlertTriangle, Clock3 } from "lucide-react";
+import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WaInboxItem } from "@/components/whatsapp/wa-inbox-item";
@@ -27,7 +29,8 @@ function ConversationMessages({ messages }: { messages: WaConversationMessage[] 
 }
 
 export default function WaInboxPage() {
-  const { items, summaries, messages, loading, error, refetch, confirmSuggestion, rejectSuggestion } = useWaInbox();
+  const [period, setPeriod] = useState("7d");
+  const { items, summaries, messages, loading, error, refetch, confirmSuggestion, rejectSuggestion, claimSuggestion, unclaimSuggestion, requestClarification } = useWaInbox();
   const suggestions = items.filter((item) => item.type === "suggestion");
 
   return (
@@ -39,18 +42,19 @@ export default function WaInboxPage() {
             <h1 className="text-2xl font-bold text-slate-900">WhatsApp Inbox</h1>
             <p className="mt-1 text-sm text-slate-500">Tinjau pesan dan saran tugas dari grup WhatsApp yang terhubung.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => void refetch({ period })} disabled={loading}>
             <RefreshCw className={loading ? "animate-spin" : ""} /> Muat ulang
           </Button>
         </div>
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"><span className="text-sm font-medium text-slate-700">Rentang aktivitas</span><Select value={period} onValueChange={(value) => { const next = value ?? "7d"; setPeriod(next); void refetch({ period: next }); }}><SelectTrigger className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="24h">24 jam terakhir</SelectItem><SelectItem value="3d">3 hari terakhir</SelectItem><SelectItem value="7d">7 hari terakhir</SelectItem><SelectItem value="14d">14 hari terakhir</SelectItem><SelectItem value="30d">30 hari terakhir</SelectItem></SelectContent></Select></div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-medium text-amber-700">Menunggu tindakan</p><p className="mt-1 text-2xl font-bold text-amber-900">{suggestions.length}</p></div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-medium text-emerald-700">Pesan 7 hari</p><p className="mt-1 text-2xl font-bold text-emerald-900">{messages.length}</p></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Percakapan aktif</p><p className="mt-1 text-2xl font-bold text-slate-900">{summaries.length}</p></div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="flex items-center gap-2 text-xs font-medium text-amber-700"><AlertTriangle className="size-4" />Perlu direview</div><p className="mt-1 text-2xl font-bold text-amber-900">{suggestions.length}</p><p className="mt-1 text-xs text-amber-700">Saran AI yang menunggu keputusan manusia</p></div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><div className="flex items-center gap-2 text-xs font-medium text-blue-700"><Clock3 className="size-4" />Aktivitas terbaru</div><p className="mt-1 text-2xl font-bold text-blue-900">{messages.length}</p><p className="mt-1 text-xs text-blue-700">Pesan dalam periode yang dipilih</p></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 text-xs font-medium text-slate-500"><Users className="size-4" />Grup aktif</div><p className="mt-1 text-2xl font-bold text-slate-900">{summaries.length}</p><p className="mt-1 text-xs text-slate-500">Grup dengan percakapan terbaru</p></div>
         </div>
 
-        {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-700"><p>{error}</p><Button variant="outline" size="sm" className="mt-3" onClick={refetch}>Coba lagi</Button></div>}
+        {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-700"><p>{error}</p><Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch({ period })}>Coba lagi</Button></div>}
 
         {loading ? (
           <div className="space-y-3">{[1, 2, 3].map((item) => <div key={item} className="rounded-xl border border-slate-200 bg-white p-5"><Skeleton className="mb-4 h-4 w-1/3" /><Skeleton className="mb-3 h-4 w-full" /><Skeleton className="h-20 w-full" /></div>)}</div>
@@ -59,7 +63,9 @@ export default function WaInboxPage() {
         ) : (
           <div className="space-y-8">
             <section className="space-y-3">
-              <div><h2 className="text-lg font-bold text-slate-900">Ringkasan percakapan</h2><p className="text-sm text-slate-500">Ringkasan deterministik dari pesan grup 7 hari terakhir.</p></div>
+              <div><h2 className="text-lg font-bold text-slate-900">Review queue</h2><p className="text-sm text-slate-500">Prioritaskan saran tugas baru sebelum membaca seluruh percakapan.</p></div>
+              {suggestions.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Tidak ada tugas baru yang menunggu review.</div> : suggestions.map((item) => <WaInboxItem key={item.id} item={item} onConfirm={confirmSuggestion} onReject={rejectSuggestion} onClaim={claimSuggestion} onUnclaim={unclaimSuggestion} onClarify={requestClarification} />)}
+              <div className="pt-4"><h2 className="text-lg font-bold text-slate-900">Ringkasan percakapan</h2><p className="text-sm text-slate-500">Konteks grup untuk membantu keputusan review.</p></div>
               {summaries.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Belum ada percakapan grup dalam 7 hari terakhir.</div> : summaries.map((summary) => (
                 <div key={summary.groupId} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-900">{summary.groupName}</h3><p className="mt-1 text-xs text-slate-500">{summary.messageCount} pesan · {summary.participantCount} pengirim · terakhir {formatDate(summary.latestReceivedAt)}</p></div><Users className="size-5 text-blue-600" /></div>
@@ -72,7 +78,6 @@ export default function WaInboxPage() {
               ))}
             </section>
             <section className="space-y-3"><div><h2 className="text-lg font-bold text-slate-900">Pesan grup</h2><p className="text-sm text-slate-500">Pesan terbaru dipisahkan dari saran tindakan.</p></div>{messages.length > 0 ? <ConversationMessages messages={messages} /> : <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Belum ada pesan untuk ditampilkan.</div>}</section>
-            <section className="space-y-3"><div><h2 className="text-lg font-bold text-slate-900">Saran tindakan</h2><p className="text-sm text-slate-500">Saran AI tetap memerlukan konfirmasi manusia.</p></div>{suggestions.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Tidak ada saran tindakan yang menunggu konfirmasi.</div> : suggestions.map((item) => <WaInboxItem key={item.id} item={item} onConfirm={confirmSuggestion} onReject={rejectSuggestion} />)}</section>
           </div>
         )}
 

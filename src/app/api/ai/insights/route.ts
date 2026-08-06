@@ -49,7 +49,10 @@ export async function GET() {
   if (!isOrgWide) query = query.in("client_id", clientIds);
   const result = await query;
   const rows = result as unknown as { data: WorkItemMetric[] | null; error: ErrorShape | null };
-  if (rows.error) return NextResponse.json({ error: "Gagal mengambil metrik dashboard." }, { status: 500 });
+  if (rows.error) {
+    console.error("[ai-insights] metrics query failed", { message: rows.error.message, code: rows.error.code, hint: rows.error.hint, details: rows.error.details });
+    return NextResponse.json({ error: "Gagal mengambil metrik dashboard." }, { status: 500 });
+  }
 
   const metrics = { current: aggregate(rows.data ?? [], currentStart, today, now), previous: aggregate(rows.data ?? [], previousStart, currentStart, now) };
   let insights: DashboardInsights;
@@ -60,6 +63,7 @@ export async function GET() {
     console.error("[ai-insights] provider failure", {
       code: aiError?.code ?? "UNKNOWN",
       status: aiError?.status ?? null,
+      message: aiError?.message ?? (error instanceof Error ? error.message : "Unknown provider error"),
     });
     return NextResponse.json({ error: "Insight tidak tersedia saat ini." }, { status: 503 });
   }

@@ -15,6 +15,7 @@ export function createQueryMock(result: QueryResult) {
     eq: vi.fn(),
     is: vi.fn(),
     limit: vi.fn(),
+    order: vi.fn(),
     in: vi.fn(),
     select: vi.fn(),
     single: vi.fn(),
@@ -24,6 +25,7 @@ export function createQueryMock(result: QueryResult) {
   query.eq.mockReturnValue(query);
   query.is.mockReturnValue(query);
   query.limit.mockReturnValue(query);
+  query.order.mockReturnValue(query);
   query.in.mockReturnValue(query);
   query.select.mockReturnValue(query);
   query.single.mockReturnValue(query);

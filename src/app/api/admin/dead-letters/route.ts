@@ -6,9 +6,10 @@ export async function GET() {
   if (auth.response) return auth.response;
   const denied = await requirePermission(auth.context, "dead_letters.view");
   if (denied) return denied;
-  const result = await auth.context.admin.from("dead_letter_events").select("id, organization_id, outbox_event_id, event_type, payload, error_message, last_error, status, retry_count, last_retry_at, replayed_at, created_at").eq("organization_id", auth.context.organizationId).order("created_at", { ascending: false }).limit(100);
+  const result = await auth.context.admin.from("dead_letter_events").select("id, event_type, status, retry_count, last_retry_at, replayed_at, created_at").eq("organization_id", auth.context.organizationId).order("created_at", { ascending: false }).limit(100);
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
-  return NextResponse.json(result.data ?? []);
+  const data = (result.data ?? []).map((item: { id: string; event_type: string; status: string; retry_count: number; last_retry_at: string | null; replayed_at: string | null; created_at: string }) => ({ id: item.id, event_type: item.event_type, status: item.status, retry_count: item.retry_count, last_retry_at: item.last_retry_at, replayed_at: item.replayed_at, created_at: item.created_at }));
+  return NextResponse.json(data);
 }
 
 export async function POST(request: Request) {

@@ -7,11 +7,18 @@ export async function GET() {
   if (auth.response) return auth.response;
   const denied = await requirePermission(auth.context, "audit.view");
   if (denied) return denied;
-  const samples = (auth.context.admin as unknown as SupabaseClient).from("audit_samples").select("id, organization_id, auditor_id, work_item_id, rating, notes, sampled_at").eq("organization_id", auth.context.organizationId).order("sampled_at", { ascending: false });
+  const db = auth.context.admin as unknown as SupabaseClient;
+  let workItems = db.from("work_items").select("id, client_id").eq("organization_id", auth.context.organizationId);
+  if (!auth.context.isOrgWide) workItems = workItems.in("client_id", auth.context.clientIds);
+  const workItemResult = await workItems;
+  if (workItemResult.error) return NextResponse.json({ error: workItemResult.error.message }, { status: 400 });
+  const workItemIds = (workItemResult.data ?? []).map((item: { id: string }) => item.id);
+  if (!workItemIds.length) return NextResponse.json({ samples: [], findings: [] });
+  const samples = db.from("audit_samples").select("id, organization_id, auditor_id, work_item_id, rating, notes, sampled_at").eq("organization_id", auth.context.organizationId).in("work_item_id", workItemIds).order("sampled_at", { ascending: false });
   const result = await samples;
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
-  const workItemIds = (result.data ?? []).map((item: { work_item_id: string }) => item.work_item_id);
-  const findings = workItemIds.length ? await auth.context.admin.from("audit_findings").select("id, client_id, audit_sample_id, finding_type, severity, description, evidence, root_cause, owner_id, due_date, corrective_task_id, status, resolution, resolved_by, resolved_at, created_at, updated_at").in("audit_sample_id", (result.data ?? []).map((item: { id: string }) => item.id)) : { data: [], error: null };
+  const findings = result.data?.length ? await db.from("audit_findings").select("id, client_id, audit_sample_id, finding_type, severity, description, evidence, root_cause, owner_id, due_date, corrective_task_id, status, resolution, resolved_by, resolved_at, created_at, updated_at").in("audit_sample_id", (result.data ?? []).map((item: { id: string }) => item.id)) : { data: [], error: null };
+  if (findings.error) return NextResponse.json({ error: findings.error.message }, { status: 400 });
   return NextResponse.json({ samples: result.data ?? [], findings: findings.data ?? [] });
 }
 

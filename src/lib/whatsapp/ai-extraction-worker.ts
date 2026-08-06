@@ -324,10 +324,22 @@ async function enqueueAiExtraction(admin: WorkerClient, organizationId: string, 
   if (outbox.error) throw new Error(outbox.error.message);
 }
 
+async function resolveClarificationResponse(admin: WorkerClient, organizationId: string, messageId: string) {
+  const result = await admin.rpc("resolve_action_suggestion_clarification" as never, {
+    p_organization_id: organizationId,
+    p_message_id: messageId,
+  } as never);
+  const resolved = result as unknown as { data: Array<{ suggestion_id: string; review_state: string }> | null; error: { message: string } | null };
+  if (resolved.error) throw new Error(resolved.error.message);
+  return resolved.data?.[0] ?? null;
+}
+
 async function processReceivedMessage(admin: WorkerClient, row: JobRow) {
   const messageId = typeof row.payload.message_id === "string" ? row.payload.message_id : null;
   if (!messageId) throw new Error("Payload pesan WhatsApp tidak lengkap.");
   const message = await loadMessage(admin, messageId, row.organization_id);
+  const clarification = await resolveClarificationResponse(admin, row.organization_id, message.id);
+  if (clarification) return;
   const content = message.content;
   const command = parseExplicitCommand(content);
   const workItemCommand = parseExplicitWorkItemCommand(content);

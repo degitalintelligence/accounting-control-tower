@@ -13,12 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { ActionType } from "@/hooks/use-wa-inbox";
 import { useI18n } from "@/components/i18n-provider";
 import { formatDate } from "@/lib/i18n";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface WaInboxItemProps {
   item: WaInboxItemData;
   busy?: boolean;
   onConfirm: (id: string, actionType: ActionType, clientId?: string, targetWorkItemId?: string, duplicateAction?: "warn" | "allow") => Promise<{ duplicateWarning: WaInboxItemData["duplicateWarning"] }>;
-  onReject: (id: string) => void;
+  onReject: (id: string, reason: string) => Promise<void>;
+  onClaim: (id: string) => Promise<void>;
+  onUnclaim: (id: string) => Promise<void>;
+  onClarify: (id: string, question: string) => Promise<void>;
 }
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -34,7 +38,7 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
-export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInboxItemProps) {
+export function WaInboxItem({ item, busy = false, onConfirm, onReject, onClaim, onUnclaim, onClarify }: WaInboxItemProps) {
   const { locale, t } = useI18n();
   const isSuggestion = item.type === "suggestion";
   const [clientId, setClientId] = useState(item.suggestedClientId);
@@ -42,6 +46,12 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
   const [actionType, setActionType] = useState<ActionType>(item.actionType ?? "work_item");
   const [targetWorkItemId, setTargetWorkItemId] = useState(item.targetWorkItemId ?? "");
   const [workItems, setWorkItems] = useState<Array<{ id: string; title: string; status: string }>>([]);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [clarifyOpen, setClarifyOpen] = useState(false);
+  const [clarificationQuestion, setClarificationQuestion] = useState("");
 
   useEffect(() => {
     if (actionType !== "update_existing" || !clientId) return;
@@ -77,6 +87,7 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
         </div>
 
         <p className="border-l-2 border-slate-200 pl-3 text-sm italic leading-6 text-slate-600">“{item.message}”</p>
+        {isSuggestion && (item.evidenceText || item.evidenceMessageIds.length > 0) && <div className="rounded-lg border border-blue-100 bg-blue-50 p-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-blue-900">Evidence AI</p><Button type="button" variant="ghost" size="sm" onClick={() => setEvidenceOpen((current) => !current)} className="h-7 text-xs text-blue-700">{evidenceOpen ? "Sembunyikan" : `Lihat evidence (${item.evidenceMessageIds.length || 1})`}</Button></div>{evidenceOpen && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-950">{item.evidenceText ?? item.message}</p>}</div>}
 
         {isSuggestion ? (
           <div className="space-y-3 rounded-lg bg-slate-50 p-4">
@@ -90,37 +101,27 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               <div><span className="block text-slate-400">{t("whatsapp.due")}</span><span className="font-medium text-slate-800">{item.dueAt ? formatDate(item.dueAt, locale, { day: "numeric", month: "short" }) : t("common.notAvailable")}</span></div>
               <div><span className="block text-slate-400">{t("whatsapp.aiConfidence")}</span><ConfidenceBar value={item.confidence} /></div>
             </div>
-            <ClientSelect id={`wa-client-${item.id}`} value={clientId || item.suggestedClientId} onChange={setClientId} />
-            <div className="space-y-1.5">
-              <Label htmlFor={`wa-action-${item.id}`}>Tindakan</Label>
-              <Select value={actionType} onValueChange={(value) => setActionType((value ?? "work_item") as ActionType)}>
-                <SelectTrigger id={`wa-action-${item.id}`} className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="work_item">{t("whatsapp.workItem")}</SelectItem>
-                  <SelectItem value="project">{t("whatsapp.project")}</SelectItem>
-                  <SelectItem value="update_existing">{t("whatsapp.updateExisting")}</SelectItem>
-                  <SelectItem value="information_only">{t("whatsapp.informationOnly")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {actionType === "update_existing" && <div className="space-y-1.5"><Label htmlFor={`wa-target-${item.id}`}>Work Item tujuan</Label><Select value={targetWorkItemId || null} onValueChange={(value) => setTargetWorkItemId(value ?? "")}><SelectTrigger id={`wa-target-${item.id}`} className="w-full"><SelectValue placeholder="Pilih work item..." /></SelectTrigger><SelectContent>{workItems.map((workItem) => <SelectItem key={workItem.id} value={workItem.id}>{workItem.title} · {workItem.status}</SelectItem>)}</SelectContent></Select></div>}
+            {item.reviewState === "claimed" && <><ClientSelect id={`wa-client-${item.id}`} value={clientId || item.suggestedClientId} onChange={setClientId} /><div className="space-y-1.5"><Label htmlFor={`wa-action-${item.id}`}>Tindakan</Label><Select value={actionType} onValueChange={(value) => setActionType((value ?? "work_item") as ActionType)}><SelectTrigger id={`wa-action-${item.id}`} className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="work_item">{t("whatsapp.workItem")}</SelectItem><SelectItem value="project">{t("whatsapp.project")}</SelectItem><SelectItem value="update_existing">{t("whatsapp.updateExisting")}</SelectItem><SelectItem value="information_only">{t("whatsapp.informationOnly")}</SelectItem></SelectContent></Select></div>{actionType === "update_existing" && <div className="space-y-1.5"><Label htmlFor={`wa-target-${item.id}`}>Work Item tujuan</Label><Select value={targetWorkItemId || null} onValueChange={(value) => setTargetWorkItemId(value ?? "")}><SelectTrigger id={`wa-target-${item.id}`} className="w-full"><SelectValue placeholder="Pilih work item..." /></SelectTrigger><SelectContent>{workItems.map((workItem) => <SelectItem key={workItem.id} value={workItem.id}>{workItem.title} · {workItem.status}</SelectItem>)}</SelectContent></Select></div>}</>}
             {duplicateWarning && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="font-semibold">Pekerjaan aktif yang sama ditemukan</p><ul className="mt-2 list-disc pl-5">{duplicateWarning.duplicates.map((duplicate) => <li key={duplicate.id}>{duplicate.title} — {duplicate.status}</li>)}</ul></div>}
           </div>
         ) : (
           <p className="text-sm text-slate-500">{t("whatsapp.noSuggestion")}</p>
         )}
 
+        {isSuggestion && item.reviewState === "claimed" && <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">Sedang Anda review · claim berakhir {item.claimExpiresAt ? formatDate(item.claimExpiresAt, locale, { hour: "2-digit", minute: "2-digit" }) : ""}</div>}
+        {isSuggestion && item.reviewState === "needs_clarification" && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><p className="font-semibold">Menunggu klarifikasi</p><p className="mt-1">{item.clarificationQuestion ?? "Pertanyaan klarifikasi sudah dikirim ke grup."}</p></div>}
+        {isSuggestion && item.reviewState === "unclaimed" && item.clarificationResponseText && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"><p className="font-semibold">Jawaban klarifikasi diterima</p><p className="mt-1">{item.clarificationResponseText}</p><p className="mt-2 text-xs text-emerald-700">Claim item ini untuk meninjau ulang jawaban dan mengambil keputusan.</p></div>}
+        {isSuggestion && item.reviewState !== "claimed" && <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">Ambil item ini untuk membuka kontrol review dan keputusan.</div>}
+        {isSuggestion && claiming && <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">Mengambil item untuk direview...</div>}
         {isSuggestion && (
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => onReject(item.id)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
-              <X /> {t("common.reject")}
-            </Button>
-              <Button size="sm" disabled={busy || (actionType !== "information_only" && !(clientId || item.suggestedClientId)) || (actionType === "update_existing" && !targetWorkItemId)} onClick={async () => { const result = await onConfirm(item.id, actionType, clientId || item.suggestedClientId, targetWorkItemId || undefined, duplicateWarning ? "allow" : "warn"); setDuplicateWarning(result.duplicateWarning); }} className="bg-emerald-600 text-white hover:bg-emerald-700">
-              <Check /> {duplicateWarning ? t("whatsapp.processAnyway") : actionType === "information_only" ? t("whatsapp.markInformation") : actionType === "update_existing" ? t("whatsapp.confirmUpdate") : actionType === "project" ? t("whatsapp.confirmProject") : t("whatsapp.confirmTask")}
-            </Button>
+            {item.reviewState === "unclaimed" && <Button variant="outline" size="sm" disabled={busy || claiming} onClick={async () => { setClaiming(true); try { await onClaim(item.id); } finally { setClaiming(false); } }}>{claiming ? "Mengambil..." : "Ambil untuk direview"}</Button>}
+            {item.reviewState === "claimed" && <><Button variant="ghost" size="sm" disabled={busy} onClick={() => void onUnclaim(item.id)}>Lepas claim</Button><Button variant="outline" size="sm" disabled={busy} onClick={() => setClarifyOpen(true)}>Minta klarifikasi</Button><Button variant="outline" size="sm" disabled={busy} onClick={() => setRejectOpen(true)} className="text-red-600 hover:bg-red-50 hover:text-red-700"><X /> {t("common.reject")}</Button><Button size="sm" disabled={busy || (actionType !== "information_only" && !(clientId || item.suggestedClientId)) || (actionType === "update_existing" && !targetWorkItemId)} onClick={async () => { const result = await onConfirm(item.id, actionType, clientId || item.suggestedClientId, targetWorkItemId || undefined, duplicateWarning ? "allow" : "warn"); setDuplicateWarning(result.duplicateWarning); }} className="bg-emerald-600 text-white hover:bg-emerald-700"><Check /> {duplicateWarning ? t("whatsapp.processAnyway") : actionType === "information_only" ? t("whatsapp.markInformation") : actionType === "update_existing" ? t("whatsapp.confirmUpdate") : actionType === "project" ? t("whatsapp.confirmProject") : t("whatsapp.confirmTask")}</Button></>}
           </div>
         )}
       </CardContent>
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent><DialogHeader><DialogTitle>Tolak saran AI</DialogTitle><DialogDescription>Alasan penolakan wajib diisi agar keputusan dapat ditelusuri.</DialogDescription></DialogHeader><textarea className="min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-blue-500" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Contoh: informasi saja, duplicate, atau evidence tidak cukup..." maxLength={5000} /><DialogFooter><Button type="button" variant="outline" onClick={() => setRejectOpen(false)}>Batal</Button><Button type="button" variant="destructive" disabled={rejectReason.trim().length < 5} onClick={async () => { await onReject(item.id, rejectReason.trim()); setRejectOpen(false); setRejectReason(""); }}>Tolak</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={clarifyOpen} onOpenChange={setClarifyOpen}><DialogContent><DialogHeader><DialogTitle>Minta klarifikasi</DialogTitle><DialogDescription>Pertanyaan ini akan dikirim ke grup WhatsApp sumber.</DialogDescription></DialogHeader><textarea className="min-h-28 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-blue-500" value={clarificationQuestion} onChange={(event) => setClarificationQuestion(event.target.value)} placeholder="Contoh: Mohon konfirmasi client, periode, dan PIC pekerjaan ini." maxLength={2000} /><p className="text-right text-xs text-slate-400">{clarificationQuestion.length}/2000</p><DialogFooter><Button type="button" variant="outline" onClick={() => setClarifyOpen(false)}>Batal</Button><Button type="button" disabled={clarificationQuestion.trim().length < 5} onClick={async () => { await onClarify(item.id, clarificationQuestion.trim()); setClarifyOpen(false); setClarificationQuestion(""); }}>Kirim klarifikasi</Button></DialogFooter></DialogContent></Dialog>
     </Card>
   );
 }

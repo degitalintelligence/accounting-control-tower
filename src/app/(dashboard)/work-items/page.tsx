@@ -27,6 +27,7 @@ function WorkItemsPageContent() {
   const search = searchParams.get("search") ?? undefined;
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
   const activeTab = searchParams.get("tab") ?? "all";
+  const reviewFilter = searchParams.get("filter") === "review" ? "review" as const : undefined;
   const view = searchParams.get("view") ?? "list";
 
   const assigneeId = activeTab === "mine" ? user?.id : undefined;
@@ -37,6 +38,7 @@ function WorkItemsPageContent() {
     type: type ?? undefined,
     priority: priority ?? undefined,
     search,
+    filter: reviewFilter,
     assignee_id: assigneeId,
     overdue_only: overdueOnly,
     page,

@@ -69,6 +69,8 @@ export function useDashboard() {
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [sections, setSections] = useState<DashboardSections | null>(null);
   const [loading, setLoading] = useState(true);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightError, setInsightError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [partialFailures, setPartialFailures] = useState<string[]>([]);
 
@@ -83,10 +85,9 @@ export function useDashboard() {
         fetch("/api/dashboard/kpis"),
         fetch("/api/dashboard/upcoming-deadlines"),
         fetch("/api/dashboard/activity-feed"),
-        fetch("/api/ai/insights"),
         fetch("/api/dashboard/sections"),
       ]);
-      const names = ["statistik", "KPI", "deadline", "aktivitas", "insight", "bagian dashboard"];
+      const names = ["statistik", "KPI", "deadline", "aktivitas", "bagian dashboard"];
       const failed = responses.flatMap((result, index) => result.status === "rejected" || (result.value && !result.value.ok) ? [names[index]] : []);
       setPartialFailures(failed);
       if (failed.length === responses.length) throw new Error("Data dashboard belum dapat dimuat.");
@@ -96,12 +97,26 @@ export function useDashboard() {
       setKpis(data[1] as DashboardKpis | null);
       setDeadlines((data[2] ?? []) as DeadlineItem[]);
       setActivity((data[3] ?? []) as ActivityItem[]);
-      setInsights((data[4] as { insights?: DashboardInsights } | null)?.insights ?? null);
-      setSections(data[5] as DashboardSections | null);
+      setSections(data[4] as DashboardSections | null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const generateInsights = useCallback(async () => {
+    setInsightLoading(true);
+    setInsightError(null);
+    try {
+      const response = await fetch("/api/ai/insights");
+      const data = await response.json() as { insights?: DashboardInsights; error?: string };
+      if (!response.ok || !data.insights) throw new Error(data.error ?? "Insight tidak tersedia saat ini.");
+      setInsights(data.insights);
+    } catch (err) {
+      setInsightError(err instanceof Error ? err.message : "Insight tidak tersedia saat ini.");
+    } finally {
+      setInsightLoading(false);
     }
   }, []);
 
@@ -116,5 +131,5 @@ export function useDashboard() {
     };
   }, [fetchAll]);
 
-  return { stats, kpis, deadlines, activity, insights, sections, loading, error, partialFailures, refetch: fetchAll };
+  return { stats, kpis, deadlines, activity, insights, sections, loading, error, partialFailures, insightLoading, insightError, generateInsights, refetch: fetchAll };
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { holidayHandlingValues, validateRRule } from "@/lib/recurrence/rules";
+import { isValidIanaTimezone } from "@/lib/clients";
 
 const uuid = z.string().uuid();
 const nullableUuid = uuid.nullable().optional();
@@ -16,12 +17,16 @@ export const recurrenceRuleSchema = z.object({
 
 export const clientCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  timezone: z.string().trim().min(1).max(100).optional(),
+  timezone: z.string().trim().min(1).max(100).refine(isValidIanaTimezone, "Timezone IANA tidak valid.").optional(),
 }).strict();
 
 export const clientUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
-  timezone: z.string().trim().min(1).max(100).optional(),
+  timezone: z.string().trim().min(1).max(100).refine(isValidIanaTimezone, "Timezone IANA tidak valid.").optional(),
+}).strict();
+
+export const clientArchiveSchema = z.object({
+  reason: z.string().trim().min(1, "Alasan wajib diisi.").max(5000),
 }).strict();
 
 export const organizationUpdateSchema = z.object({

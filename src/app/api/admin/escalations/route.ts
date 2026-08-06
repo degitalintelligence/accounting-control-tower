@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthContext, canAccessOptionalClient, requirePermission } from "@/lib/authorization";
+import { validateEscalationRules } from "@/lib/validation/policy";
 
 export async function GET() {
   const auth = await getAuthContext();
@@ -22,7 +23,9 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const body = await request.json() as { id?: string; name?: string; description?: string | null; client_id?: string | null; rules?: unknown; is_active?: boolean };
   if (!body.name?.trim() || !canAccessOptionalClient(auth.context, body.client_id)) return NextResponse.json({ error: "Nama dan client yang valid wajib diisi." }, { status: 400 });
-  const values = { organization_id: auth.context.organizationId, client_id: body.client_id ?? null, name: body.name.trim(), description: body.description ?? null, rules: body.rules ?? [], is_active: body.is_active ?? true, updated_at: new Date().toISOString() };
+  const validation = validateEscalationRules(body.rules);
+  if (validation.error) return NextResponse.json({ error: validation.error }, { status: 400 });
+  const values = { organization_id: auth.context.organizationId, client_id: body.client_id ?? null, name: body.name.trim(), description: body.description ?? null, rules: validation.rules, is_active: body.is_active ?? true, updated_at: new Date().toISOString() };
   const db = auth.context.admin as unknown as SupabaseClient;
   const result = body.id ? await db.from("escalation_policies").update(values).eq("id", body.id).eq("organization_id", auth.context.organizationId).select("id, client_id, name, description, rules, is_active, created_at, updated_at").single() : await db.from("escalation_policies").insert(values).select("id, client_id, name, description, rules, is_active, created_at, updated_at").single();
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });

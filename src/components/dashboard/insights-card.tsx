@@ -1,12 +1,12 @@
 "use client";
 
-import { BrainCircuit, CheckCircle2, Flag } from "lucide-react";
+import { BrainCircuit, CheckCircle2, Flag, Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { DashboardInsights } from "@/hooks/use-dashboard";
 import { useI18n } from "@/components/i18n-provider";
 
-export function InsightsCard({ insights }: { insights: DashboardInsights | null }) {
+export function InsightsCard({ insights, loading, error, onGenerate }: { insights: DashboardInsights | null; loading: boolean; error: string | null; onGenerate: () => void }) {
   const { t } = useI18n();
-  if (!insights) return null;
 
   return (
     <section className="bg-white border border-[#dfe4e1] rounded-xl shadow-[0_1px_2px_rgba(24,32,31,.04),0_8px_30px_rgba(24,32,31,.045)]">
@@ -15,9 +15,12 @@ export function InsightsCard({ insights }: { insights: DashboardInsights | null 
         <div>
           <h2 className="text-sm font-bold text-[#1a2421]">{t("dashboard.weeklyInsight")}</h2>
           <p className="text-[10px] text-[#8a9490]">{t("dashboard.weeklyInsightDescription")}</p>
+          {!insights && !loading && !error && <Button type="button" size="sm" variant="outline" onClick={onGenerate} className="mt-2 gap-2"><BrainCircuit className="size-3.5" />Generate insight</Button>}
         </div>
       </div>
-      <div className="p-4 space-y-4">
+      {loading && <div className="flex items-center gap-2 p-4 text-sm text-slate-500"><Loader2 className="size-4 animate-spin" />Generating insight...</div>}
+      {error && <div role="alert" className="flex items-center justify-between gap-3 p-4 text-sm text-red-700"><span>{error}</span><Button type="button" size="sm" variant="outline" onClick={onGenerate} className="shrink-0 gap-2"><RefreshCw className="size-3.5" />Retry</Button></div>}
+      {insights && <div className="p-4 space-y-4">
         <p className="text-sm leading-6 text-[#4a5a55]">{insights.summary}</p>
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -44,7 +47,7 @@ export function InsightsCard({ insights }: { insights: DashboardInsights | null 
             ))}
           </ul>
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

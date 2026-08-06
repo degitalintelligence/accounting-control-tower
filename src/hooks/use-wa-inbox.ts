@@ -18,6 +18,15 @@ export interface WaInboxItemData {
   type: "suggestion" | "message";
   actionType: ActionType | null;
   targetWorkItemId: string | null;
+  evidenceText: string | null;
+  evidenceMessageIds: string[];
+  reviewState: "unclaimed" | "claimed" | "needs_clarification";
+  claimedBy: string | null;
+  claimExpiresAt: string | null;
+  clarificationQuestion: string | null;
+  clarificationRequestedAt: string | null;
+  clarificationResponseText: string | null;
+  clarificationResponseAt: string | null;
   duplicateWarning?: { code: "DUPLICATE_BUSINESS_TASK"; message: string; duplicates: Array<{ id: string; title: string; status: string; due_at: string | null; business_period: string | null }> };
 }
 
@@ -64,6 +73,15 @@ type SuggestionResponse = {
   status: string;
   decision_type?: ActionType | null;
   target_work_item_id?: string | null;
+  evidence_text?: string | null;
+  evidence_message_ids?: string[] | null;
+  review_state?: "unclaimed" | "claimed" | "needs_clarification";
+  claimed_by?: string | null;
+  claim_expires_at?: string | null;
+  clarification_question?: string | null;
+  clarification_requested_at?: string | null;
+  clarification_response_text?: string | null;
+  clarification_response_at?: string | null;
   created_at: string;
 };
 
@@ -95,6 +113,15 @@ function toInboxItem(suggestion: SuggestionResponse): WaInboxItemData {
     confidence: Math.round((suggestion.confidence ?? 0) * 100),
     actionType: suggestion.decision_type ?? null,
     targetWorkItemId: suggestion.target_work_item_id ?? null,
+    evidenceText: suggestion.evidence_text ?? null,
+    evidenceMessageIds: suggestion.evidence_message_ids ?? [],
+    reviewState: suggestion.review_state ?? "unclaimed",
+    claimedBy: suggestion.claimed_by ?? null,
+    claimExpiresAt: suggestion.claim_expires_at ?? null,
+    clarificationQuestion: suggestion.clarification_question ?? null,
+    clarificationRequestedAt: suggestion.clarification_requested_at ?? null,
+    clarificationResponseText: suggestion.clarification_response_text ?? null,
+    clarificationResponseAt: suggestion.clarification_response_at ?? null,
     type: "suggestion",
   };
 }
@@ -115,14 +142,14 @@ export function useWaInbox() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (options: { period?: string; groupId?: string } = {}) => {
     setLoading(true);
     setError(null);
 
     try {
       const [suggestionsResponse, inboxResponse] = await Promise.all([
         fetch("/api/wa-suggestions?status=pending&limit=100", { method: "GET", cache: "no-store" }),
-        fetch("/api/wa-inbox?limit=100", { method: "GET", cache: "no-store" }),
+        fetch(`/api/wa-inbox?limit=100&period=${encodeURIComponent(options.period ?? "7d")}${options.groupId ? `&group_id=${encodeURIComponent(options.groupId)}` : ""}`, { method: "GET", cache: "no-store" }),
       ]);
       if (!suggestionsResponse.ok) throw new Error(await readError(suggestionsResponse, "Saran WhatsApp belum dapat dimuat."));
       if (!inboxResponse.ok) throw new Error(await readError(inboxResponse, "Percakapan WhatsApp belum dapat dimuat."));
@@ -142,8 +169,9 @@ export function useWaInbox() {
 
   useEffect(() => {
     queueMicrotask(() => fetchItems());
-    window.addEventListener("workspace-language-changed", fetchItems);
-    return () => window.removeEventListener("workspace-language-changed", fetchItems);
+    const handleWorkspaceLanguageChange = () => { void fetchItems(); };
+    window.addEventListener("workspace-language-changed", handleWorkspaceLanguageChange);
+    return () => window.removeEventListener("workspace-language-changed", handleWorkspaceLanguageChange);
   }, [fetchItems]);
 
   const confirmSuggestion = useCallback(async (id: string, actionType: ActionType, clientId?: string, targetWorkItemId?: string, duplicateAction: "warn" | "allow" = "warn") => {
@@ -161,14 +189,34 @@ export function useWaInbox() {
     return { duplicateWarning: null };
   }, []);
 
-  const rejectSuggestion = useCallback(async (id: string) => {
+  const rejectSuggestion = useCallback(async (id: string, reason = "Ditolak dari dashboard WhatsApp.") => {
     const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/reject`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "Ditolak dari inbox WhatsApp." }),
+      body: JSON.stringify({ reason }),
     });
     if (!response.ok) throw new Error(await readError(response, "Saran tugas belum dapat ditolak."));
     setItems((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  const claimSuggestion = useCallback(async (id: string) => {
+    const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/claim`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ duration_minutes: 30 }) });
+    if (!response.ok) throw new Error(await readError(response, "Saran tugas sedang direview user lain."));
+    const body = await response.json() as { data?: { review_state?: "claimed"; claimed_by?: string | null; claim_expires_at?: string | null } };
+    setItems((current) => current.map((item) => item.id === id ? { ...item, reviewState: body.data?.review_state ?? "claimed", claimedBy: body.data?.claimed_by ?? null, claimExpiresAt: body.data?.claim_expires_at ?? null } : item));
+  }, []);
+
+  const unclaimSuggestion = useCallback(async (id: string) => {
+    const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/unclaim`, { method: "POST" });
+    if (!response.ok) throw new Error(await readError(response, "Claim tidak dapat dilepas."));
+    setItems((current) => current.map((item) => item.id === id ? { ...item, reviewState: "unclaimed", claimedBy: null, claimExpiresAt: null } : item));
+  }, []);
+
+  const requestClarification = useCallback(async (id: string, question: string) => {
+    const response = await fetch(`/api/wa-suggestions/${encodeURIComponent(id)}/clarify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    if (!response.ok) throw new Error(await readError(response, "Klarifikasi belum dapat dikirim."));
+    const body = await response.json() as { data?: { review_state?: "needs_clarification"; clarification_question?: string; clarification_requested_at?: string } };
+    setItems((current) => current.map((item) => item.id === id ? { ...item, reviewState: body.data?.review_state ?? "needs_clarification", claimedBy: null, claimExpiresAt: null, clarificationQuestion: body.data?.clarification_question ?? question, clarificationRequestedAt: body.data?.clarification_requested_at ?? new Date().toISOString() } : item));
   }, []);
 
   return {
@@ -180,5 +228,8 @@ export function useWaInbox() {
     refetch: fetchItems,
     confirmSuggestion,
     rejectSuggestion,
+    claimSuggestion,
+    unclaimSuggestion,
+    requestClarification,
   };
 }

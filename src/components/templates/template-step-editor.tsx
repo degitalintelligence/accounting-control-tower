@@ -20,6 +20,8 @@ interface TemplateStepEditorProps {
   initialSteps: ChildBlueprint[];
   versionNumber: number;
   titleTemplate: string;
+  checklistTemplateId: string | null;
+  checklistName?: string;
   onSaved?: () => void;
 }
 
@@ -44,6 +46,8 @@ export function TemplateStepEditor({
   initialSteps,
   versionNumber,
   titleTemplate,
+  checklistTemplateId,
+  checklistName,
   onSaved,
 }: TemplateStepEditorProps) {
   const [steps, setSteps] = useState<ChildBlueprint[]>(() => {
@@ -340,6 +344,14 @@ export function TemplateStepEditor({
             "Simpan Versi Baru"
           )}
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+        {checklistTemplateId ? (
+          <>Checklist akan diwariskan ke versi baru{checklistName ? `: ${checklistName}` : "."}</>
+        ) : (
+          "Versi aktif belum memiliki checklist."
+        )}
       </div>
     </div>
   );

@@ -4,9 +4,12 @@ import { getAuthContext, hasPermission } from "@/lib/authorization";
 const permissionMap = {
   integrations: "integrations.manage",
   escalations: "escalations.view",
+  escalationManage: "escalations.manage",
   ai: "integrations.manage",
   audit: "audit.view",
+  auditManage: "audit.manage",
   dead: "dead_letters.view",
+  deadManage: "dead_letters.manage",
   health: "job_health.view",
 } as const;
 

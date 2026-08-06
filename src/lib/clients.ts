@@ -13,3 +13,12 @@ export function slugifyClientName(name: string) {
 export function shouldUpdateClientSlug(currentSlug: string, previousName: string) {
   return currentSlug === slugifyClientName(previousName);
 }
+
+export function isValidIanaTimezone(timezone: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}

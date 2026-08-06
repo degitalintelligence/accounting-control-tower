@@ -17,7 +17,7 @@ import { OverdueAgingCard } from "@/components/dashboard/overdue-aging-card";
 import { useI18n } from "@/components/i18n-provider";
 
 export default function DashboardPage() {
-  const { stats, kpis, insights, sections, loading, error, partialFailures, refetch } = useDashboard();
+  const { stats, kpis, insights, sections, loading, error, partialFailures, insightLoading, insightError, generateInsights, refetch } = useDashboard();
   const user = useAuthStore((s) => s.user);
   const { t } = useI18n();
 
@@ -97,7 +97,7 @@ export default function DashboardPage() {
       {!loading && <div className="mb-6 space-y-3"><KpiGrid kpis={kpis} />{kpis && <OverdueAgingCard buckets={kpis.overdue_aging} />}{!kpis && !error && <EmptyDashboard text={t("dashboard.kpiUnavailable")} />}</div>}
 
       <div className="mb-6">
-        <InsightsCard insights={insights} />
+        <InsightsCard insights={insights} loading={insightLoading} error={insightError} onGenerate={generateInsights} />
       </div>
 
       <div className="grid gap-3 grid-cols-1 lg:grid-cols-2 mb-6">

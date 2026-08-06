@@ -712,6 +712,8 @@ export default function TemplateDetailPage({
                 }
                 versionNumber={latestVersion.version_number}
                 titleTemplate={latestVersion.title_template}
+                checklistTemplateId={latestVersion.checklist_template_id}
+                checklistName={latestVersion.checklist_template_id ? checklistById.get(latestVersion.checklist_template_id)?.name : undefined}
                 onSaved={fetchData}
               />
             ) : (

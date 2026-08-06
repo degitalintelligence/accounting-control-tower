@@ -16,41 +16,51 @@ export async function GET() {
   const scope = <T extends { in: (column: string, values: string[]) => T }>(query: T) => isOrgWide ? query : query.in("client_id", clientIds);
 
   const now = new Date().toISOString();
-  const { count: criticalOverdue } = await scope(admin
+  const criticalResult = await scope(admin
     .from("work_items")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .not("status", "in", "(completed,cancelled,draft)")
     .lt("due_at", now));
+  const criticalOverdue = criticalResult.count;
+  if (criticalResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
 
-  const { count: waitingReview } = await scope(admin
+  const waitingResult = await scope(admin
     .from("work_items")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .eq("status", "under_review")
     .is("deleted_at", null));
+  const waitingReview = waitingResult.count;
+  if (waitingResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
 
-  const { count: blocked } = await scope(admin
+  const blockedResult = await scope(admin
     .from("work_items")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .eq("status", "blocked"));
+  const blocked = blockedResult.count;
+  if (blockedResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
 
-  const { count: totalCompleted } = await scope(admin
+  const completedResult = await scope(admin
     .from("work_items")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .eq("status", "completed"));
+  const totalCompleted = completedResult.count;
+  if (completedResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
 
-  const { count: totalItems } = await scope(admin
+  const totalResult = await scope(admin
     .from("work_items")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .not("status", "in", "(cancelled,draft)"));
+  const totalItems = totalResult.count;
+  if (totalResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
 
   const { data: completedItems } = (await scope(admin
     .from("work_items")

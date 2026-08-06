@@ -27,6 +27,9 @@ export async function wahaRequest<T>(path: string, init?: RequestInit): Promise<
   const response = await fetch(`${config.baseUrl}${path}`, { ...init, headers });
   if (!response.ok) {
     const detail = await readWahaError(response);
+    // #region debug-point A:waha-response
+    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "whatsapp-session-502", runId: "pre-fix", hypothesisId: "A", location: "whatsapp/adapter.ts:wahaRequest", msg: "[DEBUG] WAHA request failed", data: { path, status: response.status, detailPresent: Boolean(detail) } }) }).catch(() => {});
+    // #endregion
     throw new WahaRequestError(response.status, detail || `WAHA request gagal: ${response.status}`);
   }
   return (await response.json()) as T;
@@ -57,6 +60,21 @@ async function readWahaError(response: Response) {
 
 export async function startWahaSession(session: string) {
   return wahaRequest<unknown>(`/api/sessions/${encodeURIComponent(session)}/start`, { method: "POST" });
+}
+
+export async function stopWahaSession(session: string) {
+  return wahaRequest<unknown>(`/api/sessions/${encodeURIComponent(session)}/stop`, { method: "POST" });
+}
+
+export async function createWahaSession(session: string) {
+  return wahaRequest<unknown>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ name: session }),
+  });
+}
+
+export async function deleteWahaSession(session: string) {
+  return wahaRequest<unknown>(`/api/sessions/${encodeURIComponent(session)}`, { method: "DELETE" });
 }
 
 export async function getWahaSessionStatus(session: string) {

@@ -7,7 +7,6 @@ export const runtime = "nodejs";
 const MAX_MESSAGES = 100;
 const MAX_SUMMARY_MESSAGES = 1000;
 const MAX_GROUPS = 50;
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 type GroupRow = {
   id: string;
@@ -63,7 +62,10 @@ export async function GET(request: Request) {
     const searchParams = new URL(request.url).searchParams;
     const requestedLimit = Number(searchParams.get("limit") ?? "50");
     const limit = Math.min(MAX_MESSAGES, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
-    const since = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+    const period = searchParams.get("period") ?? "7d";
+    const periodDays = period === "24h" ? 1 / 24 : period === "3d" ? 3 : period === "14d" ? 14 : period === "30d" ? 30 : 7;
+    const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+    const requestedGroupId = searchParams.get("group_id");
 
     const groupsResult = await admin
       .from("wa_groups")
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
     const groups = groupsResult as unknown as { data: GroupRow[] | null; error: unknown };
     if (groups.error) throw groups.error;
 
-    const groupRows = (groups.data ?? []).filter((group) => auth.context.isOrgWide || group.client_id === null || auth.context.clientIds.includes(group.client_id));
+    const groupRows = (groups.data ?? []).filter((group) => (auth.context.isOrgWide || group.client_id === null || auth.context.clientIds.includes(group.client_id)) && (!requestedGroupId || group.id === requestedGroupId));
     const groupIds = groupRows.map((group) => group.id);
     if (!groupIds.length) return NextResponse.json({ since, summaries: [], messages: [] });
 

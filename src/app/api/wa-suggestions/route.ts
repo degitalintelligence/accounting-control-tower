@@ -3,6 +3,9 @@ import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestion
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET(request: Request) {
+  // #region debug-point wa-review-queue
+  void fetch("http://127.0.0.1:7777/event", { method: "POST", body: JSON.stringify({ sessionId: "wa-inbox-pivot", runId: "phase-2-pre-fix", hypothesisId: "review-queue", location: "src/app/api/wa-suggestions/route.ts", msg: "[DEBUG] WA suggestion queue request", data: { hasStatus: Boolean(new URL(request.url).searchParams.get("status")), hasGroup: Boolean(new URL(request.url).searchParams.get("group_id")) }, ts: Date.now() }) }).catch(() => {});
+  // #endregion
   const { user, organizationId, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
@@ -23,7 +26,7 @@ export async function GET(request: Request) {
 
     let query = admin
       .from("action_suggestions")
-      .select("id, source_type, source_reference_id, source_summary_id, source_metadata, evidence_message_ids, evidence_text, suggested_title, suggested_description, suggested_maker_id, suggested_checker_id, suggested_due_at, suggested_client_id, suggested_section_id, confidence, status, created_at, updated_at, rejected_reason, created_work_item_id, decision_type, target_work_item_id, decision_note", hasPagination ? { count: "exact" } : undefined)
+      .select("id, source_type, source_reference_id, source_summary_id, source_metadata, evidence_message_ids, evidence_text, suggested_title, suggested_description, suggested_maker_id, suggested_checker_id, suggested_due_at, suggested_client_id, suggested_section_id, confidence, status, review_state, claimed_by, claimed_at, claim_expires_at, clarification_question, clarification_requested_at, clarification_response_text, clarification_response_at, created_at, updated_at, rejected_reason, created_work_item_id, decision_type, target_work_item_id, decision_note", hasPagination ? { count: "exact" } : undefined)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false });
 

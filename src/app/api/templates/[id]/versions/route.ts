@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import type { CreateVersionInput } from "@/types/template";
 import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
+import { resolveChecklistTemplateId } from "@/lib/templates/version";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -102,20 +103,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Cari versi terakhir untuk auto-increment
     const latestResult = await admin
       .from("template_versions")
-      .select("version_number")
+      .select("version_number, checklist_template_id")
       .eq("template_id", id)
       .order("version_number", { ascending: false })
       .limit(1)
       .single();
 
     const { data: latestVersion } = latestResult as unknown as {
-      data: { version_number: number } | null;
+      data: { version_number: number; checklist_template_id: string | null } | null;
       error: { message: string; code: string; hint: string; details: string } | null;
     };
 
     const nextVersionNumber = (latestVersion?.version_number ?? 0) + 1;
 
     const body = (await request.json()) as CreateVersionInput;
+    const checklistTemplateId = resolveChecklistTemplateId(body.checklist_template_id, latestVersion?.checklist_template_id);
 
     // Validasi field wajib
     if (!body.title_template) {
@@ -124,8 +126,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
-    if (body.checklist_template_id) {
-      const checklistResult = await admin.from("checklist_templates").select("id").eq("id", body.checklist_template_id).eq("organization_id", organizationId).eq("is_active", true).is("deleted_at", null).single();
+    if (checklistTemplateId) {
+      const checklistResult = await admin.from("checklist_templates").select("id").eq("id", checklistTemplateId).eq("organization_id", organizationId).eq("is_active", true).is("deleted_at", null).single();
       const checklist = checklistResult as unknown as { data: { id: string } | null; error: { message: string } | null };
       if (checklist.error || !checklist.data) return NextResponse.json({ error: "Template checklist tidak valid." }, { status: 400 });
     }
@@ -141,7 +143,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       checker_rule: body.checker_rule ?? {},
       approver_rule: body.approver_rule ?? {},
       sop_version_id: body.sop_version_id ?? null,
-      checklist_template_id: body.checklist_template_id ?? null,
+      checklist_template_id: checklistTemplateId,
       evidence_schema: body.evidence_schema ?? [],
       maker_deadline_rule: body.maker_deadline_rule ?? {},
       checker_deadline_rule: body.checker_deadline_rule ?? {},

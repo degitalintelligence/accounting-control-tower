@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at,
         completed_at,
-        assignments:assignments(
+        assignments:assignments!inner(
           id,
           profile_id,
           role,

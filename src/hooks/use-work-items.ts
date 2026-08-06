@@ -15,6 +15,7 @@ interface WorkItemFilter {
   period_to?: string;
   source_type?: string;
   search?: string;
+  filter?: "review";
   assignee_id?: string;
   overdue_only?: boolean;
   page?: number;
@@ -68,6 +69,7 @@ export function useWorkItems(initialFilter: WorkItemFilter = {}): UseWorkItemsRe
       if (filter.period_to) params.set("period_to", filter.period_to);
       if (filter.source_type) params.set("source_type", filter.source_type);
       if (filter.search) params.set("search", filter.search);
+      if (filter.filter) params.set("filter", filter.filter);
       if (filter.assignee_id) params.set("assignee_id", filter.assignee_id);
       if (filter.overdue_only) params.set("overdue_only", "true");
       params.set("page", String(page));
