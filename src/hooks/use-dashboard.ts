@@ -109,7 +109,11 @@ export function useDashboard() {
     queueMicrotask(() => fetchAll());
     const handleWorkspaceChange = () => { void fetchAll(); };
     window.addEventListener("workspace-changed", handleWorkspaceChange);
-    return () => window.removeEventListener("workspace-changed", handleWorkspaceChange);
+    window.addEventListener("workspace-language-changed", handleWorkspaceChange);
+    return () => {
+      window.removeEventListener("workspace-changed", handleWorkspaceChange);
+      window.removeEventListener("workspace-language-changed", handleWorkspaceChange);
+    };
   }, [fetchAll]);
 
   return { stats, kpis, deadlines, activity, insights, sections, loading, error, partialFailures, refetch: fetchAll };

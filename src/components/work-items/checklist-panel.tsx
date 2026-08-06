@@ -6,18 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { WorkItemChecklist } from "@/types/checklist";
+import { useI18n } from "@/components/i18n-provider";
 
 export function ChecklistPanel({ workItemId }: { workItemId: string }) {
   const [checklist, setChecklist] = useState<WorkItemChecklist | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useI18n();
 
   const load = useCallback(async () => {
     setLoading(true);
     const response = await fetch(`/api/work-items/${workItemId}/checklist`);
     const body = await response.json().catch(() => null);
-    if (!response.ok) setError(body?.error ?? "Gagal memuat checklist.");
+    if (!response.ok) setError(body?.error ?? t("work.checklistLoadError"));
     else setChecklist(body?.data ?? null);
     setLoading(false);
   }, [workItemId]);
@@ -34,7 +36,7 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error ?? "Gagal menyimpan checklist.");
+      setError(body?.error ?? t("work.checklistSaveError"));
     } else await load();
     setSaving(null);
   }
@@ -50,10 +52,10 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-sm">Checklist SOP</CardTitle>
+            <CardTitle className="text-sm">{t("work.checklist")}</CardTitle>
             <p className="text-xs text-slate-500 mt-1">{checklist.template.name}</p>
           </div>
-          <span className="text-xs font-medium text-slate-500">{checklist.required_completed}/{checklist.required_total} wajib</span>
+          <span className="text-xs font-medium text-slate-500">{checklist.required_completed}/{checklist.required_total} {t("common.required")}</span>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -70,7 +72,7 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
                 </label>
                 {item.input_type === "checkbox" || item.input_type === "confirmation" ? (
                   <Button type="button" size="sm" variant={completed ? "secondary" : "outline"} disabled={saving === item.id} onClick={() => save(item.id, completed ? "" : "true")}>
-                    {saving === item.id ? <Loader2 className="size-3.5 animate-spin" /> : completed ? "Selesai" : "Tandai selesai"}
+                    {saving === item.id ? <Loader2 className="size-3.5 animate-spin" /> : completed ? t("common.completed") : t("common.markComplete")}
                   </Button>
                 ) : item.input_type === "file" ? (
                   <Input type="file" disabled={saving === item.id} onChange={async (event) => {
@@ -81,7 +83,7 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
                       const upload = await fetch(`/api/work-items/${workItemId}/files`, { method: "POST", body: form });
                       const uploaded = await upload.json().catch(() => null) as { data?: { file?: { id?: string } } } | null;
                       if (!upload.ok || !uploaded?.data?.file?.id) {
-                        setError("File checklist gagal diunggah.");
+                        setError(t("work.checklistUploadError"));
                         return;
                       }
                       await save(item.id, file.name, uploaded.data.file.id);

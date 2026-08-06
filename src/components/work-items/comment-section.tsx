@@ -5,6 +5,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, Send, Loader2 } from "lucide-react";
+import { useI18n } from "@/components/i18n-provider";
+import { formatDate } from "@/lib/i18n";
 
 interface Comment {
   id: string;
@@ -19,19 +21,19 @@ interface CommentSectionProps {
   workItemId: string;
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, locale: "id-ID" | "en-US", nowLabel: string): string {
   const now = Date.now();
   const then = new Date(iso).getTime();
   const diffSec = Math.floor((now - then) / 1000);
 
-  if (diffSec < 60) return "Baru saja";
+  if (diffSec < 60) return nowLabel;
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} menit lalu`;
+  if (diffMin < 60) return locale === "id-ID" ? `${diffMin} menit lalu` : `${diffMin} minutes ago`;
   const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} jam lalu`;
+  if (diffHour < 24) return locale === "id-ID" ? `${diffHour} jam lalu` : `${diffHour} hours ago`;
   const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay} hari lalu`;
-  return new Date(iso).toLocaleDateString("id-ID", {
+  if (diffDay < 7) return locale === "id-ID" ? `${diffDay} hari lalu` : `${diffDay} days ago`;
+  return formatDate(iso, locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -52,17 +54,18 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
   const [error, setError] = useState<string | null>(null);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { locale, t } = useI18n();
 
   const fetchComments = useCallback(async () => {
     try {
       const res = await fetch(`/api/work-items/${workItemId}/comments`);
       if (!res.ok) {
-        throw new Error("Gagal memuat komentar.");
+        throw new Error(t("work.commentLoadError"));
       }
       const body = await res.json();
       setComments(body.data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat komentar.");
+      setError(err instanceof Error ? err.message : t("work.commentLoadError"));
     } finally {
       setLoading(false);
     }
@@ -87,13 +90,13 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? "Gagal menambahkan komentar.");
+        throw new Error(body?.error ?? t("work.commentAddError"));
       }
 
       setNewComment("");
       await fetchComments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menambahkan komentar.");
+      setError(err instanceof Error ? err.message : t("work.commentAddError"));
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +108,7 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
       <form onSubmit={handleAddComment} className="space-y-2">
         <textarea
           rows={3}
-          placeholder="Tulis komentar..."
+          placeholder={t("work.commentPlaceholder")}
           value={newComment}
           onChange={(e) => setNewComment(e.currentTarget.value)}
           className="flex w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 resize-none"
@@ -122,7 +125,7 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
             ) : (
               <Send className="size-3.5" />
             )}
-            Kirim
+            {t("work.sendComment")}
           </Button>
         </div>
       </form>
@@ -151,7 +154,7 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
       ) : comments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <MessageSquare className="size-8 text-slate-300 mb-2" />
-          <p className="text-sm text-slate-400">Belum ada komentar.</p>
+          <p className="text-sm text-slate-400">{t("work.noComments")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -168,7 +171,7 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
                     {comment.author_name ?? "Tidak diketahui"}
                   </span>
                   <span className="text-[11px] text-slate-400 shrink-0">
-                    {timeAgo(comment.created_at)}
+                    {timeAgo(comment.created_at, locale, t("common.now"))}
                   </span>
                 </div>
                 <p className="text-sm text-slate-600 whitespace-pre-wrap break-words">

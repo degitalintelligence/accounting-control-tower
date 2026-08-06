@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { navigationItems, quickActions, type NavigationIcon } from "@/lib/navigation";
+import { useI18n } from "@/components/i18n-provider";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -32,6 +33,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const { t } = useI18n();
 
   const filteredCommands = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -92,7 +94,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-200"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t("common.commandPalette")}
       >
         <div className="flex items-center gap-2 border-b border-slate-100 px-4">
           <Search className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
@@ -101,13 +103,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ketik perintah atau cari..."
-            aria-label="Cari perintah"
+            placeholder={t("common.commandPlaceholder")}
+            aria-label={t("common.searchCommand")}
             className="h-12 border-0 px-0 shadow-none focus-visible:ring-0"
           />
           <kbd className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-400 sm:inline">Esc</kbd>
         </div>
-        <div className="max-h-[min(60vh,420px)] overflow-y-auto p-2" role="listbox" aria-label="Perintah">
+        <div className="max-h-[min(60vh,420px)] overflow-y-auto p-2" role="listbox" aria-label={t("common.searchCommand")}>
           {filteredCommands.length > 0 ? (
             filteredCommands.map((command, index) => {
               const Icon = command.icon;
@@ -134,13 +136,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               );
             })
           ) : (
-            <p className="px-3 py-8 text-center text-sm text-slate-500">Tidak ada perintah yang cocok.</p>
+            <p className="px-3 py-8 text-center text-sm text-slate-500">{t("common.noMatchingCommands")}</p>
           )}
         </div>
         <div className="hidden items-center gap-3 border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400 sm:flex">
-          <span>↑↓ pilih</span>
-          <span>Enter buka</span>
-          <span>Esc tutup</span>
+          <span>{t("common.selectCommand")}</span>
+          <span>{t("common.openCommand")}</span>
+          <span>{t("common.closeCommand")}</span>
         </div>
       </div>
     </div>

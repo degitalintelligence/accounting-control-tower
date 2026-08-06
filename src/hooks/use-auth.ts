@@ -51,6 +51,9 @@ export function useAuth() {
 
     loadSession();
 
+    const refreshProfile = () => { void fetchProfile(); };
+    window.addEventListener("workspace-language-changed", refreshProfile);
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
@@ -69,6 +72,7 @@ export function useAuth() {
 
     return () => {
       cancelled = true;
+      window.removeEventListener("workspace-language-changed", refreshProfile);
       subscription.unsubscribe();
     };
   }, [setUser, clearUser, setLoading]);

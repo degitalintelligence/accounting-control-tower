@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { NotificationBell } from "./notification-bell";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContextualHelpButton } from "@/components/help/contextual-help-sheet";
+import { useI18n } from "@/components/i18n-provider";
+import { formatDate } from "@/lib/i18n";
 
 interface AppHeaderProps {
   onMenuClick: () => void;
@@ -16,19 +18,20 @@ interface AppHeaderProps {
 
 export function AppHeader({ onMenuClick, onNewWorkItem, onSearch, onHelp }: AppHeaderProps) {
   const [periodLabel, setPeriodLabel] = useState("Periode");
+  const { locale, t } = useI18n();
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setPeriodLabel(
-        new Intl.DateTimeFormat("id-ID", {
+        formatDate(new Date(), locale, {
           month: "long",
           year: "numeric",
           timeZone: "Asia/Jakarta",
-        }).format(new Date())
+        })
       );
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [locale]);
 
   return (
     <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-line bg-surface px-4 sm:px-6 lg:px-8">
@@ -38,15 +41,15 @@ export function AppHeader({ onMenuClick, onNewWorkItem, onSearch, onHelp }: AppH
             type="button"
             onClick={onMenuClick}
             className="control-interactive grid size-10 place-items-center rounded-lg border border-line bg-surface lg:hidden"
-            aria-label="Buka menu navigasi"
+            aria-label={t("common.openMenu")}
           >
             <Menu className="size-[18px]" />
           </TooltipTrigger>
-          <TooltipContent>Buka menu navigasi</TooltipContent>
+          <TooltipContent>{t("common.openMenu")}</TooltipContent>
         </Tooltip>
 
         <div className="hidden items-center gap-2.5 text-sm text-muted-foreground sm:flex">
-          <span>Periode</span>
+          <span>{t("common.period")}</span>
           <button type="button" className="control-interactive rounded-lg border border-line bg-surface px-3 py-2 font-semibold text-foreground">
             {periodLabel}
           </button>
@@ -59,11 +62,11 @@ export function AppHeader({ onMenuClick, onNewWorkItem, onSearch, onHelp }: AppH
             type="button"
             onClick={onSearch}
             className="control-interactive hidden size-10 place-items-center rounded-lg border border-line bg-surface sm:grid"
-            aria-label="Cari pekerjaan"
+            aria-label={t("common.searchWork")}
           >
             <Search className="size-[16px] text-[#6f7a77]" />
           </TooltipTrigger>
-          <TooltipContent>Cari pekerjaan</TooltipContent>
+          <TooltipContent>{t("common.searchWork")}</TooltipContent>
         </Tooltip>
 
         <ContextualHelpButton onClick={onHelp} />
@@ -75,10 +78,10 @@ export function AppHeader({ onMenuClick, onNewWorkItem, onSearch, onHelp }: AppH
           onClick={onNewWorkItem}
           size="default"
           className="cta-primary h-10 gap-1.5 rounded-lg px-3.5 shadow-sm"
-          aria-label="Buat pekerjaan baru"
+          aria-label={t("common.newWork")}
         >
           <Plus className="size-4" />
-          <span className="hidden sm:inline">Pekerjaan baru</span>
+          <span className="hidden sm:inline">{t("common.newWork")}</span>
         </Button>
       </div>
     </header>

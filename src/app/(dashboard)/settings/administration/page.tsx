@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { WhatsAppWhitelistWizard } from "@/components/whatsapp/whitelist-wizard";
+import { useI18n } from "@/components/i18n-provider";
 
 type Policy = { id: string; name: string; description: string | null; client_id: string | null; is_active: boolean };
 type Connection = { id: string; provider: string; session_id: string | null; status: string; retired_at?: string | null; last_health_check_at: string | null };
@@ -22,16 +23,16 @@ type DeadLetter = { id: string; event_type: string; retry_count: number; created
 type JobHealth = { name: string; status: string; pending: number; processing: number; failed: number; last_activity_at: string | null };
 type Capabilities = Record<"integrations" | "escalations" | "ai" | "audit" | "dead" | "health", boolean>;
 
-const tabs = [
-  ["whatsapp", "WhatsApp", MessageCircle],
-  ["escalation", "Eskalasi", ShieldCheck],
-  ["ai", "Kebijakan AI", Cpu],
-  ["audit", "Audit", CheckCircle2],
-  ["dead", "Antrean gagal", RotateCcw],
-  ["health", "Kesehatan", Activity],
-] as const;
-
 export default function AdministrationPage() {
+  const { t } = useI18n();
+  const tabs = [
+    ["whatsapp", t("admin.whatsapp"), MessageCircle],
+    ["escalation", t("admin.escalation"), ShieldCheck],
+    ["ai", t("admin.aiPolicy"), Cpu],
+    ["audit", t("admin.audit"), CheckCircle2],
+    ["dead", t("admin.deadQueue"), RotateCcw],
+    ["health", t("admin.health"), Activity],
+  ] as const;
   const [tab, setTab] = useState("whatsapp");
   const [capabilities, setCapabilities] = useState<Capabilities>({ integrations: false, escalations: false, ai: false, audit: false, dead: false, health: false });
   const [wa, setWa] = useState<WhatsAppData>({ connections: [], groups: [], mappings: [] });

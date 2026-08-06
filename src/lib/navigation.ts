@@ -22,6 +22,7 @@ export type NavigationIcon = ComponentType<{ className?: string }>;
 
 export interface NavigationItem {
   label: string;
+  labelKey?: string;
   description?: string;
   href: string;
   icon: NavigationIcon;
@@ -31,21 +32,21 @@ export interface NavigationItem {
 }
 
 export const navigationItems: NavigationItem[] = [
-  { label: "Ringkasan", description: "Lihat ringkasan operasi", href: "/dashboard", icon: LayoutDashboard, section: "main" },
-  { label: "Pekerjaan saya", description: "Kelola work item yang ditugaskan kepada Anda", href: "/work-items?tab=mine", icon: CheckSquare, section: "main" },
-  { label: "Pekerjaan rutin", description: "Lihat pekerjaan rutin", href: "/work-items?type=routine", icon: RotateCcw, section: "main" },
-  { label: "Proyek", description: "Lihat dan kelola proyek", href: "/projects", icon: Grid3X3, section: "main" },
-  { label: "Laporan", description: "Buka laporan operasi", href: "/reports", icon: FileText, section: "main" },
-  { label: "Antrean review", description: "Tinjau pekerjaan yang menunggu review", href: "/work-items?filter=review", icon: Eye, section: "control" },
-  { label: "Template SOP", description: "Kelola template dan SOP", href: "/templates", icon: Shield, section: "control" },
-  { label: "Checklist", description: "Kelola checklist operasional", href: "/checklists", icon: CheckSquare, section: "control" },
-  { label: "Kotak masuk WhatsApp", description: "Lihat pesan operasional", href: "/wa-inbox", icon: MessageCircle, section: "control", badgeVariant: "amber" },
-  { label: "Inbox AI", description: "Tinjau saran dari AI", href: "/ai-inbox", icon: Bot, section: "control" },
-  { label: "Meeting & Notulen", description: "Kelola meeting dan notulen", href: "/meetings", icon: Video, section: "control" },
-  { label: "Tim & beban kerja", description: "Pantau kapasitas tim", href: "/settings/workload", icon: Users, section: "manage" },
-  { label: "Klien", description: "Kelola client organisasi", href: "/settings/clients", icon: Building2, section: "manage" },
-  { label: "Pengaturan", description: "Kelola konfigurasi workspace", href: "/settings", icon: Settings, section: "manage" },
-  { label: "Administrasi", description: "Kelola kontrol administrasi", href: "/settings/administration", icon: Shield, section: "manage" },
+  { label: "Ringkasan", labelKey: "nav.summary", href: "/dashboard", icon: LayoutDashboard, section: "main" },
+  { label: "Pekerjaan saya", labelKey: "nav.myWork", href: "/work-items?tab=mine", icon: CheckSquare, section: "main" },
+  { label: "Pekerjaan rutin", labelKey: "nav.routine", href: "/work-items?type=routine", icon: RotateCcw, section: "main" },
+  { label: "Proyek", labelKey: "nav.projects", href: "/projects", icon: Grid3X3, section: "main" },
+  { label: "Laporan", labelKey: "nav.reports", href: "/reports", icon: FileText, section: "main" },
+  { label: "Antrean review", labelKey: "nav.reviewQueue", href: "/work-items?filter=review", icon: Eye, section: "control" },
+  { label: "Template SOP", labelKey: "nav.sop", href: "/templates", icon: Shield, section: "control" },
+  { label: "Checklist", labelKey: "nav.checklists", href: "/checklists", icon: CheckSquare, section: "control" },
+  { label: "Kotak masuk WhatsApp", labelKey: "nav.whatsapp", href: "/wa-inbox", icon: MessageCircle, section: "control", badgeVariant: "amber" },
+  { label: "Inbox AI", labelKey: "nav.aiInbox", href: "/ai-inbox", icon: Bot, section: "control" },
+  { label: "Meeting & Notulen", labelKey: "nav.meetings", href: "/meetings", icon: Video, section: "control" },
+  { label: "Tim & beban kerja", labelKey: "nav.workload", href: "/settings/workload", icon: Users, section: "manage" },
+  { label: "Klien", labelKey: "nav.clients", href: "/settings/clients", icon: Building2, section: "manage" },
+  { label: "Pengaturan", labelKey: "nav.settings", href: "/settings", icon: Settings, section: "manage" },
+  { label: "Administrasi", labelKey: "nav.administration", href: "/settings/administration", icon: Shield, section: "manage" },
 ];
 
 export const quickActions = [
@@ -54,11 +55,11 @@ export const quickActions = [
 ];
 
 export const settingsTabs = [
-  { label: "Umum", href: "/settings", icon: Settings },
-  { label: "Anggota", href: "/settings/members", icon: Users },
-  { label: "Peran & Permission", href: "/settings/roles", icon: Shield },
-  { label: "Klien", href: "/settings/clients", icon: Building2 },
-  { label: "Notifikasi", href: "/settings/notifications", icon: Bell },
+  { label: "Umum", labelKey: "settings.general", href: "/settings", icon: Settings },
+  { label: "Anggota", labelKey: "settings.members", href: "/settings/members", icon: Users },
+  { label: "Peran & Permission", labelKey: "settings.roles", href: "/settings/roles", icon: Shield },
+  { label: "Klien", labelKey: "settings.clients", href: "/settings/clients", icon: Building2 },
+  { label: "Notifikasi", labelKey: "settings.notifications", href: "/settings/notifications", icon: Bell },
 ];
 
 export function isNavigationItemActive(pathname: string, search: string, href: string) {

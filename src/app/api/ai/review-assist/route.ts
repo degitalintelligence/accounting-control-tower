@@ -4,10 +4,11 @@ import { logAudit } from "@/lib/audit/logger";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { aiReviewSchema, validationMessage, workItemIdQuerySchema } from "@/lib/validation/schemas";
 import { getAuthContext, hasPermission } from "@/lib/authorization";
+import { resolveOrganizationLocale } from "@/lib/ai/locale";
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
 type Assignment = { profile_id: string; role: string; unassigned_at: string | null };
-type AuthContext = { admin: ReturnType<typeof createServiceRoleClient>; userId: string; organizationId: string; membershipRole: string; item: { id: string; organization_id: string; client_id: string; title: string; description: string | null; acceptance_criteria: string | null; status: string; checklist_template_id: string | null; assignments: Assignment[] } };
+type AuthContext = { admin: ReturnType<typeof createServiceRoleClient>; userId: string; organizationId: string; membershipRole: string; locale: Awaited<ReturnType<typeof resolveOrganizationLocale>>; item: { id: string; organization_id: string; client_id: string; title: string; description: string | null; acceptance_criteria: string | null; status: string; checklist_template_id: string | null; assignments: Assignment[] } };
 
 async function authorize(id: string): Promise<AuthContext | NextResponse> {
   const client = await createClient();
@@ -25,7 +26,7 @@ async function authorize(id: string): Promise<AuthContext | NextResponse> {
   if (item.error || !item.data) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
   if (!membership.data.some((entry) => entry.organization_id === organizationId && (entry.client_id === null || entry.client_id === item.data!.client_id))) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
   const scopedMembership = membership.data.find((entry) => entry.organization_id === organizationId && (entry.client_id === null || entry.client_id === item.data!.client_id));
-  return { admin, userId: user.id, organizationId, membershipRole: scopedMembership?.role ?? "", item: item.data };
+  return { admin, userId: user.id, organizationId, membershipRole: scopedMembership?.role ?? "", locale: await resolveOrganizationLocale(admin, organizationId), item: item.data };
 }
 
 function canUseAssistant(auth: AuthContext) {
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
   const checklistResult = await auth.admin.from("checklist_responses").select("value, file_id, checklist_items!inner(label, is_required)").eq("work_item_id", id);
   const checklist = checklistResult as unknown as { data: { value: string | null; file_id: string | null; checklist_items: { label: string; is_required: boolean } }[] | null; error: ErrorShape | null };
   if (checklist.error) return NextResponse.json({ error: "Gagal memuat checklist." }, { status: 500 });
-  const result = await assistReview(contextFor(auth, (checklist.data ?? []).map((entry) => ({ ...entry.checklist_items, value: entry.value, file_id: entry.file_id }))));
+  const result = await assistReview(contextFor(auth, (checklist.data ?? []).map((entry) => ({ ...entry.checklist_items, value: entry.value, file_id: entry.file_id }))), auth.locale);
   const inserted = await auth.admin.from("ai_review_notes").insert({ organization_id: auth.organizationId, client_id: auth.item.client_id, work_item_id: id, generated_by: auth.userId, result, status: "pending" } as never).select("id, status, result, generated_by, created_at").single();
   const note = inserted as unknown as { data: unknown | null; error: ErrorShape | null };
   if (note.error || !note.data) return NextResponse.json({ error: "Gagal menyimpan AI Notes." }, { status: 500 });

@@ -12,6 +12,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/actions/auth";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isNavigationItemActive, navigationItems } from "@/lib/navigation";
+import { useI18n } from "@/components/i18n-provider";
 
 interface AppSidebarProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const [switching, setSwitching] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const router = useRouter();
+  const { t } = useI18n();
 
   const initials = user?.name
     ? user.name
@@ -76,25 +78,25 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           </span>
           <div className="min-w-0 flex-1">
             <span className="block text-[8px] tracking-[.12em] text-[#9da6a4]">
-              RUANG KERJA
+              {t("nav.manage")}
             </span>
             {user?.organization_name && <strong className="block truncate text-[11px] font-semibold text-white">{user.organization_name}</strong>}
           </div>
           {switching ? <Loader2 className="size-3.5 animate-spin text-[#9da6a4]" /> : <ChevronDown className="size-3.5 text-[#9da6a4]" />}
         </button>
-        {workspaceOpen && <div className="mb-3 rounded-lg border border-white/10 bg-slate-800 p-1.5">{user?.organizations?.map((organization) => <button key={organization.id} type="button" disabled={switching || organization.is_active} onClick={async () => { setSwitching(true); const organizationId = String(organization.id).trim(); const response = await fetch("/api/auth/organization", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organization_id: organizationId }) }); if (response.ok) { const profile = await fetch("/api/auth/me", { cache: "no-store" }); if (profile.ok) setUser(await profile.json()); window.dispatchEvent(new Event("workspace-changed")); router.refresh(); setWorkspaceOpen(false); } setSwitching(false); }} className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-white/10 disabled:cursor-default disabled:opacity-60"><span className="truncate">{organization.name}</span>{organization.is_active && <span className="ml-2 text-[10px] text-emerald-300">Aktif</span>}</button>)}</div>}
+        {workspaceOpen && <div className="mb-3 rounded-lg border border-white/10 bg-slate-800 p-1.5">{user?.organizations?.map((organization) => <button key={organization.id} type="button" disabled={switching || organization.is_active} onClick={async () => { setSwitching(true); const organizationId = String(organization.id).trim(); const response = await fetch("/api/auth/organization", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organization_id: organizationId }) }); if (response.ok) { const profile = await fetch("/api/auth/me", { cache: "no-store" }); if (profile.ok) setUser(await profile.json()); window.dispatchEvent(new Event("workspace-changed")); router.refresh(); setWorkspaceOpen(false); } setSwitching(false); }} className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-white/10 disabled:cursor-default disabled:opacity-60"><span className="truncate">{organization.name}</span>{organization.is_active && <span className="ml-2 text-[10px] text-emerald-300">{t("common.active")}</span>}</button>)}</div>}
 
         {/* Navigation */}
         <nav className="scrollbar-subtle flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {navigationItems.filter((item) => item.section === "main").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
 
           <div className="px-2.5 pb-1.5 pt-[18px] text-[10px] font-bold tracking-[.14em] text-slate-400">
-            KONTROL
+            {t("nav.control")}
           </div>
           {navigationItems.filter((item) => item.section === "control").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
 
           <div className="px-2.5 pb-1.5 pt-[18px] text-[10px] font-bold tracking-[.14em] text-slate-400">
-            KELOLA
+            {t("nav.manage")}
           </div>
           {navigationItems.filter((item) => item.section === "manage").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
         </nav>
@@ -112,11 +114,11 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
               <TooltipTrigger
                 type="submit"
                 className="control-interactive grid size-9 place-items-center rounded-md text-slate-400 hover:bg-white/[.08] hover:text-white focus-visible:outline-white"
-                aria-label="Keluar dari akun"
+                aria-label={t("common.logout")}
               >
                 <LogOut className="size-3.5" />
               </TooltipTrigger>
-              <TooltipContent side="right">Keluar dari akun</TooltipContent>
+              <TooltipContent side="right">{t("common.logout")}</TooltipContent>
             </Tooltip>
           </form>
         </div>
@@ -136,6 +138,8 @@ function NavLink({
   active: boolean;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <Link
       href={item.href}
@@ -146,7 +150,7 @@ function NavLink({
       )}
     >
       <item.icon className="size-[18px] shrink-0" />
-      <span className="flex-1">{item.label}</span>
+      <span className="flex-1">{item.labelKey ? t(item.labelKey as never) : item.label}</span>
       {item.badge !== undefined && (
         <span
           className={cn(

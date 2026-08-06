@@ -11,27 +11,14 @@ import { ClientSelect } from "@/components/shared/client-select";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ActionType } from "@/hooks/use-wa-inbox";
+import { useI18n } from "@/components/i18n-provider";
+import { formatDate } from "@/lib/i18n";
 
 interface WaInboxItemProps {
   item: WaInboxItemData;
   busy?: boolean;
   onConfirm: (id: string, actionType: ActionType, clientId?: string, targetWorkItemId?: string, duplicateAction?: "warn" | "allow") => Promise<{ duplicateWarning: WaInboxItemData["duplicateWarning"] }>;
   onReject: (id: string) => void;
-}
-
-function formatReceivedAt(value: string) {
-  return new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatDueAt(value: string | null) {
-  if (!value) return "Belum ditentukan";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-  }).format(new Date(value));
 }
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -48,6 +35,7 @@ function ConfidenceBar({ value }: { value: number }) {
 }
 
 export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInboxItemProps) {
+  const { locale, t } = useI18n();
   const isSuggestion = item.type === "suggestion";
   const [clientId, setClientId] = useState(item.suggestedClientId);
   const [duplicateWarning, setDuplicateWarning] = useState(item.duplicateWarning);
@@ -81,10 +69,10 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               <span>·</span>
               <span className="flex items-center gap-1">
                 <Clock3 className="size-3.5" />
-                {formatReceivedAt(item.receivedAt)}
+                {formatDate(item.receivedAt, locale, { hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
-            {isSuggestion && <Badge className="mt-2 bg-amber-100 text-amber-700 hover:bg-amber-100">Saran tindakan</Badge>}
+            {isSuggestion && <Badge className="mt-2 bg-amber-100 text-amber-700 hover:bg-amber-100">{t("whatsapp.actionSuggestion")}</Badge>}
           </div>
         </div>
 
@@ -97,10 +85,10 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               {item.suggestedDescription && <p className="mt-1 text-sm text-slate-500">{item.suggestedDescription}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-              <div><span className="block text-slate-400">Maker</span><span className="font-medium text-slate-800">{item.makerName ?? "Belum ada"}</span></div>
-              <div><span className="block text-slate-400">Checker</span><span className="font-medium text-slate-800">{item.checkerName ?? "Belum ada"}</span></div>
-              <div><span className="block text-slate-400">Deadline</span><span className="font-medium text-slate-800">{formatDueAt(item.dueAt)}</span></div>
-              <div><span className="block text-slate-400">Keyakinan AI</span><ConfidenceBar value={item.confidence} /></div>
+              <div><span className="block text-slate-400">{t("whatsapp.maker")}</span><span className="font-medium text-slate-800">{item.makerName ?? t("common.notAvailable")}</span></div>
+              <div><span className="block text-slate-400">{t("whatsapp.checker")}</span><span className="font-medium text-slate-800">{item.checkerName ?? t("common.notAvailable")}</span></div>
+              <div><span className="block text-slate-400">{t("whatsapp.due")}</span><span className="font-medium text-slate-800">{item.dueAt ? formatDate(item.dueAt, locale, { day: "numeric", month: "short" }) : t("common.notAvailable")}</span></div>
+              <div><span className="block text-slate-400">{t("whatsapp.aiConfidence")}</span><ConfidenceBar value={item.confidence} /></div>
             </div>
             <ClientSelect id={`wa-client-${item.id}`} value={clientId || item.suggestedClientId} onChange={setClientId} />
             <div className="space-y-1.5">
@@ -108,10 +96,10 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
               <Select value={actionType} onValueChange={(value) => setActionType((value ?? "work_item") as ActionType)}>
                 <SelectTrigger id={`wa-action-${item.id}`} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="work_item">Work Item</SelectItem>
-                  <SelectItem value="project">Project</SelectItem>
-                  <SelectItem value="update_existing">Update existing</SelectItem>
-                  <SelectItem value="information_only">Information only</SelectItem>
+                  <SelectItem value="work_item">{t("whatsapp.workItem")}</SelectItem>
+                  <SelectItem value="project">{t("whatsapp.project")}</SelectItem>
+                  <SelectItem value="update_existing">{t("whatsapp.updateExisting")}</SelectItem>
+                  <SelectItem value="information_only">{t("whatsapp.informationOnly")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -119,16 +107,16 @@ export function WaInboxItem({ item, busy = false, onConfirm, onReject }: WaInbox
             {duplicateWarning && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="font-semibold">Pekerjaan aktif yang sama ditemukan</p><ul className="mt-2 list-disc pl-5">{duplicateWarning.duplicates.map((duplicate) => <li key={duplicate.id}>{duplicate.title} — {duplicate.status}</li>)}</ul></div>}
           </div>
         ) : (
-          <p className="text-sm text-slate-500">Pesan ini belum menghasilkan saran work item.</p>
+          <p className="text-sm text-slate-500">{t("whatsapp.noSuggestion")}</p>
         )}
 
         {isSuggestion && (
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" size="sm" disabled={busy} onClick={() => onReject(item.id)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
-              <X /> Tolak
+              <X /> {t("common.reject")}
             </Button>
               <Button size="sm" disabled={busy || (actionType !== "information_only" && !(clientId || item.suggestedClientId)) || (actionType === "update_existing" && !targetWorkItemId)} onClick={async () => { const result = await onConfirm(item.id, actionType, clientId || item.suggestedClientId, targetWorkItemId || undefined, duplicateWarning ? "allow" : "warn"); setDuplicateWarning(result.duplicateWarning); }} className="bg-emerald-600 text-white hover:bg-emerald-700">
-              <Check /> {duplicateWarning ? "Tetap proses" : actionType === "information_only" ? "Tandai informasi" : actionType === "update_existing" ? "Konfirmasi update" : actionType === "project" ? "Konfirmasi & buat project" : "Konfirmasi & buat tugas"}
+              <Check /> {duplicateWarning ? t("whatsapp.processAnyway") : actionType === "information_only" ? t("whatsapp.markInformation") : actionType === "update_existing" ? t("whatsapp.confirmUpdate") : actionType === "project" ? t("whatsapp.confirmProject") : t("whatsapp.confirmTask")}
             </Button>
           </div>
         )}

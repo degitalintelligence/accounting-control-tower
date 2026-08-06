@@ -14,10 +14,12 @@ import { StatCardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { InsightsCard } from "@/components/dashboard/insights-card";
 import { KpiGrid } from "@/components/dashboard/kpi-grid";
 import { OverdueAgingCard } from "@/components/dashboard/overdue-aging-card";
+import { useI18n } from "@/components/i18n-provider";
 
 export default function DashboardPage() {
   const { stats, kpis, insights, sections, loading, error, partialFailures, refetch } = useDashboard();
   const user = useAuthStore((s) => s.user);
+  const { t } = useI18n();
 
   return (
     <main className="flex-1 min-h-screen bg-canvas p-4 sm:p-6">
@@ -30,16 +32,16 @@ export default function DashboardPage() {
       {error && (
         <div role="alert" className="mb-6 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold">Dashboard gagal dimuat.</p>
+            <p className="font-semibold">{t("dashboard.loadError")}</p>
             <p className="mt-1">{error}</p>
           </div>
           <Button type="button" variant="outline" onClick={refetch} className="w-fit gap-2 border-red-200 bg-white text-red-700 hover:bg-red-100">
             <RefreshCw className="size-4" />
-            Coba lagi
+            {t("common.retry")}
           </Button>
         </div>
       )}
-      {!error && partialFailures.length > 0 && <div role="status" className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between"><span>Sebagian data belum tersedia: {partialFailures.join(", ")}.</span><Button type="button" variant="outline" onClick={refetch} className="w-fit border-amber-200 bg-white text-amber-800 hover:bg-amber-100">Muat ulang</Button></div>}
+      {!error && partialFailures.length > 0 && <div role="status" className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between"><span>{t("dashboard.partialData")}: {partialFailures.join(", ")}.</span><Button type="button" variant="outline" onClick={refetch} className="w-fit border-amber-200 bg-white text-amber-800 hover:bg-amber-100">{t("common.reload")}</Button></div>}
 
       {/* Stats Grid */}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
@@ -55,44 +57,44 @@ export default function DashboardPage() {
             <StatCard
               variant="danger"
               icon={AlertTriangle}
-              label="Terlambat Kritis"
+              label={t("dashboard.criticalOverdue")}
               value={stats?.critical_overdue ?? 0}
-              description="butuh tindakan segera"
-              actionText="Lihat semua"
+              description={t("dashboard.criticalOverdueDescription")}
+              actionText={t("common.viewAll")}
               actionHref="/work-items?tab=overdue"
             />
             <StatCard
               variant="warning"
               icon={Clock}
-              label="Menunggu Review"
+              label={t("dashboard.waitingReview")}
               value={stats?.waiting_review ?? 0}
-              description="menunggu persetujuan Anda"
-              actionText="Review sekarang"
+              description={t("dashboard.waitingReviewDescription")}
+              actionText={t("dashboard.reviewNow")}
               actionHref="/work-items?filter=review"
             />
             <StatCard
               variant="neutral"
               icon={Ban}
-              label="Terblokir"
+              label={t("dashboard.blocked")}
               value={stats?.blocked ?? 0}
-              description="tergantung pihak lain"
-              actionText="Tindak lanjuti"
+              description={t("dashboard.blockedDescription")}
+              actionText={t("dashboard.followUp")}
               actionHref="/work-items?status=blocked"
             />
             <StatCard
               variant="success"
               icon={TrendingUp}
-              label="Tingkat Tepat Waktu"
+              label={t("dashboard.onTimeRate")}
               value={`${stats?.on_time_rate ?? 0}%`}
-              description={`${stats?.total_completed ?? 0} total selesai`}
-              actionText="Lihat tren"
+              description={`${stats?.total_completed ?? 0} ${t("dashboard.totalCompleted")}`}
+              actionText={t("dashboard.viewTrend")}
               actionHref="/reports"
             />
           </>
         ) : null}
       </div>
 
-      {!loading && <div className="mb-6 space-y-3"><KpiGrid kpis={kpis} />{kpis && <OverdueAgingCard buckets={kpis.overdue_aging} />}{!kpis && !error && <EmptyDashboard text="KPI belum tersedia." />}</div>}
+      {!loading && <div className="mb-6 space-y-3"><KpiGrid kpis={kpis} />{kpis && <OverdueAgingCard buckets={kpis.overdue_aging} />}{!kpis && !error && <EmptyDashboard text={t("dashboard.kpiUnavailable")} />}</div>}
 
       <div className="mb-6">
         <InsightsCard insights={insights} />

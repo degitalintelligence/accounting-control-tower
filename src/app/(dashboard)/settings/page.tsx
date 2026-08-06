@@ -7,21 +7,25 @@ import { Building2, Clock3, Coins, Info, Loader2, RefreshCw, Settings2 } from "l
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { settingsTabs } from "@/lib/navigation";
+import { useI18n } from "@/components/i18n-provider";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function SettingsPage() {
   const pathname = usePathname();
-  const [form, setForm] = React.useState({ name: "", slug: "", timezone: "Asia/Jakarta", currency: "IDR" });
+  const [form, setForm] = React.useState({ name: "", slug: "", timezone: "Asia/Jakarta", currency: "IDR", locale: "id-ID" as "id-ID" | "en-US" });
+  const { t } = useI18n();
   const [saving, setSaving] = React.useState(false);
-  const [message, setMessage] = React.useState<string | null>(null);
+  const [message, setMessage] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const setLocale = useAuthStore((state) => state.setLocale);
 
-  async function loadSettings() { setLoading(true); setError(null); try { const response = await fetch("/api/settings/organization", { cache: "no-store" }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? "Pengaturan gagal dimuat."); const settings = body.data?.settings ?? {}; setForm({ name: body.data?.name ?? "", slug: body.data?.slug ?? "", timezone: settings.timezone ?? "Asia/Jakarta", currency: settings.currency ?? "IDR" }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Pengaturan gagal dimuat."); } finally { setLoading(false); } }
+  async function loadSettings() { setLoading(true); setError(null); try { const response = await fetch("/api/settings/organization", { cache: "no-store" }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? t("settings.loadingError")); const settings = body.data?.settings ?? {}; setForm({ name: body.data?.name ?? "", slug: body.data?.slug ?? "", timezone: settings.timezone ?? "Asia/Jakarta", currency: settings.currency ?? "IDR", locale: settings.locale === "en-US" ? "en-US" : "id-ID" }); } catch (cause) { setError(cause instanceof Error ? cause.message : t("settings.loadingError")); } finally { setLoading(false); } }
   React.useEffect(() => { const timer = window.setTimeout(() => { void loadSettings(); }, 0); return () => window.clearTimeout(timer); }, []);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setSaving(true); setMessage(null); setError(null);
-    try { const response = await fetch("/api/settings/organization", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? "Pengaturan gagal disimpan."); setMessage("Pengaturan tersimpan."); } catch (cause) { setError(cause instanceof Error ? cause.message : "Pengaturan gagal disimpan."); } finally { setSaving(false); }
+    event.preventDefault(); setSaving(true); setMessage(false); setError(null);
+    try { const response = await fetch("/api/settings/organization", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? t("settings.loadingError")); setLocale(form.locale); setMessage(true); window.dispatchEvent(new Event("workspace-language-changed")); } catch (cause) { setError(cause instanceof Error ? cause.message : t("settings.loadingError")); } finally { setSaving(false); }
   }
 
   return (
@@ -57,7 +61,7 @@ export default function SettingsPage() {
               )}
             >
               <tab.icon aria-hidden="true" className="size-3.5" />
-              {tab.label}
+              {t(tab.labelKey as never)}
             </Link>
           );
         })}
@@ -95,7 +99,8 @@ export default function SettingsPage() {
               <div className="relative"><Clock3 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input id="organization-timezone" className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })} required /></div>
             </div>
             <div><label htmlFor="organization-currency" className="mb-1.5 block text-sm font-semibold text-slate-700">Mata uang</label><div className="relative"><Coins className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input id="organization-currency" className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm uppercase text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} required /></div></div>
-            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5"><Button disabled={saving} className="cta-primary">{saving && <Loader2 className="size-4 animate-spin" />}Simpan perubahan</Button>{message && <p role="status" className="text-sm font-medium text-emerald-700">{message}</p>}</div>
+            <div><label htmlFor="organization-locale" className="mb-1.5 block text-sm font-semibold text-slate-700">{t("settings.language")}</label><select id="organization-locale" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.locale} onChange={(event) => setForm({ ...form, locale: event.target.value as "id-ID" | "en-US" })}><option value="id-ID">{t("settings.indonesian")}</option><option value="en-US">{t("settings.english")}</option></select><p className="mt-1.5 text-xs text-slate-500">{t("settings.languageHelp")}</p></div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5"><Button type="submit" disabled={saving} className="cta-primary">{saving && <Loader2 className="size-4 animate-spin" />}{t("settings.save")}</Button>{message && <p role="status" className="text-sm font-medium text-emerald-700">{t("settings.saved")}</p>}</div>
           </form>}
 
           <div className="mt-5 flex gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900"><Info className="mt-0.5 size-4 shrink-0 text-blue-600" />Perubahan nama dan konfigurasi berlaku untuk seluruh workspace. Pastikan timezone dan mata uang sesuai kebutuhan operasional.</div>

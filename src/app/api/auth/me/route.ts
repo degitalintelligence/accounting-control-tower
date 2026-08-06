@@ -53,14 +53,15 @@ export async function GET() {
   const organizationIds = [...new Set(memberships.map((membership) => membership.organization_id))];
   const { data: organizations } = (await admin
     .from("organizations")
-    .select("id, name, slug")
+    .select("id, name, slug, settings")
     .in("id", organizationIds)
     .is("deleted_at", null)
-    .order("name")) as unknown as { data: Array<{ id: string; name: string; slug: string }> | null };
+  .order("name")) as unknown as { data: Array<{ id: string; name: string; slug: string; settings?: { locale?: string } }> | null };
   const selectedOrganizationId = (await cookies()).get("acct_ctrl_active_organization")?.value;
   const activeOrganizationId = selectedOrganizationId && organizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : organizationIds[0];
   const activeMembership = memberships.find((membership) => membership.organization_id === activeOrganizationId) ?? memberships[0];
   const activeOrganization = organizations?.find((organization) => organization.id === activeOrganizationId);
+  const organizationSettings = (activeOrganization as { settings?: { locale?: string } } | undefined)?.settings;
 
   // #region debug-point A:auth-organizations
   void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "new-workspace-missing", runId: "pre-fix", hypothesisId: "A", location: "src/app/api/auth/me/route.ts:response", msg: "[DEBUG] Auth organizations response", data: { membershipOrganizationCount: organizationIds.length, returnedOrganizationCount: organizations?.length ?? 0, activeOrganizationMatches: Boolean(activeOrganization) } }) }).catch(() => {});
@@ -74,5 +75,6 @@ export async function GET() {
     organization_id: activeMembership.organization_id,
     organization_name: activeOrganization?.name ?? "",
     organizations: (organizations ?? []).map((organization) => ({ ...organization, is_active: organization.id === activeOrganizationId })),
+    locale: organizationSettings?.locale === "en-US" ? "en-US" : "id-ID",
   });
 }

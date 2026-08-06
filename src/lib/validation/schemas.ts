@@ -29,6 +29,7 @@ export const organizationUpdateSchema = z.object({
   slug: z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   timezone: z.string().trim().min(1).max(100),
   currency: z.string().trim().min(3).max(10),
+  locale: z.enum(["id-ID", "en-US"]).default("id-ID"),
 }).strict();
 
 export const memberCreateSchema = z.object({

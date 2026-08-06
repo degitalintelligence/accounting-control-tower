@@ -17,18 +17,16 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, FileText, Plus, Search } from "lucide-react";
 import { useTemplates } from "@/hooks/use-templates";
+import { useI18n } from "@/components/i18n-provider";
 
 const TYPE_OPTIONS = [
-  { value: "", label: "Semua Jenis" },
-  { value: "routine", label: "Rutin" },
-  { value: "project", label: "Proyek" },
-  { value: "ad_hoc", label: "Ad Hoc" },
-  { value: "report", label: "Laporan" },
+  { value: "", key: "work.allTypes" }, { value: "routine", key: "work.routine" }, { value: "project", key: "work.project" }, { value: "ad_hoc", key: "work.adHoc" }, { value: "report", key: "work.report" },
 ];
 
 function TemplatesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useI18n();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
@@ -103,9 +101,9 @@ function TemplatesPageContent() {
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FileText className="size-4" /> Control Library</div>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Template pekerjaan</h1>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{t("templates.title")}</h1>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Kelola blueprint pekerjaan yang bisa digunakan berulang
+              {t("templates.description")}
             </p>
           </div>
           <Button
@@ -113,7 +111,7 @@ function TemplatesPageContent() {
             className="cta-primary shrink-0"
           >
             <Plus className="size-4" />
-            Buat Template
+            {t("templates.create")}
           </Button>
         </div>
 
@@ -122,7 +120,7 @@ function TemplatesPageContent() {
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
             <Input
-              placeholder="Cari template..."
+              placeholder={t("templates.search")}
               defaultValue={search}
               onChange={(e) => {
                 if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
@@ -138,7 +136,7 @@ function TemplatesPageContent() {
             onValueChange={(val) => updateParam("type", (val as string) ?? "")}
           >
             <SelectTrigger className="h-10 min-w-[160px] bg-white text-sm">
-              <SelectValue placeholder="Semua Jenis" />
+              <SelectValue placeholder={t("work.allTypes")} />
             </SelectTrigger>
             <SelectContent>
               {TYPE_OPTIONS.map((opt) => (
@@ -146,7 +144,7 @@ function TemplatesPageContent() {
                   key={opt.value || "__all__"}
                   value={opt.value || "__all__"}
                 >
-                  {opt.label}
+                  {t(opt.key as never)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -156,7 +154,7 @@ function TemplatesPageContent() {
         {/* Results count */}
         {!loading && (
           <p className="text-sm font-medium text-slate-500">
-            {total} template ditemukan
+            {total} {t("templates.found")}
           </p>
         )}
 
@@ -170,7 +168,7 @@ function TemplatesPageContent() {
               className="mt-2"
               onClick={refetch}
             >
-              Coba Lagi
+              {t("common.tryAgain")}
             </Button>
           </div>
         )}
@@ -184,10 +182,10 @@ function TemplatesPageContent() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <FileText className="size-12 text-slate-300 mb-3" />
             <h3 className="text-base font-medium text-slate-900 mb-1">
-              Belum ada template
+              {t("templates.empty")}
             </h3>
             <p className="text-sm text-slate-400 mb-4">
-              Buat template pertama Anda untuk mempercepat pembuatan pekerjaan.
+              {t("templates.emptyDescription")}
             </p>
             <Button
               onClick={() => setCreateDialogOpen(true)}

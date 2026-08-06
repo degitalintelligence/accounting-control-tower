@@ -8,6 +8,8 @@ import { StatusBadge } from "./status-badge";
 import { PriorityBadge } from "./priority-badge";
 import { cn } from "@/lib/utils";
 import type { WorkItemType, WorkItemStatus, WorkItemPriority, Assignment } from "@/types/work-item";
+import { useI18n } from "@/components/i18n-provider";
+import { formatDate } from "@/lib/i18n";
 
 interface WorkItemCardProps {
   id: string;
@@ -20,10 +22,10 @@ interface WorkItemCardProps {
 }
 
 const TYPE_CONFIG: Record<WorkItemType, { label: string; className: string }> = {
-  routine: { label: "Rutin", className: "bg-slate-100 text-slate-600" },
-  project: { label: "Proyek", className: "bg-blue-50 text-blue-600" },
-  ad_hoc: { label: "Ad Hoc", className: "bg-orange-50 text-orange-600" },
-  report: { label: "Laporan", className: "bg-purple-50 text-purple-600" },
+  routine: { label: "work.routine", className: "bg-slate-100 text-slate-600" },
+  project: { label: "work.project", className: "bg-blue-50 text-blue-600" },
+  ad_hoc: { label: "work.adHoc", className: "bg-orange-50 text-orange-600" },
+  report: { label: "work.report", className: "bg-purple-50 text-purple-600" },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -32,25 +34,25 @@ const ROLE_LABELS: Record<string, string> = {
   approver: "A",
 };
 
-function formatDueDate(iso: string): { label: string; isOverdue: boolean } {
+function formatDueDate(iso: string, locale: "id-ID" | "en-US", today: string, tomorrow: string, overdueHours: string): { label: string; isOverdue: boolean } {
   const date = new Date(iso);
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-  const formatted = date.toLocaleDateString("id-ID", {
+  const formatted = formatDate(date, locale, {
     day: "numeric",
     month: "short",
   });
 
   if (diffDays < 0) {
-    return { label: `${Math.abs(diffDays)}h terlambat`, isOverdue: true };
+    return { label: `${Math.abs(diffDays)}${overdueHours}`, isOverdue: true };
   }
   if (diffDays === 0) {
-    return { label: "Hari ini", isOverdue: false };
+    return { label: today, isOverdue: false };
   }
   if (diffDays === 1) {
-    return { label: "Besok", isOverdue: false };
+    return { label: tomorrow, isOverdue: false };
   }
   return { label: formatted, isOverdue: false };
 }
@@ -65,8 +67,9 @@ export function WorkItemCard({
   assignments = [],
 }: WorkItemCardProps) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const typeConfig = TYPE_CONFIG[type] ?? TYPE_CONFIG.routine;
-  const dueInfo = due_at ? formatDueDate(due_at) : null;
+  const dueInfo = due_at ? formatDueDate(due_at, locale, t("work.today"), t("work.tomorrow"), t("work.overdueHours")) : null;
 
   const terminalStatuses: WorkItemStatus[] = ["completed", "cancelled"];
   const isTerminal = terminalStatuses.includes(status);
@@ -87,7 +90,7 @@ export function WorkItemCard({
       {/* Top row: badges */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <Badge className={cn(typeConfig.className, "text-[10px]")}>
-          {typeConfig.label}
+          {t(typeConfig.label as never)}
         </Badge>
         <StatusBadge status={status} />
         <PriorityBadge priority={priority} />
@@ -116,7 +119,7 @@ export function WorkItemCard({
             {dueInfo.label}
           </div>
         ) : (
-          <span className="text-[11px] text-slate-300">Tanpa tenggat</span>
+          <span className="text-[11px] text-slate-300">{t("work.noDueDate")}</span>
         )}
 
         {/* Assignee avatars */}

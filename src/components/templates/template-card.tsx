@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WorkItemType, WorkItemPriority } from "@/types/work-item";
 import type { TemplateVersion } from "@/types/template";
+import { useI18n } from "@/components/i18n-provider";
 
 interface TemplateCardProps {
   id: string;
@@ -19,17 +20,17 @@ interface TemplateCardProps {
 }
 
 const TYPE_CONFIG: Record<WorkItemType, { label: string; className: string }> = {
-  routine: { label: "Rutin", className: "bg-slate-100 text-slate-600" },
-  project: { label: "Proyek", className: "bg-blue-50 text-blue-600" },
-  ad_hoc: { label: "Ad Hoc", className: "bg-orange-50 text-orange-600" },
-  report: { label: "Laporan", className: "bg-purple-50 text-purple-600" },
+  routine: { label: "work.routine", className: "bg-slate-100 text-slate-600" },
+  project: { label: "work.project", className: "bg-blue-50 text-blue-600" },
+  ad_hoc: { label: "work.adHoc", className: "bg-orange-50 text-orange-600" },
+  report: { label: "work.report", className: "bg-purple-50 text-purple-600" },
 };
 
 const PRIORITY_CONFIG: Record<WorkItemPriority, { label: string; dotClass: string; textClass: string }> = {
-  low: { label: "Rendah", dotClass: "bg-slate-400", textClass: "text-slate-500" },
-  medium: { label: "Sedang", dotClass: "bg-blue-500", textClass: "text-blue-600" },
-  high: { label: "Tinggi", dotClass: "bg-amber-500", textClass: "text-amber-600" },
-  critical: { label: "Kritis", dotClass: "bg-red-500", textClass: "text-red-600" },
+  low: { label: "priority.low", dotClass: "bg-slate-400", textClass: "text-slate-500" },
+  medium: { label: "priority.medium", dotClass: "bg-blue-500", textClass: "text-blue-600" },
+  high: { label: "priority.high", dotClass: "bg-amber-500", textClass: "text-amber-600" },
+  critical: { label: "priority.critical", dotClass: "bg-red-500", textClass: "text-red-600" },
 };
 
 function getStepCount(version: TemplateVersion | null): number {
@@ -49,6 +50,7 @@ export function TemplateCard({
   onInstantiate,
 }: TemplateCardProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const typeConfig = TYPE_CONFIG[type] ?? TYPE_CONFIG.routine;
   const priorityConfig = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.medium;
   const stepCount = getStepCount(latest_version);
@@ -68,11 +70,11 @@ export function TemplateCard({
       {/* Top row: badges */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <Badge className={cn(typeConfig.className, "text-xs")}>
-          {typeConfig.label}
+          {t(typeConfig.label as never)}
         </Badge>
         <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", priorityConfig.textClass)}>
           <span className={cn("size-1.5 rounded-full shrink-0", priorityConfig.dotClass)} />
-          {priorityConfig.label}
+          {t(priorityConfig.label as never)}
         </span>
       </div>
 

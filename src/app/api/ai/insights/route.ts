@@ -54,7 +54,7 @@ export async function GET() {
   const metrics = { current: aggregate(rows.data ?? [], currentStart, today, now), previous: aggregate(rows.data ?? [], previousStart, currentStart, now) };
   let insights: DashboardInsights;
   try {
-    insights = await generateDashboardInsights(metricsContext(metrics));
+    insights = await generateDashboardInsights(metricsContext(metrics), auth.context.locale);
   } catch (error) {
     const aiError = error instanceof OpenRouterError ? error : null;
     console.error("[ai-insights] provider failure", {

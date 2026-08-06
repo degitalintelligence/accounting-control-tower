@@ -5,6 +5,7 @@ import { parseExplicitCommand, parseExplicitWorkItemCommand, explicitCommandHelp
 import { canTransition, getTransition } from "@/lib/work-engine/status-machine";
 import type { AssignmentRole, WorkItemStatus } from "@/types/work-item";
 import { createWhatsAppSessionAdapter } from "@/lib/whatsapp/adapter";
+import { resolveOrganizationLocale } from "@/lib/ai/locale";
 
 type WorkerClient = Pick<SupabaseClient, "from" | "rpc">;
 
@@ -143,7 +144,7 @@ async function processJob(admin: WorkerClient, row: JobRow) {
   if (!runId) throw new Error("Extraction run tidak dapat dibuat.");
 
   try {
-    const extraction = await extractTasksFromMessage(message.content ?? "");
+    const extraction = await extractTasksFromMessage(message.content ?? "", await resolveOrganizationLocale(admin, message.organization_id));
     for (const task of extraction.tasks) {
       const maker = task.maker_name ? await resolveProfileName(admin, message.wa_group_id, task.maker_name) : null;
       const checker = task.checker_name ? await resolveProfileName(admin, message.wa_group_id, task.checker_name) : null;
@@ -199,7 +200,7 @@ async function processAiIntake(admin: WorkerClient, row: JobRow) {
   if (claimedData.error) throw new Error(claimedData.error.message);
   if (!claimedData.data) return;
   try {
-    const extraction = await extractTasksFromMessage(intake.data.source_text);
+    const extraction = await extractTasksFromMessage(intake.data.source_text, await resolveOrganizationLocale(admin, row.organization_id));
     const rows = extraction.tasks.map((task, index) => ({ organization_id: row.organization_id, intake_id: intakeId, source_task_key: `${promptVersion}:${index}:${task.title.trim().toLowerCase()}:${task.source_context.trim().toLowerCase()}`, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
     if (rows.length) { const inserted = await admin.from("ai_draft_items").upsert(rows as never, { onConflict: "intake_id,source_task_key", ignoreDuplicates: true }); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
     const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
@@ -231,7 +232,7 @@ async function processConversationSummary(admin: WorkerClient, row: JobRow) {
   const participants = [...new Set(rows.map((message) => message.sender_participant_id).filter((value): value is string => Boolean(value)))];
   const deterministicSummary = `${rows.length} pesan dari ${participants.length} pengirim pada jendela 7 hari.`;
   const context = rows.map((message) => `[message_id=${message.id}] [${message.received_at}] ${message.sender_participant_id ?? "unknown"}: ${(message.content ?? `[${message.message_type}]`).slice(0, 500)}`).join("\n");
-  const ai = await generateWhatsAppSummary(context);
+  const ai = await generateWhatsAppSummary(context, await resolveOrganizationLocale(admin, organizationId));
   const upsert = await admin.from("whatsapp_conversation_summaries").upsert({ organization_id: organizationId, wa_group_id: groupId, window_start: start.toISOString(), window_end: end.toISOString(), message_count: rows.length, participant_count: participants.length, participants, latest_message_at: rows.at(-1)?.received_at ?? null, deterministic_summary: deterministicSummary, ai_summary: ai.summary, ai_action_suggestions: ai.actions.map((action) => ({ ...action, requires_human_review: true })), status: "completed", attempt_count: 1, last_error: null, updated_at: new Date().toISOString() }, { onConflict: "organization_id,wa_group_id,window_start" }).select("id").single();
   const result = upsert as unknown as { data: { id: string } | null; error: { message: string } | null };
   if (result.error) throw new Error(result.error.message);

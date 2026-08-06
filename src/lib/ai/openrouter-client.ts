@@ -1,5 +1,6 @@
 import "server-only";
-import { buildInsightsPrompt, buildReviewAssistantPrompt, buildTaskExtractionPrompt, buildWhatsAppSummaryPrompt, INSIGHTS_SCHEMA, INSIGHTS_SYSTEM_PROMPT, REVIEW_ASSISTANT_SCHEMA, REVIEW_ASSISTANT_SYSTEM_PROMPT, TASK_EXTRACTION_SCHEMA, TASK_EXTRACTION_SYSTEM_PROMPT, WHATSAPP_SUMMARY_SCHEMA, WHATSAPP_SUMMARY_SYSTEM_PROMPT } from "./prompts";
+import { buildInsightsPrompt, buildInsightsSystemPrompt, buildReviewAssistantPrompt, buildReviewAssistantSystemPrompt, buildTaskExtractionPrompt, buildTaskExtractionSystemPrompt, buildWhatsAppSummaryPrompt, buildWhatsAppSummarySystemPrompt, INSIGHTS_SCHEMA, REVIEW_ASSISTANT_SCHEMA, TASK_EXTRACTION_SCHEMA, WHATSAPP_SUMMARY_SCHEMA } from "./prompts";
+import type { AppLocale } from "@/lib/i18n";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -294,7 +295,7 @@ function isAbortError(error: unknown): boolean {
   return isRecord(error) && error.name === "AbortError";
 }
 
-export async function extractTasksFromMessage(message: string): Promise<TaskExtraction> {
+export async function extractTasksFromMessage(message: string, locale: AppLocale): Promise<TaskExtraction> {
   const cleanMessage = sanitizeMessage(message);
   if (!cleanMessage) return { classification: "noise", tasks: [] };
 
@@ -315,8 +316,8 @@ export async function extractTasksFromMessage(message: string): Promise<TaskExtr
       body: JSON.stringify({
         model: config.model,
         messages: [
-          { role: "system", content: TASK_EXTRACTION_SYSTEM_PROMPT },
-          { role: "user", content: buildTaskExtractionPrompt(cleanMessage) },
+          { role: "system", content: buildTaskExtractionSystemPrompt(locale) },
+          { role: "user", content: buildTaskExtractionPrompt(cleanMessage, locale) },
         ],
         temperature: 0,
         response_format: { type: "json_schema", json_schema: { name: "task_extraction", strict: true, schema: TASK_EXTRACTION_SCHEMA } },
@@ -375,20 +376,20 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, schema: 
   }
 }
 
-export async function assistReview(context: string): Promise<ReviewAssistantResult> {
+export async function assistReview(context: string, locale: AppLocale): Promise<ReviewAssistantResult> {
   const cleanContext = limitText(context, 4_000);
   if (!cleanContext) throw new OpenRouterError("INVALID_RESPONSE", "Konteks review kosong.");
-  return validateReviewAssistant(await callOpenRouter(REVIEW_ASSISTANT_SYSTEM_PROMPT, buildReviewAssistantPrompt(cleanContext), REVIEW_ASSISTANT_SCHEMA, "review_assistant"));
+  return validateReviewAssistant(await callOpenRouter(buildReviewAssistantSystemPrompt(locale), buildReviewAssistantPrompt(cleanContext, locale), REVIEW_ASSISTANT_SCHEMA, "review_assistant"));
 }
 
-export async function generateDashboardInsights(context: string): Promise<DashboardInsights> {
+export async function generateDashboardInsights(context: string, locale: AppLocale): Promise<DashboardInsights> {
   const cleanContext = limitText(context, 4_000);
   if (!cleanContext) throw new OpenRouterError("INVALID_RESPONSE", "Konteks insights kosong.");
-  return validateDashboardInsights(await callOpenRouter(INSIGHTS_SYSTEM_PROMPT, buildInsightsPrompt(cleanContext), INSIGHTS_SCHEMA, "dashboard_insights"));
+  return validateDashboardInsights(await callOpenRouter(buildInsightsSystemPrompt(locale), buildInsightsPrompt(cleanContext, locale), INSIGHTS_SCHEMA, "dashboard_insights"));
 }
 
-export async function generateWhatsAppSummary(context: string): Promise<WhatsAppSummaryResult> {
+export async function generateWhatsAppSummary(context: string, locale: AppLocale): Promise<WhatsAppSummaryResult> {
   const cleanContext = limitText(context, 12_000);
-  if (!cleanContext) return { summary: "Tidak ada pesan operasional yang dapat diringkas.", actions: [] };
-  return validateWhatsAppSummary(await callOpenRouter(WHATSAPP_SUMMARY_SYSTEM_PROMPT, buildWhatsAppSummaryPrompt(cleanContext), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary"));
+  if (!cleanContext) return { summary: locale === "en-US" ? "There are no operational messages to summarize." : "Tidak ada pesan operasional yang dapat diringkas.", actions: [] };
+  return validateWhatsAppSummary(await callOpenRouter(buildWhatsAppSummarySystemPrompt(locale), buildWhatsAppSummaryPrompt(cleanContext), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary"));
 }

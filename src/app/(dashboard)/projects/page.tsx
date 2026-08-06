@@ -17,25 +17,16 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
 import { useProjects } from "@/hooks/use-projects";
+import { useI18n } from "@/components/i18n-provider";
 
 const STATUS_OPTIONS = [
-  { value: "", label: "Semua Status" },
-  { value: "draft", label: "Draft" },
-  { value: "assigned", label: "Ditugaskan" },
-  { value: "in_progress", label: "Sedang Dikerjakan" },
-  { value: "blocked", label: "Terblokir" },
-  { value: "submitted", label: "Menunggu Review" },
-  { value: "under_review", label: "Sedang Direview" },
-  { value: "revision_required", label: "Perlu Revisi" },
-  { value: "awaiting_approval", label: "Menunggu Persetujuan" },
-  { value: "approved", label: "Disetujui" },
-  { value: "completed", label: "Selesai" },
-  { value: "cancelled", label: "Dibatalkan" },
+  { value: "", key: "work.allStatus" }, { value: "draft", key: "status.draft" }, { value: "assigned", key: "status.assigned" }, { value: "in_progress", key: "status.inProgress" }, { value: "blocked", key: "status.blocked" }, { value: "submitted", key: "status.submitted" }, { value: "under_review", key: "status.underReview" }, { value: "revision_required", key: "status.revisionRequired" }, { value: "awaiting_approval", key: "status.awaitingApproval" }, { value: "approved", key: "status.approved" }, { value: "completed", key: "status.completed" }, { value: "cancelled", key: "status.cancelled" },
 ];
 
 function ProjectsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useI18n();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
@@ -108,10 +99,10 @@ function ProjectsPageContent() {
         <div className="space-y-3">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FolderKanban className="size-4" /> Work Management</div>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Proyek</h1>
+              <div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FolderKanban className="size-4" /> {t("projects.title")}</div>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{t("projects.title")}</h1>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                Kelola proyek dan lacak progresnya
+                {t("projects.description")}
               </p>
             </div>
             <Button
@@ -119,7 +110,7 @@ function ProjectsPageContent() {
               className="cta-primary shrink-0"
             >
               <Plus className="size-4" />
-              Buat Proyek
+              {t("projects.create")}
             </Button>
           </div>
 
@@ -128,7 +119,7 @@ function ProjectsPageContent() {
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
               <Input
-                placeholder="Cari proyek..."
+                placeholder={t("projects.search")}
                 defaultValue={search}
                 onChange={(e) => {
                   if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
@@ -143,7 +134,7 @@ function ProjectsPageContent() {
               onValueChange={(val) => updateParam("status", (val as string) ?? "")}
             >
               <SelectTrigger className="h-10 min-w-[160px] bg-white text-sm">
-                <SelectValue placeholder="Semua Status" />
+                <SelectValue placeholder={t("work.allStatus")} />
               </SelectTrigger>
               <SelectContent>
                 {STATUS_OPTIONS.map((opt) => (
@@ -151,7 +142,7 @@ function ProjectsPageContent() {
                     key={opt.value || "all"}
                     value={opt.value || ""}
                   >
-                    {opt.label}
+                    {t(opt.key as never)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -162,7 +153,7 @@ function ProjectsPageContent() {
         {/* Results count */}
         {!loading && (
           <p className="text-sm font-medium text-slate-500">
-            {total} proyek ditemukan
+            {total} {t("projects.found")}
           </p>
         )}
 
@@ -176,7 +167,7 @@ function ProjectsPageContent() {
               className="mt-2"
               onClick={refetch}
             >
-              Coba Lagi
+              {t("common.tryAgain")}
             </Button>
           </div>
         )}
@@ -190,16 +181,16 @@ function ProjectsPageContent() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <FolderKanban className="size-12 text-slate-300 mb-3" />
             <h3 className="text-base font-medium text-slate-900 mb-1">
-              Belum ada proyek
+              {t("projects.empty")}
             </h3>
             <p className="text-sm text-slate-400 mb-4">
-              Buat proyek pertama Anda untuk mulai melacak progres.
+              {t("projects.emptyDescription")}
             </p>
             <Button
               onClick={() => setCreateDialogOpen(true)}
               className="cta-primary"
             >
-              Buat Proyek
+              {t("projects.create")}
             </Button>
           </div>
         ) : (

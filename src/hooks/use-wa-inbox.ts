@@ -142,6 +142,8 @@ export function useWaInbox() {
 
   useEffect(() => {
     queueMicrotask(() => fetchItems());
+    window.addEventListener("workspace-language-changed", fetchItems);
+    return () => window.removeEventListener("workspace-language-changed", fetchItems);
   }, [fetchItems]);
 
   const confirmSuggestion = useCallback(async (id: string, actionType: ActionType, clientId?: string, targetWorkItemId?: string, duplicateAction: "warn" | "allow" = "warn") => {

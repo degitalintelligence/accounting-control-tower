@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import type { WorkItemStatus } from "@/types/work-item";
+import { useI18n } from "@/components/i18n-provider";
 
 interface StatusTransitionButtonProps {
   workItemId: string;
@@ -30,17 +31,7 @@ interface StatusTransitionButtonProps {
 }
 
 const STATUS_LABELS: Record<WorkItemStatus, string> = {
-  draft: "Draft",
-  assigned: "Ditugaskan",
-  in_progress: "Sedang Dikerjakan",
-  blocked: "Terblokir",
-  submitted: "Menunggu Review",
-  under_review: "Sedang Direview",
-  revision_required: "Perlu Revisi",
-  awaiting_approval: "Menunggu Persetujuan",
-  approved: "Disetujui",
-  completed: "Selesai",
-  cancelled: "Dibatalkan",
+  draft: "status.draft", assigned: "status.assigned", in_progress: "status.inProgress", blocked: "status.blocked", submitted: "status.submitted", under_review: "status.underReview", revision_required: "status.revisionRequired", awaiting_approval: "status.awaitingApproval", approved: "status.approved", completed: "status.completed", cancelled: "status.cancelled",
 };
 
 const TRANSITION_MAP: Record<WorkItemStatus, { to: WorkItemStatus; label: string; requiresReason?: boolean }[]> = {
@@ -93,6 +84,7 @@ export function StatusTransitionButton({
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useI18n();
 
   const available = TRANSITION_MAP[currentStatus] ?? [];
   const isTerminal = currentStatus === "completed" || currentStatus === "cancelled";
@@ -144,7 +136,7 @@ export function StatusTransitionButton({
     e.preventDefault();
     if (!selectedTransition) return;
     if (!reason.trim()) {
-      setError("Alasan wajib diisi.");
+      setError(t("work.reasonRequired"));
       return;
     }
     executeTransition(selectedTransition.to, reason.trim());
@@ -178,11 +170,11 @@ export function StatusTransitionButton({
           <DropdownMenuGroup>
             <DropdownMenuLabel>Transisi ke:</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {available.map((t) => (
-              <DropdownMenuItem key={t.to} onClick={() => handleSelect(t)}>
-                {t.label}
+            {available.map((transition) => (
+              <DropdownMenuItem key={transition.to} onClick={() => handleSelect(transition)}>
+                {transition.label}
                 <span className="ml-auto text-[11px] text-slate-400">
-                  {STATUS_LABELS[t.to]}
+                  {t(STATUS_LABELS[transition.to] as never)}
                 </span>
               </DropdownMenuItem>
             ))}
@@ -196,7 +188,7 @@ export function StatusTransitionButton({
           <DialogHeader>
             <DialogTitle>Alasan Perubahan Status</DialogTitle>
             <DialogDescription>
-              {selectedTransition?.label} — {selectedTransition ? STATUS_LABELS[selectedTransition.to] : ""}
+              {selectedTransition?.label} — {selectedTransition ? t(STATUS_LABELS[selectedTransition.to] as never) : ""}
             </DialogDescription>
           </DialogHeader>
 

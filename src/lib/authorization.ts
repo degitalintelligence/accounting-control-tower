@@ -2,6 +2,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
+import { resolveOrganizationLocale } from "@/lib/ai/locale";
+import type { AppLocale } from "@/lib/i18n";
 
 const ACTIVE_ORGANIZATION_COOKIE = "acct_ctrl_active_organization";
 
@@ -21,6 +23,7 @@ export type AuthContext = {
   memberships: MembershipAccess[];
   clientIds: string[];
   isOrgWide: boolean;
+  locale: AppLocale;
 };
 
 export async function getAuthContext(): Promise<
@@ -61,6 +64,7 @@ export async function getAuthContext(): Promise<
       memberships: organizationMemberships,
       clientIds,
       isOrgWide: organizationMemberships.some((membership) => membership.client_id === null),
+      locale: await resolveOrganizationLocale(admin, organizationId),
     },
   };
 }

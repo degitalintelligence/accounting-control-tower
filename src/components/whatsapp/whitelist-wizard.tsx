@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronRight, Database, Link2, Loader2, MessageCirc
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/components/i18n-provider";
 
 type Connection = { id: string; provider: string; session_id: string | null; status: string; retired_at?: string | null; last_health_check_at: string | null };
 type Group = { id: string; connection_id: string; client_id: string | null; provider_group_id: string; group_name: string | null; is_active: boolean };
@@ -51,21 +52,16 @@ type Props = {
   onAddMapping: () => void;
 };
 
-const steps = [
-  ["connection", "Koneksi", Wifi],
-  ["group", "Aktifkan grup", MessageCircle],
-  ["contacts", "Petakan kontak", Users],
-  ["review", "Review", ShieldCheck],
-] as const;
-
 export function WhatsAppWhitelistWizard(props: Props) {
   const [step, setStep] = useState(0);
   const [advanced, setAdvanced] = useState(false);
+  const { locale, t } = useI18n();
+  const steps = [["connection", t("whatsapp.stepConnection"), Wifi], ["group", t("whatsapp.stepGroup"), MessageCircle], ["contacts", t("whatsapp.stepContacts"), Users], ["review", t("whatsapp.stepReview"), ShieldCheck]] as const;
   const connection = props.data.connections.find((item) => item.id === props.selected);
   const groups = props.data.groups.filter((item) => item.connection_id === props.selected);
   const selectedGroup = props.data.groups.find((item) => item.id === props.groupId);
   const mappings = props.data.mappings.filter((item) => item.wa_group_id === props.groupId);
-  const groupClientName = (clientId: string | null) => props.clients.find((item) => item.id === clientId)?.name ?? "Seluruh organisasi";
+  const groupClientName = (clientId: string | null) => props.clients.find((item) => item.id === clientId)?.name ?? t("whatsapp.allOrganization");
   const discoveredValue = (value: unknown): string => {
     if (typeof value === "string") return value;
     if (!value || typeof value !== "object") return "";
@@ -87,12 +83,12 @@ export function WhatsAppWhitelistWizard(props: Props) {
   }
 
   return <section className="surface-card rounded-2xl p-5 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-lg font-bold text-slate-950">Whitelist WhatsApp</h2><p className="mt-1 max-w-2xl text-sm text-slate-500">Ikuti empat langkah untuk menghubungkan session, mengaktifkan grup, memetakan kontak, lalu memastikan konfigurasi siap dipakai.</p></div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><h2 className="text-lg font-bold text-slate-950">{t("whatsapp.whitelist")}</h2><p className="mt-1 max-w-2xl text-sm text-slate-500">{t("whatsapp.whitelistDescription")}</p></div>
       <MessageCircle className="size-5 text-blue-600" />
     </div>
-    <nav aria-label="Langkah whitelist WhatsApp" className="mt-6 grid gap-2 sm:grid-cols-4">
-      {steps.map(([value, label, Icon], index) => <button type="button" key={value} onClick={() => index <= step && setStep(index)} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm ${index === step ? "border-blue-300 bg-blue-50 text-blue-900" : index < step ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 text-slate-500"}`}><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold shadow-sm">{index < step ? <Check className="size-4" /> : index + 1}</span><span><span className="block text-xs text-current/70">Langkah {index + 1}</span><span className="font-semibold">{label}</span></span><Icon className="ml-auto hidden size-4 sm:block" /></button>)}
+    <nav aria-label={t("whatsapp.whitelist")} className="mt-6 grid gap-2 sm:grid-cols-4">
+      {steps.map(([value, label, Icon], index) => <button type="button" key={value} onClick={() => index <= step && setStep(index)} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm ${index === step ? "border-blue-300 bg-blue-50 text-blue-900" : index < step ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 text-slate-500"}`}><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold shadow-sm">{index < step ? <Check className="size-4" /> : index + 1}</span><span><span className="block text-xs text-current/70">{t("whatsapp.step")} {index + 1}</span><span className="font-semibold">{label}</span></span><Icon className="ml-auto hidden size-4 sm:block" /></button>)}
     </nav>
     <div className="mt-6 min-h-72">
       {step === 0 && <div className="space-y-5"><div className="rounded-xl border border-blue-100 bg-blue-50 p-4"><p className="font-semibold text-blue-950">1. Hubungkan nomor operasional</p><p className="mt-1 text-sm leading-6 text-blue-800">Simpan session WAHA, mulai session, lalu pindai QR. Chat pribadi tetap tidak diproses.</p></div><div className="flex flex-col gap-2 sm:flex-row"><Input aria-label="ID sesi WAHA" placeholder="Masukkan nama session" value={props.session} onChange={(event) => props.setSession(event.target.value)} /><Button onClick={props.onCreate} disabled={props.busy === "create"} className="cta-primary">{props.busy === "create" ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Simpan koneksi</Button></div><div className="grid gap-3 lg:grid-cols-2">{props.data.connections.map((item) => { const retired = item.status === "retired"; return <div key={item.id} className={`rounded-xl border p-4 ${props.selected === item.id ? "border-blue-300 bg-blue-50/50" : "border-slate-200"}`}><button type="button" onClick={() => props.onSelect(item.id)} className="flex w-full items-start justify-between gap-3 text-left"><span><span className="block font-semibold">{item.session_id || "Session tanpa nama"}</span><span className="mt-1 block text-xs text-slate-500">{item.provider} · {retired ? "Retired" : item.last_health_check_at ? `Dicek ${new Date(item.last_health_check_at).toLocaleString("id-ID")}` : "Belum dicek"}</span></span><Status value={item.status} /></button>{!retired && <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => props.onQr(item)} disabled={props.busy === `qr-${item.id}`}><QrCode className="size-4" /> QR</Button><Button size="sm" variant="outline" onClick={() => props.onStart(item.id)}><Wifi className="size-4" /> Mulai</Button><Button size="sm" variant="ghost" onClick={() => props.onHealth(item.id)}><RefreshCw className="size-4" /> Cek status</Button><Button size="sm" variant="destructive" onClick={() => props.onRetire(item)}><XCircle className="size-4" /> Retire</Button></div>}</div>; })}</div><div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50">{props.qrUrl ? <Image src={props.qrUrl} alt="QR WhatsApp untuk dipindai" width={192} height={192} unoptimized /> : <div className="text-center"><QrCode className="mx-auto size-9 text-slate-300" /><p className="mt-2 text-sm text-slate-600">Pilih koneksi, lalu tampilkan QR.</p></div>}</div></div>}
@@ -101,7 +97,7 @@ export function WhatsAppWhitelistWizard(props: Props) {
       {step === 3 && <div className="space-y-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4"><p className="font-semibold text-emerald-950">4. Review sebelum digunakan</p><p className="mt-1 text-sm leading-6 text-emerald-800">Pastikan session benar, grup aktif, dan kontak sudah terhubung ke anggota yang tepat.</p></div><div className="grid gap-3 sm:grid-cols-3"><Review icon={Link2} label="Koneksi" value={connection?.session_id || "Belum dipilih"} /><Review icon={MessageCircle} label="Grup aktif" value={selectedGroup?.group_name || "Belum dipilih"} /><Review icon={Users} label="Kontak terpetakan" value={`${mappings.length}`} /></div><div className="rounded-xl border border-slate-200 p-4 text-sm"><p className="font-semibold">Cakupan data</p><p className="mt-1 text-slate-600">{selectedGroup ? groupClientName(selectedGroup.client_id) : "Belum ada grup yang dipilih"}</p><p className="mt-3 text-xs leading-5 text-slate-500">Pesan dari grup lain tetap diabaikan. Session retired tidak dapat diaktifkan kembali.</p></div></div>}
     </div>
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><Button variant="outline" onClick={previous} disabled={step === 0}><ChevronLeft className="size-4" /> Kembali</Button><div className="flex gap-2"><Button variant="ghost" onClick={() => setAdvanced((value) => !value)}>{advanced ? "Sembunyikan opsi lanjutan" : "Opsi lanjutan"}</Button>{step < steps.length - 1 && <Button onClick={next} disabled={step === 0 ? !connection : step === 1 ? !props.groupId : mappings.length === 0} className="cta-primary">Lanjut <ChevronRight className="size-4" /></Button>}</div></div>
-    {advanced && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600"><div className="flex items-center gap-2 font-semibold text-slate-800"><Database className="size-4" /> Informasi teknis</div><p className="mt-2">ID teknis hanya digunakan untuk troubleshooting dan tetap dikirim melalui endpoint administrasi yang sama.</p><p className="mt-1">Connection: {connection?.id || "-"} · Group: {selectedGroup?.id || "-"}</p></div>}
+    {advanced && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600"><div className="flex items-center gap-2 font-semibold text-slate-800"><Database className="size-4" /> {t("whatsapp.technicalInfo")}</div><p className="mt-2">{t("whatsapp.technicalInfoDescription")}</p><p className="mt-1">Connection: {connection?.id || "-"} · Group: {selectedGroup?.id || "-"}</p></div>}
   </section>;
 }
 

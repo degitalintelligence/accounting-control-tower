@@ -29,7 +29,7 @@ export async function POST(_: Request, context: Context) {
       meetingData.data.notes,
       ...(attachmentData ?? []).map((attachment) => `Lampiran ${attachment.file_name}:\n${attachment.source_text}`),
     ].filter(Boolean).join("\n\n").slice(0, 100000);
-    const extraction = await extractTasksFromMessage(source);
+    const extraction = await extractTasksFromMessage(source, auth.context.locale);
     const rows = extraction.tasks.map((task) => ({ organization_id: auth.context.organizationId, meeting_id: id, title: task.title, description: task.source_context, type: task.type, client_id: meetingData.data!.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name, clarification_question: task.maker_name ? null : "Siapa PIC untuk action item ini?", status: "draft", created_by: auth.context.userId }));
     const drafts = rows.length ? await auth.context.admin.from("ai_draft_items").insert(rows as never).select("id, title, type, maker_name, due_at, confidence, clarification_needed, clarification_question, status") : { data: [], error: null };
     const draftData = drafts as unknown as { data: unknown[] | null; error: { message: string } | null };

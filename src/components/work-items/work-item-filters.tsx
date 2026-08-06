@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useI18n } from "@/components/i18n-provider";
 
 interface WorkItemFiltersProps {
   activeTab: string;
@@ -23,40 +24,40 @@ interface WorkItemFiltersProps {
 }
 
 const TABS = [
-  { value: "all", label: "Semua" },
-  { value: "mine", label: "Tugas Saya" },
-  { value: "overdue", label: "Terlambat" },
+  { value: "all", key: "work.all" },
+  { value: "mine", key: "work.mine" },
+  { value: "overdue", key: "work.overdue" },
 ];
 
 const STATUS_OPTIONS = [
-  { value: "", label: "Semua Status" },
-  { value: "draft", label: "Draft" },
-  { value: "assigned", label: "Ditugaskan" },
-  { value: "in_progress", label: "Sedang Dikerjakan" },
-  { value: "blocked", label: "Terblokir" },
-  { value: "submitted", label: "Menunggu Review" },
-  { value: "under_review", label: "Sedang Direview" },
-  { value: "revision_required", label: "Perlu Revisi" },
-  { value: "awaiting_approval", label: "Menunggu Persetujuan" },
-  { value: "approved", label: "Disetujui" },
-  { value: "completed", label: "Selesai" },
-  { value: "cancelled", label: "Dibatalkan" },
+  { value: "", key: "work.allStatus" },
+  { value: "draft", key: "status.draft" },
+  { value: "assigned", key: "status.assigned" },
+  { value: "in_progress", key: "status.inProgress" },
+  { value: "blocked", key: "status.blocked" },
+  { value: "submitted", key: "status.submitted" },
+  { value: "under_review", key: "status.underReview" },
+  { value: "revision_required", key: "status.revisionRequired" },
+  { value: "awaiting_approval", key: "status.awaitingApproval" },
+  { value: "approved", key: "status.approved" },
+  { value: "completed", key: "status.completed" },
+  { value: "cancelled", key: "status.cancelled" },
 ];
 
 const TYPE_OPTIONS = [
-  { value: "", label: "Semua Jenis" },
-  { value: "routine", label: "Rutin" },
-  { value: "project", label: "Proyek" },
-  { value: "ad_hoc", label: "Ad Hoc" },
-  { value: "report", label: "Laporan" },
+  { value: "", key: "work.allTypes" },
+  { value: "routine", key: "work.routine" },
+  { value: "project", key: "work.project" },
+  { value: "ad_hoc", key: "work.adHoc" },
+  { value: "report", key: "work.report" },
 ];
 
 const PRIORITY_OPTIONS = [
-  { value: "", label: "Semua Prioritas" },
-  { value: "low", label: "Rendah" },
-  { value: "medium", label: "Sedang" },
-  { value: "high", label: "Tinggi" },
-  { value: "critical", label: "Kritis" },
+  { value: "", key: "work.allPriorities" },
+  { value: "low", key: "priority.low" },
+  { value: "medium", key: "priority.medium" },
+  { value: "high", key: "priority.high" },
+  { value: "critical", key: "priority.critical" },
 ];
 
 export function WorkItemFilters({
@@ -67,6 +68,7 @@ export function WorkItemFilters({
   onCreateClick,
 }: WorkItemFiltersProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const searchParams = useSearchParams();
 
   const currentSearch = searchParams.get("search") ?? "";
@@ -75,10 +77,10 @@ export function WorkItemFilters({
   const currentPriority = searchParams.get("priority") ?? "";
 
   const views = [
-    { value: "list", label: "List", icon: List },
-    { value: "board", label: "Board", icon: Kanban },
-    { value: "calendar", label: "Kalender", icon: CalendarDays },
-    { value: "outline", label: "Outline", icon: Network },
+    { value: "list", label: t("work.list"), icon: List },
+    { value: "board", label: t("work.board"), icon: Kanban },
+    { value: "calendar", label: t("work.calendar"), icon: CalendarDays },
+    { value: "outline", label: t("work.outline"), icon: Network },
   ];
 
   function updateParam(key: string, value: string) {
@@ -97,9 +99,9 @@ export function WorkItemFilters({
       {/* Header + CTA */}
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Work Items</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{t("work.title")}</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Kelola semua pekerjaan tim Anda
+            {t("work.description")}
           </p>
         </div>
         <Button
@@ -107,7 +109,7 @@ export function WorkItemFilters({
           className="bg-orange-500 hover:bg-orange-600 text-white font-bold shrink-0"
         >
           <Plus className="size-4" />
-          Buat Work Item
+          {t("work.create")}
         </Button>
       </div>
 
@@ -124,12 +126,12 @@ export function WorkItemFilters({
                   ? "border-slate-900 text-slate-900"
                   : "border-transparent text-slate-400 hover:text-slate-600"
               )}
-              aria-label={`Tampilkan ${tab.label.toLowerCase()}`}
+              aria-label={`Tampilkan ${t(tab.key as never).toLowerCase()}`}
             >
-              {tab.label}
+              {t(tab.key as never)}
             </TooltipTrigger>
             <TooltipContent>
-              {tab.value === "overdue" ? "Tampilkan pekerjaan melewati tenggat" : `Tampilkan ${tab.label.toLowerCase()}`}
+              {tab.value === "overdue" ? "Tampilkan pekerjaan melewati tenggat" : `Tampilkan ${t(tab.key as never).toLowerCase()}`}
             </TooltipContent>
           </Tooltip>
         ))}
@@ -142,7 +144,7 @@ export function WorkItemFilters({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
           <Input
             id="work-item-search"
-            placeholder="Cari work item..."
+            placeholder={t("work.searchPlaceholder")}
             defaultValue={currentSearch}
             onChange={(e) => updateParam("search", e.currentTarget.value)}
             className="pl-8 h-8 text-sm bg-white"
@@ -155,12 +157,12 @@ export function WorkItemFilters({
           onValueChange={(val) => updateParam("status", val === "__all__" ? "" : (val as string) ?? "")}
         >
           <SelectTrigger className="h-8 text-sm bg-white min-w-[140px]">
-            <SelectValue placeholder="Semua Status" />
+            <SelectValue placeholder={t("work.allStatus")} />
           </SelectTrigger>
           <SelectContent>
             {STATUS_OPTIONS.map((opt) => (
               <SelectItem key={opt.value || "__all__"} value={opt.value || "__all__"}>
-                {opt.label}
+                {t(opt.key as never)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -172,12 +174,12 @@ export function WorkItemFilters({
           onValueChange={(val) => updateParam("type", val === "__all__" ? "" : (val as string) ?? "")}
         >
           <SelectTrigger className="h-8 text-sm bg-white min-w-[130px]">
-            <SelectValue placeholder="Semua Jenis" />
+            <SelectValue placeholder={t("work.allTypes")} />
           </SelectTrigger>
           <SelectContent>
             {TYPE_OPTIONS.map((opt) => (
               <SelectItem key={opt.value || "__all__"} value={opt.value || "__all__"}>
-                {opt.label}
+                {t(opt.key as never)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -189,12 +191,12 @@ export function WorkItemFilters({
           onValueChange={(val) => updateParam("priority", val === "__all__" ? "" : (val as string) ?? "")}
         >
           <SelectTrigger className="h-8 text-sm bg-white min-w-[140px]">
-            <SelectValue placeholder="Semua Prioritas" />
+            <SelectValue placeholder={t("work.allPriorities")} />
           </SelectTrigger>
           <SelectContent>
             {PRIORITY_OPTIONS.map((opt) => (
               <SelectItem key={opt.value || "__all__"} value={opt.value || "__all__"}>
-                {opt.label}
+                {t(opt.key as never)}
               </SelectItem>
             ))}
           </SelectContent>

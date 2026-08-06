@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bell, CheckCircle2, ClipboardCheck, MessageSquare, UserPlus } from "lucide-react";
 import type { NotificationRecord } from "@/types/notification";
+import { useI18n } from "@/components/i18n-provider";
 
 const icons = {
   item_assigned: UserPlus,
@@ -21,6 +22,7 @@ interface NotificationItemProps {
 
 export function NotificationItem({ notification, onRead }: NotificationItemProps) {
   const Icon = icons[notification.event_type as keyof typeof icons] ?? Bell;
+  const { locale, t } = useI18n();
   const workItemId = typeof notification.data.work_item_id === "string" ? notification.data.work_item_id : null;
   const content = (
     <div className={`flex gap-3 border-b border-line-soft px-4 py-3 text-left transition hover:bg-muted ${notification.read_at ? "" : "bg-sentinel-blue-soft/40"}`}>
@@ -30,9 +32,9 @@ export function NotificationItem({ notification, onRead }: NotificationItemProps
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold text-ink">{notification.title}</span>
         {notification.body && <span className="mt-0.5 block line-clamp-2 text-sm text-muted-foreground">{notification.body}</span>}
-        <span className="mt-1 block text-xs text-muted-foreground">{formatNotificationDate(notification.created_at)}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">{formatNotificationDate(notification.created_at, locale)}</span>
       </span>
-      {!notification.read_at && <span aria-label="Belum dibaca" className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />}
+      {!notification.read_at && <span aria-label={t("common.unreadNotification")} className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />}
     </div>
   );
 
@@ -42,6 +44,6 @@ export function NotificationItem({ notification, onRead }: NotificationItemProps
   return <button className="block w-full" onClick={() => onRead(notification.id)}>{content}</button>;
 }
 
-function formatNotificationDate(value: string) {
-  return new Intl.DateTimeFormat("id-ID", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+function formatNotificationDate(value: string, locale: string) {
+    return new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
