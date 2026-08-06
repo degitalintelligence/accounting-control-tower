@@ -183,7 +183,7 @@ export const WHATSAPP_SUMMARY_SCHEMA = {
           key: { type: "string" },
           title: { type: "string" },
           summary: { type: "string" },
-          classifications: { type: "array", items: { type: "string" }, maxItems: 9 },
+          classifications: { type: "array", items: { type: "string", enum: ["fact", "decision", "task", "update", "question", "blocker", "request", "reference", "noise"] }, maxItems: 9 },
           message_ids: { type: "array", items: { type: "string" }, maxItems: 100 },
         },
       },
