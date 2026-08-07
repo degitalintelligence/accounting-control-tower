@@ -18,34 +18,33 @@ export async function GET() {
 }
 
 export async function DELETE(request: NextRequest) {
-  // #region debug-point E:route-entry
-  void 0; // { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "organization-archive-500", runId: "pre-fix", hypothesisId: "E", location: "organization/route.ts:DELETE", msg: "[DEBUG] DELETE route entered", data: {}, ts: Date.now() }) }).catch(() => {});
-  // #endregion
-  const auth = await getAuthContext();
-  if (auth.response) {
-    // #region debug-point E:auth-response
-    void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "organization-archive-500", runId: "pre-fix", hypothesisId: "E", location: "organization/route.ts:DELETE", msg: "[DEBUG] Auth context returned response", data: { status: auth.response.status }, ts: Date.now() }) }).catch(() => {});
-    // #endregion
-    return auth.response;
+  let auth;
+  try {
+    auth = await getAuthContext();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const invalidSession = message.toLowerCase().includes("invalid refresh token") || message.toLowerCase().includes("refresh token not found");
+    return NextResponse.json({ error: invalidSession ? "Sesi login sudah tidak valid. Silakan login ulang." : "Sesi autentikasi tidak dapat diproses." }, { status: invalidSession ? 401 : 500 });
   }
+  if (auth.response) return auth.response;
   const owner = auth.context.memberships.some((membership) => membership.organization_id === auth.context.organizationId && membership.role === "owner");
   if (!owner) return NextResponse.json({ error: "Hanya owner organisasi yang dapat mengarsipkan organisasi." }, { status: 403 });
   const { data: organization, error: organizationError } = await auth.context.admin.from("organizations").select("id, name, deleted_at").eq("id", auth.context.organizationId).maybeSingle() as unknown as { data: { id: string; name: string; deleted_at: string | null } | null; error: { code?: string; message?: string } | null };
-  // #region debug-point A:organization-query
-  void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "organization-archive-500", runId: "pre-fix", hypothesisId: "A", location: "organization/route.ts:DELETE", msg: "[DEBUG] Organization query completed", data: { found: Boolean(organization), errorCode: organizationError?.code ?? null, hasErrorMessage: Boolean(organizationError?.message) }, ts: Date.now() }) }).catch(() => {});
-  // #endregion
+  if (organizationError) return NextResponse.json({ error: "Organisasi gagal dimuat." }, { status: 500 });
   if (!organization) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 404 });
   const parsed = archiveSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || parsed.data.confirmation !== organization.name) return NextResponse.json({ error: "Ketik nama organisasi persis untuk mengonfirmasi pengarsipan." }, { status: 400 });
-  const userClient = await createClient();
-  const result = await userClient.rpc("archive_organization" as never, { p_organization_id: organization.id } as never) as unknown as { data: unknown; error: { code?: string; message?: string } | null };
-  // #region debug-point B:rpc-result
-  void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "organization-archive-500", runId: "pre-fix", hypothesisId: "B", location: "organization/route.ts:DELETE", msg: "[DEBUG] Archive RPC completed", data: { hasData: Boolean(result.data), errorCode: result.error?.code ?? null, errorMessage: result.error?.message ?? null }, ts: Date.now() }) }).catch(() => {});
-  // #endregion
+  let result: { data: unknown; error: { code?: string; message?: string; hint?: string; details?: string } | null };
+  try {
+    const userClient = await createClient();
+    result = await userClient.rpc("archive_organization" as never, { p_organization_id: organization.id } as never) as unknown as { data: unknown; error: { code?: string; message?: string; hint?: string; details?: string } | null };
+  } catch (error) {
+    return NextResponse.json({ error: "Organisasi gagal diarsipkan. Periksa konfigurasi koneksi database." }, { status: 500 });
+  }
   if (result.error) {
     const status = result.error.code === "P0002" ? 409 : result.error.code === "42501" ? 403 : 500;
-    const error = result.error.message === "SOLE_OWNER_REQUIRED" ? "Organisasi hanya dapat diarsipkan jika Anda adalah satu-satunya owner aktif." : result.error.message === "ORGANIZATION_ALREADY_ARCHIVED" ? "Organisasi sudah diarsipkan." : "Organisasi gagal diarsipkan.";
-    return NextResponse.json({ error }, { status });
+    const error = result.error.message === "SOLE_OWNER_REQUIRED" ? "Organisasi hanya dapat diarsipkan jika Anda adalah satu-satunya owner aktif." : result.error.message === "ORGANIZATION_ALREADY_ARCHIVED" ? "Organisasi sudah diarsipkan." : result.error.code === "PGRST202" ? "Fungsi arsip organisasi belum tersedia di database. Jalankan migration terbaru." : result.error.code === "23505" ? "Permintaan arsip organisasi sudah pernah dibuat. Muat ulang halaman lalu coba lagi." : "Organisasi gagal diarsipkan.";
+    return NextResponse.json({ error, ...(process.env.NODE_ENV !== "production" ? { errorCode: result.error.code ?? null } : {}) }, { status });
   }
   const cookieStore = await cookies();
   cookieStore.delete(ACTIVE_ORGANIZATION_COOKIE);
