@@ -88,22 +88,34 @@ async function claimNext(admin: NotificationClient, workerId: string): Promise<O
   const result = await admin.rpc("claim_outbox_event" as never, {
     p_worker_id: workerId,
     p_event_type: "notification",
-    p_lease_seconds: 300,
+    p_lease_seconds: 900,
   });
   const claimed = result as unknown as { data: OutboxRow[] | null; error: { message: string } | null };
   if (claimed.error) throw new Error(claimed.error.message);
   return claimed.data?.[0] ?? null;
 }
 
-async function markProcessed(admin: NotificationClient, id: string, workerId: string) {
+async function markProcessed(admin: NotificationClient, id: string, workerId: string, claimToken: string | null) {
   const result = await admin
     .from("outbox_events")
     .update({ status: "processed", processed_at: new Date().toISOString(), next_retry_at: null, lease_expires_at: null, claimed_at: null, claimed_by: null, claim_token: null })
     .eq("id", id)
     .eq("status", "processing")
-    .eq("claimed_by", workerId);
+    .eq("claimed_by", workerId)
+    .eq("claim_token", claimToken);
   const update = result as unknown as { error: { message: string } | null };
   if (update.error) throw new Error(update.error.message);
+}
+
+async function safelyMarkFailed(admin: NotificationClient, row: OutboxRow, workerId: string, error: unknown) {
+  try {
+    await markFailed(admin, row, workerId, error);
+  } catch (failureError) {
+    console.error("[notification-outbox] Gagal mencatat kegagalan:", {
+      outboxId: row.id,
+      error: failureError instanceof Error ? { message: failureError.message } : structuredSupabaseError(failureError),
+    });
+  }
 }
 
 async function markFailed(admin: NotificationClient, row: OutboxRow, workerId: string, error: unknown) {
@@ -283,10 +295,10 @@ export async function runNotificationOutboxWorker(admin: NotificationClient) {
 
     try {
       await processRow(admin, row);
-      await markProcessed(admin, row.id, workerId);
+      await markProcessed(admin, row.id, workerId, row.claim_token);
       processed += 1;
     } catch (error) {
-      await markFailed(admin, row, workerId, error);
+      await safelyMarkFailed(admin, row, workerId, error);
       failed += 1;
       console.error("[notification-outbox] Pemrosesan gagal:", {
         outboxId: row.id,

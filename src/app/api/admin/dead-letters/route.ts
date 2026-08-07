@@ -6,11 +6,11 @@ export async function GET() {
   if (auth.response) return auth.response;
   const denied = await requirePermission(auth.context, "dead_letters.view");
   if (denied) return denied;
-  const result = await auth.context.admin.from("dead_letter_events").select("id, event_type, status, retry_count, last_retry_at, replayed_at, created_at, error_message, last_error").eq("organization_id", auth.context.organizationId).eq("status", "pending").order("created_at", { ascending: true }).limit(100);
+  const result = await auth.context.admin.from("dead_letter_events").select("id, event_type, status, retry_count, last_retry_at, replayed_at, created_at, error_message, last_error", { count: "exact" }).eq("organization_id", auth.context.organizationId).eq("status", "pending").order("created_at", { ascending: true }).limit(100);
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 });
   const data = (result.data ?? []).map((item: { id: string; event_type: string; status: string; retry_count: number; last_retry_at: string | null; replayed_at: string | null; created_at: string; error_message: string | null; last_error: string | null }) => ({ id: item.id, event_type: item.event_type, status: item.status, retry_count: item.retry_count, last_retry_at: item.last_retry_at, replayed_at: item.replayed_at, created_at: item.created_at, error_message: item.error_message, last_error: item.last_error }));
-  return NextResponse.json(data);
+  return NextResponse.json({ items: data, total: result.count ?? data.length, has_more: (result.count ?? data.length) > data.length });
 }
 
 export async function POST(request: Request) {

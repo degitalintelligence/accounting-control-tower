@@ -62,6 +62,7 @@ export type OpenRouterErrorCode =
   | "TIMEOUT"
   | "NETWORK_ERROR"
   | "PROVIDER_ERROR"
+  | "INVALID_HTTP_RESPONSE"
   | "INVALID_RESPONSE";
 
 export class OpenRouterError extends Error {
@@ -296,85 +297,80 @@ function isAbortError(error: unknown): boolean {
   return isRecord(error) && error.name === "AbortError";
 }
 
+const MAX_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 150;
+const MAX_ERROR_BODY_LENGTH = 2_000;
+
+type OpenRouterRequest = {
+  systemPrompt: string;
+  userPrompt: string;
+  schema: object;
+  schemaName: string;
+};
+
+function shouldRetry(error: OpenRouterError): boolean {
+  return error.code === "TIMEOUT" || error.code === "NETWORK_ERROR" || error.code === "INVALID_HTTP_RESPONSE" ||
+    (error.code === "PROVIDER_ERROR" && (error.status === 429 || (error.status !== undefined && error.status >= 500)));
+}
+
+async function requestOpenRouter(request: OpenRouterRequest): Promise<unknown> {
+  const config = getConfig();
+  let lastError: OpenRouterError | null = null;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS * 2 ** (attempt - 1)));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+
+    try {
+      const response = await fetch(config.baseUrl, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json", ...(process.env.OPENROUTER_HTTP_REFERER ? { "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER } : {}), ...(process.env.OPENROUTER_APP_TITLE ? { "X-Title": process.env.OPENROUTER_APP_TITLE } : {}) },
+        body: JSON.stringify({ model: config.model, messages: [{ role: "system", content: request.systemPrompt }, { role: "user", content: request.userPrompt }], temperature: 0, response_format: { type: "json_schema", json_schema: { name: request.schemaName, strict: true, schema: request.schema } }, provider: { data_collection: "deny" } }),
+      });
+
+      if (!response.ok) {
+        await response.text().then((body) => body.slice(0, MAX_ERROR_BODY_LENGTH)).catch(() => "");
+        throw new OpenRouterError("PROVIDER_ERROR", "OpenRouter mengembalikan error.", response.status);
+      }
+
+      const body = await response.text();
+      try {
+        return parseOpenRouterPayload(JSON.parse(body));
+      } catch (error) {
+        if (error instanceof OpenRouterError) throw error;
+        throw new OpenRouterError("INVALID_HTTP_RESPONSE", "Respons HTTP OpenRouter bukan JSON.");
+      }
+    } catch (error) {
+      const normalized = error instanceof OpenRouterError
+        ? error
+        : isAbortError(error)
+          ? new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.")
+          : new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
+      lastError = normalized;
+      if (!shouldRetry(normalized) || attempt === MAX_ATTEMPTS - 1) throw normalized;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw lastError ?? new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
+}
+
 export async function extractTasksFromMessage(message: string, locale: AppLocale): Promise<TaskExtraction> {
   const cleanMessage = sanitizeMessage(message);
   if (!cleanMessage) return { classification: "noise", tasks: [] };
-
-  const config = getConfig();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-
-  try {
-    const response = await fetch(config.baseUrl, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-        ...(process.env.OPENROUTER_HTTP_REFERER ? { "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER } : {}),
-        ...(process.env.OPENROUTER_APP_TITLE ? { "X-Title": process.env.OPENROUTER_APP_TITLE } : {}),
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: "system", content: buildTaskExtractionSystemPrompt(locale) },
-          { role: "user", content: buildTaskExtractionPrompt(cleanMessage, locale) },
-        ],
-        temperature: 0,
-        response_format: { type: "json_schema", json_schema: { name: "task_extraction", strict: true, schema: TASK_EXTRACTION_SCHEMA } },
-        provider: { data_collection: "deny" },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new OpenRouterError("PROVIDER_ERROR", "OpenRouter mengembalikan error.", response.status);
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throw new OpenRouterError("INVALID_RESPONSE", "Respons OpenRouter bukan JSON.");
-    }
-
-    return validateTaskExtraction(parseOpenRouterPayload(payload));
-  } catch (error) {
-    if (error instanceof OpenRouterError) throw error;
-    if (isAbortError(error)) {
-      throw new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.");
-    }
-    throw new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
-  } finally {
-    clearTimeout(timeout);
-  }
+  return validateTaskExtraction(await requestOpenRouter({
+    systemPrompt: buildTaskExtractionSystemPrompt(locale),
+    userPrompt: buildTaskExtractionPrompt(cleanMessage, locale),
+    schema: TASK_EXTRACTION_SCHEMA,
+    schemaName: "task_extraction",
+  }));
 }
 
 async function callOpenRouter(systemPrompt: string, userPrompt: string, schema: object, schemaName: string): Promise<unknown> {
-  const config = getConfig();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-  try {
-    const response = await fetch(config.baseUrl, {
-      method: "POST",
-      signal: controller.signal,
-      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json", ...(process.env.OPENROUTER_HTTP_REFERER ? { "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER } : {}), ...(process.env.OPENROUTER_APP_TITLE ? { "X-Title": process.env.OPENROUTER_APP_TITLE } : {}) },
-      body: JSON.stringify({ model: config.model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0, response_format: { type: "json_schema", json_schema: { name: schemaName, strict: true, schema } }, provider: { data_collection: "deny" } }),
-    });
-    if (!response.ok) throw new OpenRouterError("PROVIDER_ERROR", "OpenRouter mengembalikan error.", response.status);
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throw new OpenRouterError("INVALID_RESPONSE", "Respons OpenRouter bukan JSON.");
-    }
-    return parseOpenRouterPayload(payload);
-  } catch (error) {
-    if (error instanceof OpenRouterError) throw error;
-    if (isAbortError(error)) throw new OpenRouterError("TIMEOUT", "Permintaan OpenRouter timeout.");
-    throw new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
-  } finally {
-    clearTimeout(timeout);
-  }
+  return requestOpenRouter({ systemPrompt, userPrompt, schema, schemaName });
 }
 
 export async function assistReview(context: string, locale: AppLocale): Promise<ReviewAssistantResult> {

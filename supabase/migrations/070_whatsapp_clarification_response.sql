@@ -26,8 +26,8 @@ BEGIN
 
   IF NOT FOUND THEN RETURN; END IF;
 
-  SELECT count(*), min(suggestion_row.id)
-  INTO candidate_count, candidate_id
+  SELECT count(*)
+  INTO candidate_count
   FROM acct_ctrl.action_suggestions AS suggestion_row
   JOIN acct_ctrl.wa_messages AS source_message ON source_message.id::TEXT = suggestion_row.source_reference_id
   JOIN acct_ctrl.wa_groups AS source_group ON source_group.id = source_message.wa_group_id
@@ -36,6 +36,19 @@ BEGIN
     AND suggestion_row.review_state = 'needs_clarification'
     AND source_group.id = incoming_message.wa_group_id
     AND (suggestion_row.clarification_response_message_id IS NULL OR suggestion_row.clarification_response_message_id <> p_message_id);
+
+  SELECT suggestion_row.id
+  INTO candidate_id
+  FROM acct_ctrl.action_suggestions AS suggestion_row
+  JOIN acct_ctrl.wa_messages AS source_message ON source_message.id::TEXT = suggestion_row.source_reference_id
+  JOIN acct_ctrl.wa_groups AS source_group ON source_group.id = source_message.wa_group_id
+  WHERE suggestion_row.organization_id = p_organization_id
+    AND suggestion_row.status = 'pending'
+    AND suggestion_row.review_state = 'needs_clarification'
+    AND source_group.id = incoming_message.wa_group_id
+    AND (suggestion_row.clarification_response_message_id IS NULL OR suggestion_row.clarification_response_message_id <> p_message_id)
+  ORDER BY suggestion_row.id
+  LIMIT 1;
 
   IF candidate_count <> 1 THEN RETURN; END IF;
 

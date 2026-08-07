@@ -33,7 +33,7 @@ type MessageContext = {
   chat_id: string;
 };
 
-type AiIntake = { id: string; organization_id: string; client_id: string | null; created_by: string; source_text: string; status: string; attempt_count: number };
+type AiIntake = { id: string; organization_id: string; client_id: string | null; created_by: string; source_text: string; status: string; attempt_count: number; claim_token: string | null };
 
 const batchSize = 10;
 const promptVersion = "task-extraction-v1";
@@ -51,11 +51,11 @@ function errorMessage(error: unknown): string {
   return "Kesalahan tidak diketahui.";
 }
 
-async function claimNext(admin: WorkerClient, workerId: string, eventType: string): Promise<JobRow | null> {
+async function claimNext(admin: WorkerClient, workerId: string, eventType: string, leaseSeconds = 600): Promise<JobRow | null> {
   const result = await admin.rpc("claim_outbox_event" as never, {
     p_worker_id: workerId,
     p_event_type: eventType,
-    p_lease_seconds: 600,
+    p_lease_seconds: leaseSeconds,
   });
   const claimed = result as unknown as { data: JobRow[] | null; error: { message: string } | null };
   if (claimed.error) throw new Error(claimed.error.message);
@@ -69,9 +69,12 @@ async function markCompleted(admin: WorkerClient, row: JobRow, workerId: string)
     .eq("id", row.id)
     .eq("status", "processing")
     .eq("claimed_by", workerId)
-    .eq("claim_token", row.claim_token);
-  const update = result as unknown as { error: { message: string } | null };
+    .eq("claim_token", row.claim_token)
+    .select("id")
+    .maybeSingle();
+  const update = result as unknown as { data: { id: string } | null; error: { message: string } | null };
   if (update.error) throw new Error(update.error.message);
+  if (!update.data) throw new Error("Outbox claim sudah tidak dimiliki worker ini.");
 }
 
 async function markFailed(admin: WorkerClient, row: JobRow, workerId: string, error: unknown) {
@@ -82,6 +85,14 @@ async function markFailed(admin: WorkerClient, row: JobRow, workerId: string, er
   });
   const update = result as unknown as { error: { message: string } | null };
   if (update.error) throw new Error(update.error.message);
+}
+
+async function safelyMarkFailed(admin: WorkerClient, row: JobRow, workerId: string, error: unknown) {
+  try {
+    await markFailed(admin, row, workerId, error);
+  } catch (failureError) {
+    console.error("[ai-extraction-worker] Gagal mencatat kegagalan:", { outboxId: row.id, message: errorMessage(failureError) });
+  }
 }
 
 async function loadMessage(admin: WorkerClient, messageId: string, organizationId: string): Promise<MessageContext> {
@@ -186,30 +197,41 @@ async function processJob(admin: WorkerClient, row: JobRow) {
   }
 }
 
-async function processAiIntake(admin: WorkerClient, row: JobRow) {
+async function processAiIntake(admin: WorkerClient, row: JobRow, workerId: string) {
   const intakeId = typeof row.payload.intake_id === "string" ? row.payload.intake_id : null;
   if (!intakeId) throw new Error("Payload AI intake tidak lengkap.");
-  const loaded = await admin.from("ai_intake_items").select("id, organization_id, client_id, created_by, source_text, status, attempt_count").eq("id", intakeId).eq("organization_id", row.organization_id).is("deleted_at", null).maybeSingle();
+  const loaded = await admin.from("ai_intake_items").select("id, organization_id, client_id, created_by, source_text, status, attempt_count, claim_token").eq("id", intakeId).eq("organization_id", row.organization_id).is("deleted_at", null).maybeSingle();
   const intake = loaded as unknown as { data: AiIntake | null; error: { message: string } | null };
   if (intake.error) throw new Error(intake.error.message);
   if (!intake.data || intake.data.status === "draft") return;
-  const claimed = intake.data.status === "processing"
-    ? { data: { id: intakeId }, error: null }
-    : await admin.from("ai_intake_items").update({ status: "processing", processing_started_at: new Date().toISOString(), attempt_count: (intake.data.attempt_count ?? 0) + 1, updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("organization_id", row.organization_id).eq("status", "queued").select("id").maybeSingle();
-  const claimedData = claimed as unknown as { data: { id: string } | null; error: { message: string } | null };
+  const claimed = await admin.rpc("claim_ai_intake" as never, {
+    p_intake_id: intakeId,
+    p_organization_id: row.organization_id,
+    p_worker_id: workerId,
+    p_lease_seconds: 600,
+  } as never);
+  const claimedData = claimed as unknown as { data: AiIntake[] | null; error: { message: string } | null };
   if (claimedData.error) throw new Error(claimedData.error.message);
-  if (!claimedData.data) return;
+  const claimedIntake = claimedData.data?.[0];
+  if (!claimedIntake) return;
   try {
-    const extraction = await extractTasksFromMessage(intake.data.source_text, await resolveOrganizationLocale(admin, row.organization_id));
-    const rows = extraction.tasks.map((task, index) => ({ organization_id: row.organization_id, intake_id: intakeId, source_task_key: `${promptVersion}:${index}:${task.title.trim().toLowerCase()}:${task.source_context.trim().toLowerCase()}`, title: task.title, description: task.source_context, type: task.type, client_id: intake.data?.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !intake.data?.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !intake.data?.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: intake.data?.created_by }));
+    const extraction = await extractTasksFromMessage(claimedIntake.source_text, await resolveOrganizationLocale(admin, row.organization_id));
+    const rows = extraction.tasks.map((task, index) => ({ organization_id: row.organization_id, intake_id: intakeId, source_task_key: `${promptVersion}:${index}:${task.title.trim().toLowerCase()}:${task.source_context.trim().toLowerCase()}`, title: task.title, description: task.source_context, type: task.type, client_id: claimedIntake.client_id, maker_name: task.maker_name, due_at: task.due_date ? `${task.due_date}T23:59:59.000Z` : null, source_context: task.source_context, confidence: task.confidence, clarification_needed: !task.maker_name || !claimedIntake.client_id, clarification_question: !task.maker_name ? "Siapa PIC/maker untuk pekerjaan ini?" : !claimedIntake.client_id ? "Task ini masuk ke client mana?" : null, status: "draft", created_by: claimedIntake.created_by }));
     if (rows.length) { const inserted = await admin.from("ai_draft_items").upsert(rows as never, { onConflict: "intake_id,source_task_key", ignoreDuplicates: true }); const insertedData = inserted as unknown as { error: { message: string } | null }; if (insertedData.error) throw new Error(insertedData.error.message); }
-    const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
-    const updatedData = updated as unknown as { error: { message: string } | null };
+    const updated = await admin.from("ai_intake_items").update({ status: "draft", completed_at: new Date().toISOString(), updated_at: new Date().toISOString(), claimed_by: null, claim_token: null, lease_expires_at: null } as never).eq("id", intakeId).eq("status", "processing").eq("claimed_by", workerId).eq("claim_token", claimedIntake.claim_token).select("id").maybeSingle();
+    const updatedData = updated as unknown as { data: { id: string } | null; error: { message: string } | null };
     if (updatedData.error) throw new Error(updatedData.error.message);
+    if (!updatedData.data) throw new Error("AI intake claim sudah tidak dimiliki worker ini.");
   } catch (error) {
-    const failed = await admin.from("ai_intake_items").update({ status: "failed", failed_at: new Date().toISOString(), error_message: errorMessage(error), updated_at: new Date().toISOString() } as never).eq("id", intakeId).eq("status", "processing");
-    const failedData = failed as unknown as { error: { message: string } | null };
+    const failed = await admin.from("ai_intake_items").update({ status: "failed", failed_at: new Date().toISOString(), error_message: errorMessage(error), updated_at: new Date().toISOString() } as never).eq("id", intakeId)
+      .eq("status", "processing")
+      .eq("claimed_by", workerId)
+      .eq("claim_token", claimedIntake.claim_token)
+      .select("id")
+      .maybeSingle();
+    const failedData = failed as unknown as { data: { id: string } | null; error: { message: string } | null };
     if (failedData.error) throw new Error(failedData.error.message);
+    if (!failedData.data) throw new Error("AI intake claim sudah tidak dimiliki worker ini.");
     throw error;
   }
 }
@@ -415,6 +437,17 @@ async function processReply(admin: WorkerClient, row: JobRow) {
 }
 
 export async function runAiExtractionWorker(admin: WorkerClient) {
+  const recovery = await admin.rpc("recover_expired_ai_intakes" as never, {
+    p_limit: 100,
+  } as never);
+  const recoveryResult = recovery as unknown as {
+    data: number | null;
+    error: { message: string } | null;
+  };
+  if (recoveryResult.error) {
+    throw new Error(recoveryResult.error.message);
+  }
+
   const workerId = `ai-extraction-${crypto.randomUUID()}`;
   const summaryWorkerId = `whatsapp-summary-${crypto.randomUUID()}`;
   let processed = 0;
@@ -422,8 +455,8 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
   for (let index = 0; index < batchSize; index += 1) {
     const row = await claimNext(admin, workerId, "ai_intake_requested");
     if (!row) break;
-    try { await processAiIntake(admin, row); await markCompleted(admin, row, workerId); processed += 1; }
-    catch (error) { await markFailed(admin, row, workerId, error); failed += 1; console.error("[ai-extraction-worker] AI intake gagal:", { outboxId: row.id, message: errorMessage(error) }); }
+    try { await processAiIntake(admin, row, workerId); await markCompleted(admin, row, workerId); processed += 1; }
+    catch (error) { await safelyMarkFailed(admin, row, workerId, error); failed += 1; console.error("[ai-extraction-worker] AI intake gagal:", { outboxId: row.id, message: errorMessage(error) }); }
   }
   for (let index = 0; index < batchSize; index += 1) {
     const row = await claimNext(admin, workerId, "ai_extraction_requested");
@@ -433,7 +466,7 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
       await markCompleted(admin, row, workerId);
       processed += 1;
     } catch (error) {
-      await markFailed(admin, row, workerId, error);
+      await safelyMarkFailed(admin, row, workerId, error);
       failed += 1;
       console.error("[ai-extraction-worker] Pemrosesan gagal:", { outboxId: row.id, message: errorMessage(error) });
     }
@@ -446,16 +479,16 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
       await markCompleted(admin, row, workerId);
       processed += 1;
     } catch (error) {
-      await markFailed(admin, row, workerId, error);
+      await safelyMarkFailed(admin, row, workerId, error);
       failed += 1;
       console.error("[ai-extraction-worker] Pemrosesan gagal:", { outboxId: row.id, message: errorMessage(error) });
     }
   }
   for (let index = 0; index < batchSize; index += 1) {
-    const row = await claimNext(admin, summaryWorkerId, "whatsapp_conversation_summary_requested");
+    const row = await claimNext(admin, summaryWorkerId, "whatsapp_conversation_summary_requested", 1800);
     if (!row) break;
     try { await processConversationSummary(admin, row); await markCompleted(admin, row, summaryWorkerId); processed += 1; }
-    catch (error) { await markFailed(admin, row, summaryWorkerId, error); failed += 1; }
+    catch (error) { await safelyMarkFailed(admin, row, summaryWorkerId, error); failed += 1; }
   }
   for (let index = 0; index < batchSize; index += 1) {
     const row = await claimNext(admin, workerId, "whatsapp_reply_requested");
@@ -465,7 +498,7 @@ export async function runAiExtractionWorker(admin: WorkerClient) {
       await markCompleted(admin, row, workerId);
       processed += 1;
     } catch (error) {
-      await markFailed(admin, row, workerId, error);
+      await safelyMarkFailed(admin, row, workerId, error);
       failed += 1;
       console.error("[ai-extraction-worker] Pemrosesan gagal:", { outboxId: row.id, message: errorMessage(error) });
     }

@@ -24,6 +24,17 @@ async function fail(admin: WorkerClient, id: string, workerId: string, message: 
   if (data.error) throw new Error(data.error.message);
 }
 
+async function safelyFail(admin: WorkerClient, job: Job, workerId: string, message: string) {
+  try {
+    await fail(admin, job.id, workerId, message);
+  } catch (failureError) {
+    console.error("[file-scan-worker] Gagal mencatat kegagalan:", {
+      outboxId: job.id,
+      error: failureError instanceof Error ? { message: failureError.message } : { message: "Kesalahan tidak diketahui." },
+    });
+  }
+}
+
 async function processJob(admin: WorkerClient, job: Job) {
   const fileId = typeof job.payload.file_id === "string" ? job.payload.file_id : null;
   if (!fileId) throw new Error("Payload scan file tidak lengkap.");
@@ -46,7 +57,7 @@ export async function runFileScanWorker(admin: WorkerClient) {
     const job = await claim(admin, workerId);
     if (!job) break;
     try { await processJob(admin, job); await finish(admin, job.id, workerId, job.claim_token); processed += 1; }
-    catch (error) { await fail(admin, job.id, workerId, error instanceof Error ? error.message : "Pemeriksaan file gagal."); failed += 1; }
+    catch (error) { await safelyFail(admin, job, workerId, error instanceof Error ? error.message : "Pemeriksaan file gagal."); failed += 1; }
   }
   return { processed, failed };
 }
