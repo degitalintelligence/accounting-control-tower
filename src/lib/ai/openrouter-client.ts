@@ -388,5 +388,5 @@ export async function generateDashboardInsights(context: string, locale: AppLoca
 export async function generateWhatsAppSummary(context: string, locale: AppLocale): Promise<WhatsAppSummaryResult> {
   const cleanContext = limitText(context, 12_000);
   if (!cleanContext) return { summary: locale === "en-US" ? "There are no operational messages to summarize." : "Tidak ada pesan operasional yang dapat diringkas.", actions: [] };
-  return validateWhatsAppSummary(await callOpenRouter(buildWhatsAppSummarySystemPrompt(locale), buildWhatsAppSummaryPrompt(cleanContext), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary"));
+  return validateWhatsAppSummary(await callOpenRouter(buildWhatsAppSummarySystemPrompt(locale), buildWhatsAppSummaryPrompt(cleanContext, locale), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary"));
 }
