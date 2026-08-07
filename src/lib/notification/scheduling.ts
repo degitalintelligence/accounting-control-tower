@@ -41,7 +41,7 @@ export async function runDeadlineReminderSweep(admin: SchedulingClient) {
 
 export async function runBasicDigestSweep(admin: SchedulingClient) {
   const now = new Date();
-  const profilesResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end");
+  const profilesResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end, memberships!inner(organization_id, organizations!inner(deleted_at))").is("memberships.organizations.deleted_at", null);
   const profiles = profilesResult as unknown as { data: { id: string; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
   if (profiles.error) throw new Error(profiles.error.message);
   let scheduled = 0;
@@ -53,7 +53,7 @@ export async function runBasicDigestSweep(admin: SchedulingClient) {
     if (preference.data?.digest_enabled === false) continue;
     const localHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: profile.timezone, hour: "2-digit", hour12: false }).format(now));
     if (localHour !== (preference.data?.digest_hour ?? 8)) continue;
-    const assignmentsResult = await admin.from("assignments").select("work_item_id, work_items!inner(id, organization_id, title, due_at, status)").eq("profile_id", profile.id).is("unassigned_at", null).not("work_items.status", "in", "(completed,cancelled)");
+    const assignmentsResult = await admin.from("assignments").select("work_item_id, work_items!inner(id, organization_id, title, due_at, status, organizations!inner(deleted_at))").is("work_items.organizations.deleted_at", null).eq("profile_id", profile.id).is("unassigned_at", null).not("work_items.status", "in", "(completed,cancelled)");
     const assignments = assignmentsResult as unknown as { data: { work_items: { id: string; organization_id: string; title: string; due_at: string | null; status: string } }[] | null; error: { message: string } | null };
     if (assignments.error || !assignments.data?.length) continue;
     const byOrganization = new Map<string, typeof assignments.data>();

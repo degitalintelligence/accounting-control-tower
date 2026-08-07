@@ -51,7 +51,10 @@ export async function getAuthContext(): Promise<
     return { response: NextResponse.json({ error: "User tidak memiliki membership aktif." }, { status: 403 }) };
   }
 
-  const organizationIds = [...new Set(memberships.data.map((membership) => membership.organization_id))];
+  const membershipOrganizationIds = [...new Set(memberships.data.map((membership) => membership.organization_id))];
+  const activeOrganizations = await admin.from("organizations").select("id").in("id", membershipOrganizationIds).is("deleted_at", null);
+  const organizationIds = ((activeOrganizations.data ?? []) as unknown as { id: string }[]).map((organization) => organization.id);
+  if (!organizationIds.length) return { response: NextResponse.json({ error: "Tidak ada organisasi aktif yang dapat digunakan." }, { status: 403 }) };
   const selectedOrganizationId = (await cookies()).get(ACTIVE_ORGANIZATION_COOKIE)?.value;
   const organizationId = selectedOrganizationId && organizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : organizationIds[0];
   const organizationMemberships = memberships.data.filter((membership) => membership.organization_id === organizationId);

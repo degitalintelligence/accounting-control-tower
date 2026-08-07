@@ -197,8 +197,9 @@ async function processRule(
 export async function runEscalationCheck(admin: AnyClient) {
   const policiesResult = await admin
     .from("escalation_policies")
-    .select("id, organization_id, client_id, rules")
-    .eq("is_active", true);
+    .select("id, organization_id, client_id, rules, organizations!inner(deleted_at)")
+    .eq("is_active", true)
+    .is("organizations.deleted_at", null);
   const { data: policies, error: policiesError } = policiesResult as unknown as {
     data: Policy[] | null;
     error: { message: string; code: string; hint: string; details: string } | null;
@@ -212,7 +213,8 @@ export async function runEscalationCheck(admin: AnyClient) {
   for (const policy of policies ?? []) {
     let itemsQuery = admin
       .from("work_items")
-      .select("id, organization_id, client_id, title, priority, status, due_at")
+      .select("id, organization_id, client_id, title, priority, status, due_at, organizations!inner(deleted_at)")
+      .is("organizations.deleted_at", null)
       .eq("organization_id", policy.organization_id)
       .is("deleted_at", null)
       .not("status", "in", "(completed,cancelled)")

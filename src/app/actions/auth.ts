@@ -31,9 +31,10 @@ async function hasActiveMembership(userId: string) {
   const admin = createServiceRoleClient();
   const result = await admin
     .from("memberships")
-    .select("id")
+    .select("id, organizations!inner(id)")
     .eq("profile_id", userId)
     .eq("is_active", true)
+    .is("organizations.deleted_at", null)
     .limit(1);
   return Boolean(result.data?.length && !result.error);
 }

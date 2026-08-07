@@ -1,6 +1,8 @@
 import "server-only";
 import { buildInsightsPrompt, buildInsightsSystemPrompt, buildReviewAssistantPrompt, buildReviewAssistantSystemPrompt, buildTaskExtractionPrompt, buildTaskExtractionSystemPrompt, buildWhatsAppSummaryPrompt, buildWhatsAppSummarySystemPrompt, INSIGHTS_SCHEMA, REVIEW_ASSISTANT_SCHEMA, TASK_EXTRACTION_SCHEMA, WHATSAPP_SUMMARY_SCHEMA } from "./prompts";
 import type { AppLocale } from "@/lib/i18n";
+import { getActiveOrganizationAssertion, type ActiveOrganizationAssertion } from "@/lib/organization/active";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -313,12 +315,19 @@ function shouldRetry(error: OpenRouterError): boolean {
     (error.code === "PROVIDER_ERROR" && (error.status === 429 || (error.status !== undefined && error.status >= 500)));
 }
 
-async function requestOpenRouter(request: OpenRouterRequest): Promise<unknown> {
+async function requestOpenRouter(request: OpenRouterRequest, organization: ActiveOrganizationAssertion): Promise<unknown> {
+  if (organization.active !== true || !organization.organizationId) throw new OpenRouterError("CONFIGURATION_ERROR", "Organisasi aktif wajib diverifikasi sebelum memakai OpenRouter.");
   const config = getConfig();
+  const admin = createServiceRoleClient();
   let lastError: OpenRouterError | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS * 2 ** (attempt - 1)));
+
+    // Revalidate active organization before each fetch attempt.
+    const reassertion = await getActiveOrganizationAssertion(admin, organization.organizationId);
+    if (!reassertion) throw new OpenRouterError("CONFIGURATION_ERROR", "Organisasi sudah diarsipkan; permintaan AI dibatalkan.");
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
@@ -358,7 +367,7 @@ async function requestOpenRouter(request: OpenRouterRequest): Promise<unknown> {
   throw lastError ?? new OpenRouterError("NETWORK_ERROR", "OpenRouter tidak dapat dihubungi.");
 }
 
-export async function extractTasksFromMessage(message: string, locale: AppLocale): Promise<TaskExtraction> {
+export async function extractTasksFromMessage(message: string, locale: AppLocale, organization: ActiveOrganizationAssertion): Promise<TaskExtraction> {
   const cleanMessage = sanitizeMessage(message);
   if (!cleanMessage) return { classification: "noise", tasks: [] };
   return validateTaskExtraction(await requestOpenRouter({
@@ -366,27 +375,27 @@ export async function extractTasksFromMessage(message: string, locale: AppLocale
     userPrompt: buildTaskExtractionPrompt(cleanMessage, locale),
     schema: TASK_EXTRACTION_SCHEMA,
     schemaName: "task_extraction",
-  }));
+  }, organization));
 }
 
-async function callOpenRouter(systemPrompt: string, userPrompt: string, schema: object, schemaName: string): Promise<unknown> {
-  return requestOpenRouter({ systemPrompt, userPrompt, schema, schemaName });
+async function callOpenRouter(systemPrompt: string, userPrompt: string, schema: object, schemaName: string, organization: ActiveOrganizationAssertion): Promise<unknown> {
+  return requestOpenRouter({ systemPrompt, userPrompt, schema, schemaName }, organization);
 }
 
-export async function assistReview(context: string, locale: AppLocale): Promise<ReviewAssistantResult> {
+export async function assistReview(context: string, locale: AppLocale, organization: ActiveOrganizationAssertion): Promise<ReviewAssistantResult> {
   const cleanContext = limitText(context, 4_000);
   if (!cleanContext) throw new OpenRouterError("INVALID_RESPONSE", "Konteks review kosong.");
-  return validateReviewAssistant(await callOpenRouter(buildReviewAssistantSystemPrompt(locale), buildReviewAssistantPrompt(cleanContext, locale), REVIEW_ASSISTANT_SCHEMA, "review_assistant"));
+  return validateReviewAssistant(await callOpenRouter(buildReviewAssistantSystemPrompt(locale), buildReviewAssistantPrompt(cleanContext, locale), REVIEW_ASSISTANT_SCHEMA, "review_assistant", organization));
 }
 
-export async function generateDashboardInsights(context: string, locale: AppLocale): Promise<DashboardInsights> {
+export async function generateDashboardInsights(context: string, locale: AppLocale, organization: ActiveOrganizationAssertion): Promise<DashboardInsights> {
   const cleanContext = limitText(context, 4_000);
   if (!cleanContext) throw new OpenRouterError("INVALID_RESPONSE", "Konteks insights kosong.");
-  return validateDashboardInsights(await callOpenRouter(buildInsightsSystemPrompt(locale), buildInsightsPrompt(cleanContext, locale), INSIGHTS_SCHEMA, "dashboard_insights"));
+  return validateDashboardInsights(await callOpenRouter(buildInsightsSystemPrompt(locale), buildInsightsPrompt(cleanContext, locale), INSIGHTS_SCHEMA, "dashboard_insights", organization));
 }
 
-export async function generateWhatsAppSummary(context: string, locale: AppLocale): Promise<WhatsAppSummaryResult> {
+export async function generateWhatsAppSummary(context: string, locale: AppLocale, organization: ActiveOrganizationAssertion): Promise<WhatsAppSummaryResult> {
   const cleanContext = limitText(context, 12_000);
   if (!cleanContext) return { summary: locale === "en-US" ? "There are no operational messages to summarize." : "Tidak ada pesan operasional yang dapat diringkas.", actions: [] };
-  return validateWhatsAppSummary(await callOpenRouter(buildWhatsAppSummarySystemPrompt(locale), buildWhatsAppSummaryPrompt(cleanContext, locale), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary"));
+  return validateWhatsAppSummary(await callOpenRouter(buildWhatsAppSummarySystemPrompt(locale), buildWhatsAppSummaryPrompt(cleanContext, locale), WHATSAPP_SUMMARY_SCHEMA, "whatsapp_conversation_summary", organization));
 }

@@ -57,10 +57,13 @@ export async function GET() {
     .in("id", organizationIds)
     .is("deleted_at", null)
   .order("name")) as unknown as { data: Array<{ id: string; name: string; slug: string; settings?: { locale?: string } }> | null };
+  const activeOrganizationIds = (organizations ?? []).map((organization) => organization.id);
   const selectedOrganizationId = (await cookies()).get("acct_ctrl_active_organization")?.value;
-  const activeOrganizationId = selectedOrganizationId && organizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : organizationIds[0];
-  const activeMembership = memberships.find((membership) => membership.organization_id === activeOrganizationId) ?? memberships[0];
+  const activeOrganizationId = selectedOrganizationId && activeOrganizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : activeOrganizationIds[0];
+  if (!activeOrganizationId) return NextResponse.json({ error: "Tidak ada organisasi aktif yang dapat digunakan." }, { status: 403 });
+  const activeMembership = memberships.find((membership) => membership.organization_id === activeOrganizationId);
   const activeOrganization = organizations?.find((organization) => organization.id === activeOrganizationId);
+  if (!activeMembership || !activeOrganization) return NextResponse.json({ error: "Organisasi aktif tidak ditemukan." }, { status: 403 });
   const organizationSettings = (activeOrganization as { settings?: { locale?: string } } | undefined)?.settings;
 
   // #region debug-point A:auth-organizations

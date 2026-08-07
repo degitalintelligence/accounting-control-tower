@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createServiceRoleClient();
-  const connectionResult = await admin.from("integration_connections").select("id, organization_id, status").eq("provider", "waha").eq("session_id", payload.session).neq("status", "retired").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const connectionResult = await admin.from("integration_connections").select("id, organization_id, status, organizations!inner(deleted_at)").eq("provider", "waha").eq("session_id", payload.session).is("deleted_at", null).is("organizations.deleted_at", null).neq("status", "retired").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const connection = connectionResult as unknown as { data: { id: string; organization_id: string; status: string } | null; error: { message: string } | null };
   if (connection.error || !connection.data) return NextResponse.json({ accepted: true });
   if (connection.data.status === "retired") return NextResponse.json({ accepted: true });

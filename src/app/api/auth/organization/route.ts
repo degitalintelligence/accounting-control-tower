@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Organisasi belum valid." }, { status: 400 });
 
   const admin = createServiceRoleClient();
-  let membershipQuery = admin
+  const membershipQuery = admin
     .from("memberships")
     .select("organization_id")
     .eq("profile_id", user.id)
@@ -40,6 +40,8 @@ export async function POST(request: Request) {
   }
   const selectedMembership = (memberships ?? []).find((item) => item.organization_id === selectedOrganizationId);
   if (!selectedMembership) return NextResponse.json({ error: "Anda tidak memiliki akses ke organisasi ini." }, { status: 403 });
+  const { data: activeOrganization } = await admin.from("organizations").select("id").eq("id", selectedMembership.organization_id).is("deleted_at", null).maybeSingle();
+  if (!activeOrganization) return NextResponse.json({ error: "Organisasi ini sudah diarsipkan dan tidak dapat dipilih." }, { status: 410 });
 
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_ORGANIZATION_COOKIE, selectedMembership.organization_id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30 });

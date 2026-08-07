@@ -35,12 +35,12 @@ async function processJob(admin: Client, job: Job, createdBy: string | null) {
 }
 
 export async function runRecurrenceWorker(admin: Client) {
-  const rulesResult = await admin.from("recurrence_rules").select("id, template_id, rrule, timezone, generation_lead_days, holiday_handling, skip_weekends, task_templates!inner(organization_id, is_active, deleted_at)").is("deleted_at", null).eq("task_templates.is_active", true).is("task_templates.deleted_at", null);
+  const rulesResult = await admin.from("recurrence_rules").select("id, template_id, rrule, timezone, generation_lead_days, holiday_handling, skip_weekends, task_templates!inner(organization_id, is_active, deleted_at, organizations!inner(deleted_at))").is("deleted_at", null).eq("task_templates.is_active", true).is("task_templates.deleted_at", null).is("task_templates.organizations.deleted_at", null);
   const rules = rulesResult as unknown as { data: (Rule & { task_templates: { organization_id: string } })[] | null; error: { message: string } | null };
   if (rules.error) throw new Error(rules.error.message);
   const now = new Date();
   for (const rule of rules.data ?? []) for (const occurrence of previewOccurrences(rule.rrule, rule.timezone, now, 200, { skipWeekends: rule.skip_weekends, holidayHandling: rule.holiday_handling })) if (occurrence.date <= new Intl.DateTimeFormat("en-CA", { timeZone: rule.timezone }).format(new Date(now.getTime() + rule.generation_lead_days * 86400000))) await enqueue(admin, rule, rule.task_templates.organization_id, occurrence.date);
-  const jobsResult = await admin.from("recurrence_job_runs").select("id, attempts, max_attempts, template_id, instance_key, occurrence_date").eq("status", "pending").or(`next_retry_at.is.null,next_retry_at.lte.${now.toISOString()}`).order("occurrence_date", { ascending: true }).limit(50);
+  const jobsResult = await admin.from("recurrence_job_runs").select("id, attempts, max_attempts, template_id, instance_key, occurrence_date, organizations!inner(deleted_at)").is("organizations.deleted_at", null).eq("status", "pending").or(`next_retry_at.is.null,next_retry_at.lte.${now.toISOString()}`).order("occurrence_date", { ascending: true }).limit(50);
   const jobs = jobsResult as unknown as { data: Job[] | null; error: { message: string } | null };
   if (jobs.error) throw new Error(jobs.error.message);
   let processed = 0; let failed = 0;

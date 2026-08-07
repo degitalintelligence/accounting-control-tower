@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assistReview } from "@/lib/ai/openrouter-client";
+import { assistReview, OpenRouterError } from "@/lib/ai/openrouter-client";
+import { requireActiveOrganization } from "@/lib/organization/active";
 import { logAudit } from "@/lib/audit/logger";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { aiReviewSchema, validationMessage, workItemIdQuerySchema } from "@/lib/validation/schemas";
@@ -84,7 +85,9 @@ export async function POST(request: NextRequest) {
   const checklistResult = await auth.admin.from("checklist_responses").select("value, file_id, checklist_items!inner(label, is_required)").eq("work_item_id", id);
   const checklist = checklistResult as unknown as { data: { value: string | null; file_id: string | null; checklist_items: { label: string; is_required: boolean } }[] | null; error: ErrorShape | null };
   if (checklist.error) return NextResponse.json({ error: "Gagal memuat checklist." }, { status: 500 });
-  const result = await assistReview(contextFor(auth, (checklist.data ?? []).map((entry) => ({ ...entry.checklist_items, value: entry.value, file_id: entry.file_id }))), auth.locale);
+  let organization;
+  try { organization = await requireActiveOrganization(auth.admin, auth.organizationId); } catch { return NextResponse.json({ error: "Organisasi sudah diarsipkan." }, { status: 410 }); }
+  const result = await assistReview(contextFor(auth, (checklist.data ?? []).map((entry) => ({ ...entry.checklist_items, value: entry.value, file_id: entry.file_id }))), auth.locale, organization);
   const inserted = await auth.admin.from("ai_review_notes").insert({ organization_id: auth.organizationId, client_id: auth.item.client_id, work_item_id: id, generated_by: auth.userId, result, status: "pending" } as never).select("id, status, result, generated_by, created_at").single();
   const note = inserted as unknown as { data: unknown | null; error: ErrorShape | null };
   if (note.error || !note.data) return NextResponse.json({ error: "Gagal menyimpan AI Notes." }, { status: 500 });

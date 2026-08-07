@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser();
       const admin = createServiceRoleClient();
       const membership = user
-        ? await admin.from("memberships").select("id").eq("profile_id", user.id).eq("is_active", true).limit(1)
+        ? await admin.from("memberships").select("id, organizations!inner(id)").eq("profile_id", user.id).eq("is_active", true).is("organizations.deleted_at", null).limit(1)
         : { data: [], error: null };
       if (user && !membership.error && membership.data?.length) return NextResponse.redirect(redirectUrl);
       if (user && !membership.error) return NextResponse.redirect(new URL("/onboarding/organization", appUrl ?? request.url));

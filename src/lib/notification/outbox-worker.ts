@@ -244,7 +244,7 @@ async function deliverWhatsAppNotifications(admin: NotificationClient, event: No
   const profileResult = await admin.from("profiles").select("id, timezone, quiet_hours_start, quiet_hours_end").in("id", notifications.map((notification) => notification.profile_id));
   const profiles = profileResult as unknown as { data: { id: string; timezone: string; quiet_hours_start: string | null; quiet_hours_end: string | null }[] | null; error: { message: string } | null };
   if (profiles.error) throw new Error(profiles.error.message);
-  const mappingsResult = await admin.from("wa_participant_mappings").select("profile_id, provider_participant_id, wa_group_id, wa_groups!inner(connection_id, organization_id, integration_connections!inner(provider, session_id, status))").in("profile_id", notifications.map((notification) => notification.profile_id)).eq("is_verified", true);
+  const mappingsResult = await admin.from("wa_participant_mappings").select("profile_id, provider_participant_id, wa_group_id, wa_groups!inner(connection_id, organization_id, integration_connections!inner(provider, session_id, status), organizations!inner(deleted_at))").is("wa_groups.organizations.deleted_at", null).in("profile_id", notifications.map((notification) => notification.profile_id)).eq("is_verified", true);
   const mappings = mappingsResult as unknown as { data: { profile_id: string; provider_participant_id: string; wa_group_id: string; wa_groups: { connection_id: string; organization_id: string; integration_connections: { provider: string; session_id: string | null; status: string } } }[] | null; error: { message: string } | null };
   if (mappings.error) throw new Error(mappings.error.message);
   for (const notification of notifications) {
@@ -252,7 +252,8 @@ async function deliverWhatsAppNotifications(admin: NotificationClient, event: No
     if (!profile || inQuietHours(new Date(), profile.timezone, profile.quiet_hours_start, profile.quiet_hours_end)) continue;
     const mapping = (mappings.data ?? []).find((candidate) => candidate.profile_id === notification.profile_id);
     if (!mapping) continue;
-    const groupResult = await admin.from("wa_groups").select("provider_group_id, connection_id, organization_id, integration_connections!inner(provider, session_id, status)").eq("id", mapping.wa_group_id).eq("organization_id", event.organizationId).eq("is_active", true).maybeSingle();
+    const groupResult = await admin.from("wa_groups").select("provider_group_id, connection_id, organization_id, integration_connections!inner(provider, session_id, status), organizations!inner(deleted_at)")
+      .is("organizations.deleted_at", null).eq("id", mapping.wa_group_id).eq("organization_id", event.organizationId).eq("is_active", true).maybeSingle();
     const group = groupResult as unknown as { data: { provider_group_id: string; connection_id: string; organization_id: string; integration_connections: { provider: string; session_id: string | null; status: string } } | null; error: { message: string } | null };
     if (group.error || !group.data) continue;
     const connection = group.data.integration_connections;
@@ -270,7 +271,7 @@ async function deliverWhatsAppNotifications(admin: NotificationClient, event: No
     const started = await admin.from("whatsapp_delivery_attempts").insert({ ...attempt, outcome: "started" });
     if (started.error) throw new Error(started.error.message);
     try {
-      const providerResponse = await sendWahaText(sessionId, group.data.provider_group_id, [notification.title, notification.body].filter(Boolean).join("\n"));
+      const providerResponse = await sendWahaText({ organizationId: event.organizationId, connectionId: group.data.connection_id, sessionId, provider: connection.provider }, group.data.provider_group_id, [notification.title, notification.body].filter(Boolean).join("\n"));
       const providerMessageId = typeof providerResponse.id === "string" ? providerResponse.id : providerResponse._data?.id?._serialized;
       const succeeded = await admin.from("whatsapp_delivery_attempts").insert({ ...attempt, outcome: "succeeded", provider_message_id: providerMessageId ?? null, provider_response: providerResponse });
       if (succeeded.error) throw new Error(succeeded.error.message);

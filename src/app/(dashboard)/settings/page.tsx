@@ -18,10 +18,23 @@ export default function SettingsPage() {
   const [message, setMessage] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [archiveConfirmation, setArchiveConfirmation] = React.useState("");
+  const [archiving, setArchiving] = React.useState(false);
   const setLocale = useAuthStore((state) => state.setLocale);
 
   async function loadSettings() { setLoading(true); setError(null); try { const response = await fetch("/api/settings/organization", { cache: "no-store" }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error ?? t("settings.loadingError")); const settings = body.data?.settings ?? {}; setForm({ name: body.data?.name ?? "", slug: body.data?.slug ?? "", timezone: settings.timezone ?? "Asia/Jakarta", currency: settings.currency ?? "IDR", locale: settings.locale === "en-US" ? "en-US" : "id-ID" }); } catch (cause) { setError(cause instanceof Error ? cause.message : t("settings.loadingError")); } finally { setLoading(false); } }
   React.useEffect(() => { const timer = window.setTimeout(() => { void loadSettings(); }, 0); return () => window.clearTimeout(timer); }, []);
+
+  async function archiveOrganization() {
+    if (archiveConfirmation !== form.name) return;
+    setArchiving(true); setError(null);
+    try {
+      const response = await fetch("/api/settings/organization", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: archiveConfirmation }) });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "Organisasi gagal diarsipkan.");
+      window.location.assign("/onboarding/organization");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Organisasi gagal diarsipkan."); } finally { setArchiving(false); }
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setMessage(false); setError(null);
@@ -104,6 +117,13 @@ export default function SettingsPage() {
           </form>}
 
           <div className="mt-5 flex gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900"><Info className="mt-0.5 size-4 shrink-0 text-blue-600" />Perubahan nama dan konfigurasi berlaku untuk seluruh workspace. Pastikan timezone dan mata uang sesuai kebutuhan operasional.</div>
+          <section className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4" aria-labelledby="archive-organization-heading">
+            <h2 id="archive-organization-heading" className="font-bold text-red-950">Arsipkan organisasi</h2>
+            <p className="mt-1 text-sm leading-6 text-red-900">Tindakan ini menonaktifkan organisasi secara permanen dari pemilihan aktif. Data, membership, file, dan riwayat audit tetap dipertahankan.</p>
+            <label htmlFor="archive-confirmation" className="mt-3 block text-sm font-semibold text-red-950">Ketik nama organisasi: <span className="font-bold">{form.name}</span></label>
+            <input id="archive-confirmation" value={archiveConfirmation} onChange={(event) => setArchiveConfirmation(event.target.value)} className="mt-1.5 w-full rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100" disabled={archiving} />
+            <Button type="button" variant="destructive" className="mt-3" disabled={archiving || archiveConfirmation !== form.name} onClick={() => void archiveOrganization()}>{archiving && <Loader2 className="size-4 animate-spin" />} Arsipkan organisasi</Button>
+          </section>
         </div>
         <aside className="space-y-4"><div className="surface-card rounded-2xl p-5"><h3 className="font-bold text-slate-950">Tentang pengaturan</h3><p className="mt-2 text-sm leading-6 text-slate-500">Gunakan navigasi di atas untuk mengelola akses tim, data klien, dan preferensi notifikasi.</p><div className="mt-5 space-y-3 text-sm"><QuickLink icon={Building2} label="Anggota dan akses" text="Kelola role pengguna" href="/settings/members" /><QuickLink icon={Info} label="Klien" text="Atur scope client" href="/settings/clients" /><QuickLink icon={Settings2} label="Notifikasi" text="Atur preferensi akun" href="/settings/notifications" /></div></div><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><p className="text-sm font-bold text-amber-950">Butuh kontrol lanjutan?</p><p className="mt-1 text-sm leading-6 text-amber-900">Buka Administrasi untuk integrasi WhatsApp, audit, antrean gagal, dan kesehatan worker.</p><Link href="/settings/administration" className="mt-4 inline-flex items-center text-sm font-bold text-amber-950 hover:underline">Buka administrasi <span aria-hidden="true">→</span></Link></div></aside>
       </section>

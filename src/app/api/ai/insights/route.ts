@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateDashboardInsights, OpenRouterError, type DashboardInsights } from "@/lib/ai/openrouter-client";
+import { requireActiveOrganization } from "@/lib/organization/active";
 import { getAuthContext } from "@/lib/authorization";
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
@@ -57,7 +58,8 @@ export async function GET() {
   const metrics = { current: aggregate(rows.data ?? [], currentStart, today, now), previous: aggregate(rows.data ?? [], previousStart, currentStart, now) };
   let insights: DashboardInsights;
   try {
-    insights = await generateDashboardInsights(metricsContext(metrics), auth.context.locale);
+    const organization = await requireActiveOrganization(admin, organizationId);
+    insights = await generateDashboardInsights(metricsContext(metrics), auth.context.locale, organization);
   } catch (error) {
     const aiError = error instanceof OpenRouterError ? error : null;
     console.error("[ai-insights] provider failure", {

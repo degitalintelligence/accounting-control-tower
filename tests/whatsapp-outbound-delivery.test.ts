@@ -15,8 +15,9 @@ describe("WhatsApp outbound delivery", () => {
   it("mengirim menggunakan session connection, bukan konfigurasi global", () => {
     const adapter = read("src/lib/whatsapp/adapter.ts");
     const worker = read("src/lib/notification/outbox-worker.ts");
-    expect(adapter).toContain("sendWahaText(session: string");
-    expect(worker).toContain("sendWahaText(sessionId");
+    expect(adapter).toContain("sendWahaText(session: WhatsAppSession");
+    expect(adapter).toContain("requireActiveWhatsAppSession(session)");
+    expect(worker).toContain("organizationId: event.organizationId");
     expect(worker).toContain("provider_message_id");
   });
 });

@@ -1,12 +1,49 @@
 import "server-only";
 import { getWahaConfig } from "./config";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { WahaGroup, WahaParticipant } from "@/types/whatsapp";
 
 export type WhatsAppSession = {
+  organizationId: string;
   connectionId: string;
   sessionId: string;
   provider: string;
 };
+
+type ActiveConnectionRow = {
+  id: string;
+  organization_id: string;
+  provider: string;
+  session_id: string | null;
+  status: string;
+  retired_at: string | null;
+};
+
+async function requireActiveWhatsAppSession(session: WhatsAppSession): Promise<WhatsAppSession> {
+  if (session.provider !== "waha") throw new Error(`Provider WhatsApp tidak didukung: ${session.provider}`);
+  if (!session.organizationId || !session.connectionId || !session.sessionId) throw new Error("Koneksi WhatsApp tidak lengkap.");
+
+  const admin = createServiceRoleClient();
+  const result = await admin
+    .from("integration_connections")
+    .select("id, organization_id, provider, session_id, status, retired_at, organizations!inner(deleted_at)")
+    .eq("id", session.connectionId)
+    .eq("organization_id", session.organizationId)
+    .eq("provider", "waha")
+    .is("deleted_at", null)
+    .is("retired_at", null)
+    .neq("status", "retired")
+    .is("organizations.deleted_at", null)
+    .maybeSingle();
+
+  const checked = result as unknown as { data: ActiveConnectionRow | null; error: { message: string } | null };
+  if (checked.error) throw new Error(checked.error.message);
+  if (!checked.data || checked.data.session_id !== session.sessionId || checked.data.provider !== session.provider) {
+    throw new Error("Koneksi WhatsApp sudah tidak aktif.");
+  }
+
+  return session;
+}
 
 export type WhatsAppSessionAdapter = {
   sendText: (chatId: string, text: string) => Promise<{ id?: string; _data?: { id?: { _serialized?: string } }; [key: string]: unknown }>;
@@ -37,9 +74,6 @@ export async function wahaRequest<T>(path: string, init?: RequestInit): Promise<
   }
   if (!response.ok) {
     const detail = await readWahaError(response);
-    // #region debug-point A:waha-response
-    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "whatsapp-session-502", runId: "pre-fix", hypothesisId: "A", location: "whatsapp/adapter.ts:wahaRequest", msg: "[DEBUG] WAHA request failed", data: { path, status: response.status, detailPresent: Boolean(detail) } }) }).catch(() => {});
-    // #endregion
     throw new WahaRequestError(response.status, detail || `WAHA request gagal: ${response.status}`);
   }
   return (await response.json()) as T;
@@ -113,15 +147,16 @@ export async function getWahaGroupParticipants(session: string, groupId: string)
   return wahaRequest<WahaParticipant[]>(`/api/${encodeURIComponent(session)}/groups/${encodeURIComponent(groupId)}/participants/v2`);
 }
 
-export async function sendWahaText(session: string, chatId: string, text: string) {
+export async function sendWahaText(session: WhatsAppSession, chatId: string, text: string) {
+  const activeSession = await requireActiveWhatsAppSession(session);
   return wahaRequest<{ id?: string; _data?: { id?: { _serialized?: string } }; [key: string]: unknown }>("/api/sendText", {
     method: "POST",
-    body: JSON.stringify({ session, chatId, text }),
+    body: JSON.stringify({ session: activeSession.sessionId, chatId, text }),
   });
 }
 
 export function createWhatsAppSessionAdapter(session: WhatsAppSession): WhatsAppSessionAdapter {
   if (session.provider !== "waha") throw new Error(`Provider WhatsApp tidak didukung: ${session.provider}`);
-  if (!session.connectionId || !session.sessionId) throw new Error("Koneksi WhatsApp tidak lengkap.");
-  return { sendText: (chatId, text) => sendWahaText(session.sessionId, chatId, text) };
+  if (!session.organizationId || !session.connectionId || !session.sessionId) throw new Error("Koneksi WhatsApp tidak lengkap.");
+  return { sendText: (chatId, text) => sendWahaText(session, chatId, text) };
 }
