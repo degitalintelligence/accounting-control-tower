@@ -25,9 +25,6 @@ export function useAuth() {
           return;
         }
         const data: AuthUser = await res.json();
-        // #region debug-point B:auth-store-update
-        void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "new-workspace-missing", runId: "pre-fix", hypothesisId: "B", location: "src/hooks/use-auth.ts:fetchProfile", msg: "[DEBUG] Auth store organization update", data: { organizationCount: data.organizations?.length ?? 0, activeOrganizationPresent: Boolean(data.organization_id) } }) }).catch(() => {});
-        // #endregion
         if (!cancelled) setUser(data);
       } catch {
         if (!cancelled) clearUser();

@@ -66,9 +66,6 @@ export async function GET() {
   if (!activeMembership || !activeOrganization) return NextResponse.json({ error: "Organisasi aktif tidak ditemukan." }, { status: 403 });
   const organizationSettings = (activeOrganization as { settings?: { locale?: string } } | undefined)?.settings;
 
-  // #region debug-point A:auth-organizations
-  void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "new-workspace-missing", runId: "pre-fix", hypothesisId: "A", location: "src/app/api/auth/me/route.ts:response", msg: "[DEBUG] Auth organizations response", data: { membershipOrganizationCount: organizationIds.length, returnedOrganizationCount: organizations?.length ?? 0, activeOrganizationMatches: Boolean(activeOrganization) } }) }).catch(() => {});
-  // #endregion
   return NextResponse.json({
     id: user.id,
     email: user.email ?? "",

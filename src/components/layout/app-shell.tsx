@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { CommandPalette } from "./command-palette";
@@ -14,7 +14,6 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
@@ -22,13 +21,10 @@ export function AppShell({ children }: AppShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Redirect to onboarding if authenticated but no organization selected.
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !user) return;
-    if (user.organization_id) return;
-    if (pathname.startsWith("/onboarding")) return;
-    router.replace("/onboarding/organization");
-  }, [isLoading, isAuthenticated, user, pathname, router]);
+    if (isLoading || isAuthenticated) return;
+    router.replace("/login");
+  }, [isLoading, isAuthenticated, router]);
 
   const handleMenuClick = useCallback(() => {
     setSidebarOpen((prev) => !prev);
@@ -75,6 +71,8 @@ export function AppShell({ children }: AppShellProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNewWorkItem, handleSearch]);
+
+  if (isLoading || !isAuthenticated || !user?.organization_id) return null;
 
   return (
     <div className="flex min-h-screen bg-[#f3f5f2]">
