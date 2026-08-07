@@ -25,12 +25,20 @@ interface Member {
 }
 
 const roleLabels: Record<string, string> = {
-  admin: "settings.admin",
-  finance_manager: "settings.financeManager",
-  finance_staff: "settings.financeStaff",
+  owner: "settings.owner",
+  administrator: "settings.administrator",
+  team_leader: "settings.teamLeader",
+  staff: "settings.staff",
+  admin: "settings.administrator",
+  finance_manager: "settings.teamLeader",
+  finance_staff: "settings.staff",
 };
 
 const roleColors: Record<string, string> = {
+  owner: "bg-amber-50 text-amber-700",
+  administrator: "bg-blue-50 text-blue-700",
+  team_leader: "bg-purple-50 text-purple-700",
+  staff: "bg-slate-100 text-slate-700",
   admin: "bg-blue-50 text-blue-700",
   finance_manager: "bg-purple-50 text-purple-700",
   finance_staff: "bg-slate-100 text-slate-700",
@@ -42,7 +50,7 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ email: "", display_name: "", role: "finance_staff", client_id: "" });
+  const [form, setForm] = useState({ email: "", display_name: "", role: "staff", client_id: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const { t } = useI18n();
 
@@ -71,7 +79,7 @@ export default function MembersPage() {
     try {
       const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!response.ok) { const result = await response.json().catch(() => null); throw new Error(result?.error ?? t("common.saveFailed")); }
-      setForm({ email: "", display_name: "", role: "finance_staff", client_id: "" }); setEditingId(null);
+      setForm({ email: "", display_name: "", role: "staff", client_id: "" }); setEditingId(null);
       await fetchMembers();
     } catch (cause) { setError(cause instanceof Error ? cause.message : t("common.saveFailed")); } finally { setSaving(false); }
   }
@@ -125,7 +133,7 @@ export default function MembersPage() {
                 {members.filter((member) => member.is_active).length} {t("settings.activeOfMembers")} {members.length} {t("settings.memberCountLabel")}
               </p>
             </div>
-            <Button type="button" onClick={() => { setEditingId(null); setForm({ email: "", display_name: "", role: "finance_staff", client_id: "" }); }} className="cta-primary"><UserPlus className="size-4" />{t("settings.inviteMember")}</Button>
+            <Button type="button" onClick={() => { setEditingId(null); setForm({ email: "", display_name: "", role: "staff", client_id: "" }); }} className="cta-primary"><UserPlus className="size-4" />{t("settings.inviteMember")}</Button>
           </div>
           {error && <div role="alert" className="flex flex-col gap-2 border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-600 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><Button type="button" variant="outline" onClick={() => void fetchMembers()} className="w-fit gap-2 border-red-200 bg-white text-red-700"><RefreshCw className="size-4" />Coba lagi</Button></div>}
 
@@ -190,7 +198,7 @@ export default function MembersPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label htmlFor="member-name" className="text-sm font-semibold text-slate-700">{t("settings.name")}<input id="member-name" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} required /></label>
             {!editingId && <label htmlFor="member-email" className="text-sm font-semibold text-slate-700">{t("settings.email")}<input id="member-email" type="email" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>}
-            <label htmlFor="member-role" className="text-sm font-semibold text-slate-700">{t("settings.role")}<select id="member-role" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="finance_staff">{t("settings.financeStaff")}</option><option value="finance_manager">{t("settings.financeManager")}</option><option value="admin">{t("settings.admin")}</option></select></label>
+            <label htmlFor="member-role" className="text-sm font-semibold text-slate-700">{t("settings.role")}<select id="member-role" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="staff">{t("settings.staff")}</option><option value="team_leader">{t("settings.teamLeader")}</option><option value="administrator">{t("settings.administrator")}</option><option value="owner">{t("settings.owner")}</option></select></label>
           </div>
           <div className="mt-5 flex gap-2"><Button disabled={saving} className="cta-primary">{saving && <Loader2 className="size-4 animate-spin" />}{editingId ? t("common.save") : t("settings.sendInvite")}</Button>{editingId && <Button type="button" variant="outline" onClick={() => setEditingId(null)}>{t("common.cancel")}</Button>}</div>
           </form>

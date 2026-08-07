@@ -271,7 +271,7 @@ export function CreateProjectDialog({
                 </Label>
                 <Input
                   id="proj-title"
-                  placeholder="Contoh: Migrasi Sistem Akuntansi"
+                  placeholder="Contoh: Implementasi SOP cabang baru"
                   value={title}
                   onChange={(e) => {
                     setTitle(e.currentTarget.value);

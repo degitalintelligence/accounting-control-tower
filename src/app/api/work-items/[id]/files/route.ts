@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getUserOrganizationId } from "@/lib/checklists";
 import { getRequiredServerEnv } from "@/lib/server-env";
 import { createHash } from "node:crypto";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -79,7 +80,7 @@ export async function GET(_request: NextRequest, context: Context) {
   ]);
   const files = filesResult as unknown as { data: Record<string, unknown>[] | null; error: { message: string; code: string; hint: string; details: string } | null };
   if (files.error || requirementsResult.error) {
-    return errorResponse("Gagal mengambil evidence.");
+    return errorResponse("Gagal mengambil bukti pendukung.");
   }
 
   const rows = files.data ?? [];
@@ -102,6 +103,10 @@ export async function GET(_request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth instanceof NextResponse) return auth;
+  const permissionContext = await getAuthContext();
+  if (permissionContext.response) return permissionContext.response;
+  const permissionDenied = await requirePermission(permissionContext.context, "work_items.execute");
+  if (permissionDenied) return permissionDenied;
 
   const workItemStatus = await auth.admin.from("work_items").select("status").eq("id", auth.id).single();
   const workItemStatusData = workItemStatus as unknown as { data: { status: string } | null; error: { message: string } | null };
@@ -160,7 +165,7 @@ export async function POST(request: NextRequest, context: Context) {
   }
   const existingFile = await auth.admin.from("files").select("is_locked").eq("id", body.get("file_id")?.toString() ?? "").maybeSingle();
   const existingFileData = existingFile as unknown as { data: { is_locked: boolean } | null };
-  if (existingFileData.data?.is_locked) return errorResponse("Evidence sudah terkunci.", 409);
+  if (existingFileData.data?.is_locked) return errorResponse("Bukti pendukung sudah terkunci.", 409);
   const fileResult = await auth.admin.from("files").insert({ organization_id: auth.organizationId, storage_path: storagePath, filename, mime_type: mimeType, size_bytes: sizeBytes, checksum, uploaded_by: auth.userId, scan_status: "pending" } as never).select("id, filename, mime_type, size_bytes, checksum, scan_status, created_at").single();
   const insertedFile = fileResult as unknown as { data: Record<string, unknown> | null; error: { message: string; code: string; hint: string; details: string } | null };
   if (insertedFile.error || !insertedFile.data) {

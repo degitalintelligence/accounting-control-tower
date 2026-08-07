@@ -15,6 +15,6 @@ export function OverdueAgingCard({ buckets }: { buckets: OverdueAgingBucket[] })
       </div>
       <Link href="/work-items?tab=overdue" className="text-sm font-semibold text-blue-600 hover:text-blue-700">{t("common.viewItems")}</Link>
     </div>
-    {total === 0 ? <p className="mt-5 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{t("common.noOverdue")}</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{buckets.map((bucket) => <Link key={bucket.bucket} href={`/work-items?tab=overdue&aging=${bucket.bucket}`} className="rounded-lg border border-slate-200 p-3 transition hover:border-blue-300 hover:bg-blue-50"><p className="text-xs text-muted-foreground">{bucket.label}</p><p className="mt-1 text-xl font-bold text-slate-900">{bucket.count}</p><p className="text-xs text-muted-foreground">{t("common.weight")} {bucket.weight}</p></Link>)}</div>}
+    {total === 0 ? <p className="mt-5 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{t("common.noOverdue")} (Tidak ada item overdue)</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{buckets.map((bucket) => <Link key={bucket.bucket} href={`/work-items?tab=overdue&aging=${bucket.bucket}`} className="rounded-lg border border-slate-200 p-3 transition hover:border-blue-300 hover:bg-blue-50"><p className="text-xs text-muted-foreground">{bucket.label}</p><p className="mt-1 text-xl font-bold text-slate-900">{bucket.count}</p><p className="text-xs text-muted-foreground">{t("common.weight")} {bucket.weight}</p></Link>)}</div>}
   </section>;
 }

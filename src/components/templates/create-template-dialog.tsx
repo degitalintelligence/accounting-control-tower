@@ -196,7 +196,7 @@ export function CreateTemplateDialog({
           <ClientSelect id="tpl-client" value={form.client_id} onChange={(value) => updateField("client_id", value)} />
 
           <div className="space-y-1.5">
-            <Label htmlFor="tpl-checklist">Checklist SOP</Label>
+            <Label htmlFor="tpl-checklist">Checklist Pengendalian</Label>
             <Select value={form.checklist_template_id || null} onValueChange={(value) => updateField("checklist_template_id", value ?? "")}>
               <SelectTrigger id="tpl-checklist" className="w-full"><SelectValue placeholder="Tanpa checklist" /></SelectTrigger>
               <SelectContent>{checklistTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}</SelectContent>
@@ -210,7 +210,7 @@ export function CreateTemplateDialog({
             </Label>
             <Input
               id="tpl-title"
-              placeholder="Contoh: Rekonsiliasi Bank {{month}} {{year}}"
+              placeholder="Contoh: Pemeriksaan proses {{month}} {{year}}"
               value={form.title_template}
               onChange={(e) => updateField("title_template", e.currentTarget.value)}
             />

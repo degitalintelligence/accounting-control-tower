@@ -6,7 +6,7 @@ type AnyClient = Pick<SupabaseClient, "from">;
 
 type EscalationRule = {
   threshold_hours: number;
-  level: "maker" | "team_lead" | "accounting_manager" | "owner";
+  level: "maker" | "team_leader" | "owner";
   priority: "low" | "medium" | "high" | "critical";
   recipient_roles?: string[];
 };
@@ -41,29 +41,22 @@ type Recipient = {
 const defaultRules: EscalationRule[] = [
   {
     threshold_hours: 24,
-    level: "accounting_manager",
+    level: "team_leader",
     priority: "high",
-    recipient_roles: ["manager", "accounting_manager"],
+    recipient_roles: ["team_leader"],
   },
   {
     threshold_hours: 48,
     level: "owner",
     priority: "critical",
-    recipient_roles: ["admin", "owner"],
-  },
-  {
-    threshold_hours: 72,
-    level: "owner",
-    priority: "critical",
-    recipient_roles: ["director"],
+    recipient_roles: ["administrator", "owner"],
   },
 ];
 
 const levelRank: Record<EscalationRule["level"], number> = {
   maker: 0,
-  team_lead: 1,
-  accounting_manager: 2,
-  owner: 3,
+  team_leader: 1,
+  owner: 2,
 };
 
 const priorityRank: Record<string, number> = {
@@ -73,31 +66,55 @@ const priorityRank: Record<string, number> = {
   critical: 3,
 };
 
+function normalizeLevel(level: string): EscalationRule["level"] | null {
+  if (level === "maker" || level === "team_leader" || level === "owner") return level;
+  if (["team_lead", "manager", "finance_manager", "accounting_manager"].includes(level)) return "team_leader";
+  return null;
+}
+
 function parseRules(value: unknown): EscalationRule[] {
   if (!Array.isArray(value)) return defaultRules;
 
-  const rules = value.filter((rule): rule is EscalationRule => {
-    if (!rule || typeof rule !== "object") return false;
+  const rules = value.flatMap((rule): EscalationRule[] => {
+    if (!rule || typeof rule !== "object") return [];
     const candidate = rule as Record<string, unknown>;
-    return (
-      typeof candidate.threshold_hours === "number" &&
-      Number.isFinite(candidate.threshold_hours) &&
-      typeof candidate.level === "string" &&
-      candidate.level in levelRank &&
-      typeof candidate.priority === "string" &&
-      candidate.priority in priorityRank
-    );
+    const level = typeof candidate.level === "string" ? normalizeLevel(candidate.level) : null;
+    if (
+      typeof candidate.threshold_hours !== "number" ||
+      !Number.isFinite(candidate.threshold_hours) ||
+      !level ||
+      typeof candidate.priority !== "string" ||
+      !(candidate.priority in priorityRank)
+    ) {
+      return [];
+    }
+
+    const recipientRoles = Array.isArray(candidate.recipient_roles)
+      ? candidate.recipient_roles.filter((role): role is string => typeof role === "string").map(normalizeRole)
+      : undefined;
+
+    return [{
+      threshold_hours: candidate.threshold_hours,
+      level,
+      priority: candidate.priority as EscalationRule["priority"],
+      ...(recipientRoles?.length ? { recipient_roles: recipientRoles } : {}),
+    }];
   });
 
   return rules.length > 0 ? rules.sort((a, b) => a.threshold_hours - b.threshold_hours) : defaultRules;
 }
 
+function normalizeRole(role: string): string {
+  if (["team_lead", "team_leader", "manager", "finance_manager", "accounting_manager"].includes(role)) return "team_leader";
+  if (role === "admin") return "administrator";
+  return role;
+}
+
 function getRecipients(rule: EscalationRule): string[] {
-  if (rule.recipient_roles && rule.recipient_roles.length > 0) return rule.recipient_roles;
-  if (rule.level === "team_lead") return ["team_lead", "manager"];
-  if (rule.level === "accounting_manager") return ["manager", "accounting_manager"];
-  if (rule.level === "owner") return ["admin", "owner", "director"];
-  return ["maker"];
+  if (rule.recipient_roles && rule.recipient_roles.length > 0) return [...new Set(rule.recipient_roles.map(normalizeRole))];
+  if (rule.level === "team_leader") return ["team_leader"];
+  if (rule.level === "owner") return ["administrator", "owner"];
+  return ["staff"];
 }
 
 async function getRecipientIds(
@@ -109,10 +126,10 @@ async function getRecipientIds(
   const roles = getRecipients(rule);
   const result = await admin
     .from("memberships")
-    .select("profile_id, role")
+    .select("profile_id, role_id, role, organization_roles!inner(role_key)")
     .eq("organization_id", item.organization_id)
     .eq("is_active", true)
-    .in("role", roles);
+    .in("organization_roles.role_key", roles);
 
   const { data: recipients, error } = result as unknown as {
     data: Recipient[] | null;

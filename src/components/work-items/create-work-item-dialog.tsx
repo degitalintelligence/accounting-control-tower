@@ -174,7 +174,7 @@ export function CreateWorkItemDialog({
             </Label>
             <Input
               id="wi-title"
-              placeholder="Contoh: Rekonsiliasi bank bulan Juli"
+              placeholder="Contoh: Review dokumen vendor bulan Juli"
               value={form.title}
               onChange={(e) => updateField("title", e.currentTarget.value)}
             />
@@ -226,7 +226,7 @@ export function CreateWorkItemDialog({
           <ClientSelect id="wi-client" value={form.client_id} onChange={(value) => updateField("client_id", value)} />
 
           <div className="space-y-1.5">
-            <Label htmlFor="wi-checklist">Checklist SOP</Label>
+            <Label htmlFor="wi-checklist">Checklist Pengendalian</Label>
             <Select value={form.checklist_template_id || null} onValueChange={(value) => updateField("checklist_template_id", value ?? "")}>
               <SelectTrigger id="wi-checklist" className="w-full"><SelectValue placeholder="Tanpa checklist" /></SelectTrigger>
               <SelectContent>

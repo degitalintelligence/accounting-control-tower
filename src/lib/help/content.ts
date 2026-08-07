@@ -28,15 +28,15 @@ const helpDefinitions: Record<string, HelpDefinition> = {
   },
   "/work-items": {
     title: "Memahami Work Items",
-    summary: "Kelola pekerjaan accounting berdasarkan status, tipe, deadline, dan pihak yang bertanggung jawab.",
+    summary: "Kelola pekerjaan operasional berdasarkan status, tipe, tenggat, dan pihak yang bertanggung jawab.",
     steps: [
       "Gunakan filter untuk mempersempit daftar pekerjaan.",
-      "Buka work item untuk melihat checklist, evidence, assignment, dan riwayat.",
+      "Buka work item untuk melihat checklist, bukti pendukung, assignment, dan riwayat.",
       "Pilih pekerjaan baru untuk membuat dan menugaskan pekerjaan.",
     ],
     rules: [
       "Status pekerjaan hanya dapat berubah melalui alur yang diizinkan.",
-      "Maker tidak boleh menjadi checker pada pekerjaan yang sama.",
+      "Pelaksana tidak boleh menjadi reviewer pada pekerjaan yang sama.",
       "Overdue ditentukan oleh deadline, bukan status manual.",
     ],
     related: [
@@ -47,14 +47,14 @@ const helpDefinitions: Record<string, HelpDefinition> = {
   },
   "/work-items/[id]": {
     title: "Memahami Detail Work Item",
-    summary: "Halaman ini menyatukan assignment, checklist, evidence, review, komentar, dan audit trail.",
+    summary: "Halaman ini menyatukan assignment, checklist, bukti pendukung, review, komentar, dan audit trail.",
     steps: [
       "Periksa status dan langkah berikutnya di bagian atas halaman.",
-      "Selesaikan checklist dan lampirkan evidence yang diperlukan.",
-      "Submit pekerjaan setelah semua persyaratan maker terpenuhi.",
+      "Selesaikan checklist dan lampirkan bukti pendukung yang diperlukan.",
+      "Submit pekerjaan setelah semua persyaratan pelaksana terpenuhi.",
     ],
     rules: [
-      "Evidence yang sudah disubmit tidak dapat diedit maker sampai pekerjaan dikembalikan untuk revisi.",
+      "Bukti pendukung yang sudah dikirim tidak dapat diedit pelaksana sampai pekerjaan dikembalikan untuk revisi.",
       "Permintaan revisi wajib memiliki alasan dan finding yang jelas.",
       "Pekerjaan selesai setelah seluruh kontrol dan approval yang diwajibkan terpenuhi.",
     ],
@@ -78,7 +78,7 @@ const helpDefinitions: Record<string, HelpDefinition> = {
     related: [{ label: "Buka semua pekerjaan", href: "/work-items" }],
   },
   "/templates": {
-    title: "Memahami Template SOP",
+    title: "Memahami Template Proses dan Kontrol",
     summary: "Gunakan template untuk membentuk pekerjaan yang konsisten dan dapat diaudit.",
     steps: [
       "Pilih template untuk melihat versi, checklist, dan aturan yang digunakan.",
@@ -146,7 +146,7 @@ const helpDefinitions: Record<string, HelpDefinition> = {
 
 const fallbackDefinition: HelpDefinition = {
   title: "Bantuan halaman ini",
-  summary: "Gunakan halaman ini untuk menjalankan proses accounting sesuai akses dan workflow Anda.",
+  summary: "Gunakan halaman ini untuk menjalankan proses operasional sesuai akses dan alur kerja Anda.",
   steps: [
     "Periksa judul, status, dan filter aktif di halaman.",
     "Buka detail item untuk melihat informasi dan tindakan yang tersedia.",
@@ -169,11 +169,11 @@ export function getHelpDefinition(pathname: string, search: string): HelpDefinit
   if (route === "/work-items" && new URLSearchParams(search).get("filter") === "review") {
     return {
       ...definition,
-      title: "Memahami Antrean Review",
-      summary: "Fokuskan perhatian pada pekerjaan yang menunggu pemeriksaan checker.",
+      title: "Memahami Antrean Pengendalian",
+      summary: "Fokuskan perhatian pada pekerjaan yang menunggu pemeriksaan reviewer.",
       steps: [
         "Buka pekerjaan yang paling dekat dengan deadline.",
-        "Periksa checklist, evidence, dan finding sebelum mengambil keputusan.",
+        "Periksa checklist, bukti pendukung, dan temuan sebelum mengambil keputusan.",
         "Minta revisi dengan alasan yang jelas jika ada kontrol yang belum terpenuhi.",
       ],
     };

@@ -110,16 +110,19 @@ export async function getActiveMembership(admin: AdminClient, userId: string) {
 }
 
 export function canManageOrganization(role: string | null | undefined) {
-  return ["admin", "manager", "finance_manager", "accounting_manager"].includes(role ?? "");
+  return ["owner", "administrator", "team_leader"].includes(role ?? "");
 }
 
 export async function hasPermission(context: AuthContext, permissionKey: string) {
   const { data, error } = await context.admin
     .from("memberships")
-    .select("role_id, role, organization_id")
+    .select("role_id, role, organization_id, organization_roles!inner(organization_id, is_active, deleted_at)")
     .eq("profile_id", context.userId)
     .eq("organization_id", context.organizationId)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("organization_roles.organization_id", context.organizationId)
+    .eq("organization_roles.is_active", true)
+    .is("organization_roles.deleted_at", null);
   if (error || !data?.length) return false;
   const roleIds = data.map((membership) => (membership as { role_id?: string | null }).role_id).filter((id): id is string => Boolean(id));
   if (roleIds.length) {

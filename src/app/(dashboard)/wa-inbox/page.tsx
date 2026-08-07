@@ -63,7 +63,7 @@ export default function WaInboxPage() {
         ) : (
           <div className="space-y-8">
             <section className="space-y-3">
-              <div><h2 className="text-lg font-bold text-slate-900">Review queue</h2><p className="text-sm text-slate-500">Prioritaskan saran tugas baru sebelum membaca seluruh percakapan.</p></div>
+              <div><h2 className="text-lg font-bold text-slate-900">Antrean Peninjauan</h2><p className="text-sm text-slate-500">Prioritaskan saran tugas baru sebelum membaca seluruh percakapan.</p></div>
               {suggestions.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Tidak ada tugas baru yang menunggu review.</div> : suggestions.map((item) => <WaInboxItem key={item.id} item={item} onConfirm={confirmSuggestion} onReject={rejectSuggestion} onClaim={claimSuggestion} onUnclaim={unclaimSuggestion} onClarify={requestClarification} />)}
               <div className="pt-4"><h2 className="text-lg font-bold text-slate-900">Ringkasan percakapan</h2><p className="text-sm text-slate-500">Konteks grup untuk membantu keputusan review.</p></div>
               {summaries.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Belum ada percakapan grup dalam 7 hari terakhir.</div> : summaries.map((summary) => (

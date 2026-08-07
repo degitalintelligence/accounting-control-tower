@@ -27,10 +27,10 @@ export default function LoginPage() {
             <Shield className="h-6 w-6 text-blue-600" />
           </div>
           <CardTitle className="text-xl font-bold text-slate-900">
-            Accounting Control Tower
+            Operations Control Tower
           </CardTitle>
           <p className="text-sm text-slate-500">
-            Masuk untuk mengelola operasi accounting
+            Masuk untuk mengelola operasi tim
           </p>
         </CardHeader>
         <CardContent>

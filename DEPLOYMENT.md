@@ -46,6 +46,7 @@ Semua endpoint berikut menerima `POST` dan wajib memakai header authorization te
 - `/api/jobs/recurrence`
 - `/api/jobs/reminders`
 - `/api/jobs/whatsapp-retention`
+- `/api/jobs/waha-cleanup`
 
 Scheduler harus menganggap response non-2xx sebagai kegagalan dan melakukan retry sesuai kebijakan durable queue. Endpoint job bersifat server-only dan menggunakan service role setelah secret tervalidasi.
 

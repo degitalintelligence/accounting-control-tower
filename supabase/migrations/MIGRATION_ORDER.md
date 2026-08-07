@@ -91,8 +91,26 @@ The current repository order is lexical by complete filename. Dependencies that 
 064_fix_action_suggestion_conflicts.sql
 062_granular_rbac_permissions.sql
 065_complete_work_item_ai_retry_isolation.sql
+065_whatsapp_review_claims.sql
+066_fix_whatsapp_review_claim_ambiguity.sql
 066_organization_onboarding.sql
+067_atomic_whatsapp_review_claim_audit.sql
 067_multi_organization_context.sql
+068_atomic_whatsapp_review_unclaim_audit.sql
+069_whatsapp_suggestion_clarification.sql
+070_whatsapp_clarification_response.sql
+071_whatsapp_connection_archive.sql
+072_audit_finding_atomic_corrective_action.sql
+073_grant_whatsapp_delivery_attempts_read.sql
+074_harden_expired_outbox_retry.sql
+075_harden_ai_intake_claim.sql
+076_fix_clarification_uuid_min.sql
+077_organization_archive.sql
+078_active_organization_automation_guards.sql
+079_harden_archived_org_rpc_guards.sql
+080_waha_cleanup_after_organization_archive.sql
+081_general_operations_roles.sql
+082_reconcile_archived_waha_sessions.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

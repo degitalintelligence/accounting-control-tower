@@ -4,6 +4,8 @@ import { memberUpdateSchema, validationMessage } from "@/lib/validation/schemas"
 
 type Params = { params: Promise<{ id: string }> };
 
+const assignableRoles = ["administrator", "team_leader", "staff"] as const;
+
 async function authorize(id: string) {
   const auth = await getAuthContext();
   if (auth.response) return { response: auth.response } as const;
@@ -22,6 +24,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const parsed = memberUpdateSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const { context } = authorized;
+  if (parsed.data.role && !assignableRoles.includes(parsed.data.role as (typeof assignableRoles)[number])) {
+    return NextResponse.json({ error: "Role yang dapat diberikan melalui pengelolaan anggota: administrator, team_leader, atau staff." }, { status: 400 });
+  }
   const update = { ...parsed.data } as Record<string, unknown>;
   if (parsed.data.role) {
     const roleRecordResult = await context.admin.from("organization_roles").select("id").eq("organization_id", context.organizationId).eq("role_key", parsed.data.role).is("deleted_at", null).maybeSingle();

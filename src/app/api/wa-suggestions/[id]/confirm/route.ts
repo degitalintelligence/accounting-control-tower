@@ -109,13 +109,13 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   if (suggestion.suggested_maker_id && !validProfileIds.has(suggestion.suggested_maker_id)) {
-    return NextResponse.json({ error: "Maker suggestion tidak valid dalam organisasi." }, { status: 400 });
+    return NextResponse.json({ error: "Saran pelaksana tidak valid dalam organisasi." }, { status: 400 });
   }
   if (suggestion.suggested_checker_id && !validProfileIds.has(suggestion.suggested_checker_id)) {
     return NextResponse.json({ error: "Checker suggestion tidak valid dalam organisasi." }, { status: 400 });
   }
   if (suggestion.suggested_maker_id && suggestion.suggested_maker_id === suggestion.suggested_checker_id) {
-    return NextResponse.json({ error: "Maker dan checker harus berbeda." }, { status: 400 });
+    return NextResponse.json({ error: "Pelaksana dan reviewer harus berbeda." }, { status: 400 });
   }
 
   const result = await admin.rpc("confirm_action_suggestion_choice", {

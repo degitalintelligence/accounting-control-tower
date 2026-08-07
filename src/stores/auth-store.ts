@@ -6,7 +6,7 @@ export interface AuthUser {
   email: string;
   name: string;
   avatar_url: string | null;
-  role: string; // membership role: admin | finance_manager | finance_staff
+  role: string; // membership role: owner | administrator | team_leader | staff
   organization_id: string;
   organization_name: string;
   organizations: Array<{ id: string; name: string; slug: string; is_active: boolean }>;

@@ -13,6 +13,7 @@ const bypassRoutes = [
   "/api/jobs/recurrence",
   "/api/jobs/reminders",
   "/api/jobs/whatsapp-retention",
+  "/api/jobs/waha-cleanup",
 ];
 
 const securityHeaders = {

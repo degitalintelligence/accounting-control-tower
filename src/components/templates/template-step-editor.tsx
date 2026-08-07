@@ -26,9 +26,9 @@ interface TemplateStepEditorProps {
 }
 
 const ROLE_OPTIONS = [
-  { value: "maker", label: "Maker" },
-  { value: "checker", label: "Checker" },
-  { value: "approver", label: "Approver" },
+  { value: "maker", label: "Pelaksana" },
+  { value: "checker", label: "Reviewer" },
+  { value: "approver", label: "Penyetuju" },
 ];
 
 const EMPTY_STEP: ChildBlueprint = {

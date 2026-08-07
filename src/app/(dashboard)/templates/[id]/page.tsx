@@ -553,7 +553,7 @@ export default function TemplateDetailPage({
                         </div>
                       )}
                       <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
-                        <p className="text-[11px] font-medium text-blue-600">Checklist SOP</p>
+                        <p className="text-[11px] font-medium text-blue-600">Checklist Pengendalian</p>
                         {latestVersion.checklist_template_id && checklistById.get(latestVersion.checklist_template_id) ? (
                           <p className="mt-1 text-sm text-slate-700">
                             {checklistById.get(latestVersion.checklist_template_id)!.name} · {checklistById.get(latestVersion.checklist_template_id)!.target_role}

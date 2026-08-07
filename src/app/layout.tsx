@@ -14,9 +14,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Accounting Control Tower",
+  title: "Operations Control Tower",
   description:
-    "Sistem manajemen operasi accounting — kontrol, audit, dan otomasi pekerjaan tim.",
+    "Sistem kontrol operasi untuk pekerjaan, review, persetujuan, audit trail, dan otomasi tim.",
 };
 
 export default function RootLayout({

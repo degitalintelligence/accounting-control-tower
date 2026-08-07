@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   if (auth.response) return auth.response;
   const permissionContext = await getAuthContext();
   if (permissionContext.response) return permissionContext.response;
-  const permissionDenied = await hasPermission(permissionContext.context, "work_items.manage");
+  const permissionDenied = await hasPermission(permissionContext.context, "work_items.execute");
   if (!permissionDenied) return NextResponse.json({ error: "Anda tidak memiliki permission untuk aksi ini." }, { status: 403 });
   const parsed = checklistResponseSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });

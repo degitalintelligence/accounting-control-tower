@@ -524,8 +524,8 @@ export default function WorkItemDetailPage({
             <Tabs defaultValue="overview">
               <TabsList className="w-full justify-start overflow-x-auto rounded-xl bg-slate-100 p-1">
                 <TabsTrigger value="overview">Ringkasan</TabsTrigger>
-                <TabsTrigger value="checklist">Checklist SOP</TabsTrigger>
-                <TabsTrigger value="evidence">Evidence</TabsTrigger>
+                <TabsTrigger value="checklist">Checklist Pengendalian</TabsTrigger>
+                <TabsTrigger value="evidence">Bukti Pendukung</TabsTrigger>
                 <TabsTrigger value="review">Review</TabsTrigger>
                 <TabsTrigger value="comments">Komentar</TabsTrigger>
                 <TabsTrigger value="history">Riwayat</TabsTrigger>
@@ -605,9 +605,9 @@ export default function WorkItemDetailPage({
                               <SelectValue placeholder="Pilih role..." />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="maker">Maker</SelectItem>
-                              <SelectItem value="checker">Checker</SelectItem>
-                              <SelectItem value="approver">Approver</SelectItem>
+                              <SelectItem value="maker">Pelaksana</SelectItem>
+                              <SelectItem value="checker">Reviewer</SelectItem>
+                              <SelectItem value="approver">Penyetuju</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

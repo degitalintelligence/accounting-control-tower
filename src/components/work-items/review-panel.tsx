@@ -38,7 +38,7 @@ function ApprovalEntry({ approval, locale, t }: { approval: ApprovalRecord; loca
   return (
     <div className="rounded-lg border border-slate-200 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-slate-900">{approval.approver_name ?? "Approver"}</span>
+        <span className="text-sm font-medium text-slate-900">{approval.approver_name ?? "Penyetuju"}</span>
         <Badge className={approval.decision === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}>
           {approval.decision ? t(decisionLabels[approval.decision] as never) : t("status.draft" as never)}
         </Badge>
@@ -111,7 +111,7 @@ export function ReviewPanel({ workItemId, status, onChanged }: Props) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm"><ShieldCheck className="size-4 text-blue-600" />Review & Approval</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm"><ShieldCheck className="size-4 text-blue-600" />Review & Persetujuan</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {actionable ? (
             <>

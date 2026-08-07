@@ -4,6 +4,8 @@ import { memberCreateSchema, validationMessage } from "@/lib/validation/schemas"
 import { NextRequest } from "next/server";
 import { createPublicAuthClient } from "@/lib/supabase/server";
 
+const assignableRoles = ["administrator", "team_leader", "staff"] as const;
+
 /**
  * GET /api/settings/members
  * Returns all members in the current user's organization.
@@ -90,6 +92,9 @@ export async function POST(request: NextRequest) {
   const parsed = memberCreateSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const { admin, organizationId } = auth.context;
+  if (!assignableRoles.includes(parsed.data.role as (typeof assignableRoles)[number])) {
+    return NextResponse.json({ error: "Role yang dapat diberikan melalui undangan: administrator, team_leader, atau staff." }, { status: 400 });
+  }
   const clientId = parsed.data.client_id ?? null;
   const entityId = parsed.data.entity_id ?? null;
 

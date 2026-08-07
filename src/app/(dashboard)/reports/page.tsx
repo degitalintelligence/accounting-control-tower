@@ -47,7 +47,7 @@ export default function ReportsPage() {
 
   return (
     <main className="page-canvas text-slate-900"><div className="mx-auto w-full max-w-6xl space-y-6">
-      <header><div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FileBarChart className="size-4" /> Performance Center</div><h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Laporan operasional</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Pantau performa pekerjaan, alur deliverable, dan ketepatan waktu workspace.</p></header>
+      <header><div className="flex items-center gap-2 text-xs font-semibold text-blue-600"><FileBarChart className="size-4" /> Operations Performance</div><h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Laporan operasional</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Pantau performa pekerjaan, alur deliverable, dan ketepatan waktu workspace.</p></header>
 
       {error && <div role="alert" className="mb-4 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Laporan belum dapat dimuat.</p><p className="mt-1">{error}</p></div><Button type="button" variant="outline" onClick={() => void loadReports()} className="w-fit gap-2 border-red-200 bg-white text-red-700 hover:bg-red-100"><RefreshCw className="size-4" />Coba lagi</Button></div>}
       {!data && !error ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl" />)}</div> : data && (

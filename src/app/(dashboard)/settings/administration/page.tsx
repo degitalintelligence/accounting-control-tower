@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { WhatsAppWhitelistWizard } from "@/components/whatsapp/whitelist-wizard";
 import { useI18n } from "@/components/i18n-provider";
 
-type EscalationRule = { threshold_hours: number; level: "maker" | "team_lead" | "accounting_manager" | "owner"; priority: "low" | "medium" | "high" | "critical"; recipient_roles?: string[] };
+type EscalationRule = { threshold_hours: number; level: "maker" | "team_lead" | "team_leader" | "accounting_manager" | "owner"; priority: "low" | "medium" | "high" | "critical"; recipient_roles?: string[] };
 type Policy = { id: string; name: string; description: string | null; client_id: string | null; is_active: boolean; rules?: EscalationRule[] };
 
 function defaultEscalationRule(): EscalationRule { return { threshold_hours: 24, level: "team_lead", priority: "high", recipient_roles: [] }; }
@@ -330,7 +330,7 @@ function AiPolicyPanel({ policies, busy, clients, onSave }: { policies: AiPolicy
   const emptyDraft: AiPolicy = { id: "", name: "", description: null, client_id: null, is_active: true, provider: "openrouter", model: "", retention_days: 90, require_human_confirmation: true, allow_sensitive_data: false, no_training_required: true };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<AiPolicy>(emptyDraft);
-  const fields = [["require_human_confirmation", "Perlu persetujuan manusia", "AI hanya memberi saran. User tetap mengambil keputusan."], ["allow_sensitive_data", "Boleh memproses data sensitif", "Izinkan data keuangan atau data client dikirim ke AI."], ["no_training_required", "Data tidak untuk melatih AI", "Provider tidak boleh memakai data organisasi untuk training."]] as const;
+  const fields = [["require_human_confirmation", "Perlu persetujuan manusia", "AI hanya memberi saran. User tetap mengambil keputusan."], ["allow_sensitive_data", "Boleh memproses data sensitif", "Izinkan data bisnis sensitif atau data client dikirim ke AI."], ["no_training_required", "Data tidak untuk melatih AI", "Provider tidak boleh memakai data organisasi untuk training."]] as const;
   function openCreate() { setDraft({ ...emptyDraft }); setDialogOpen(true); }
   function openEdit(item: AiPolicy) { setDraft({ ...item }); setDialogOpen(true); }
   function closeDialog() { setDialogOpen(false); setDraft({ ...emptyDraft }); }
