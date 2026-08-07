@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { CommandPalette } from "./command-palette";
 import { ContextualHelpSheet } from "@/components/help/contextual-help-sheet";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -13,9 +14,21 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // Redirect to onboarding if authenticated but no organization selected.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !user) return;
+    if (user.organization_id) return;
+    if (pathname.startsWith("/onboarding")) return;
+    router.replace("/onboarding/organization");
+  }, [isLoading, isAuthenticated, user, pathname, router]);
 
   const handleMenuClick = useCallback(() => {
     setSidebarOpen((prev) => !prev);
