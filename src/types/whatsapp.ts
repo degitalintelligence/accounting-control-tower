@@ -39,11 +39,16 @@ export type WahaGroup = {
     id?: WahaSerializedId;
     subject?: string;
     participants?: WahaParticipant[];
+    name?: string;
   };
   name?: string;
   subject?: string;
+  title?: string;
   groupId?: string;
+  addressingMode?: string;
 };
+
+export type WahaGroupCollection = WahaGroup[] | { groups?: WahaGroup[] } | Record<string, WahaGroup>;
 
 export type WahaSerializedId = {
   user?: string;

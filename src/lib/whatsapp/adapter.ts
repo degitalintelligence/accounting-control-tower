@@ -1,7 +1,7 @@
 import "server-only";
 import { getWahaConfig } from "./config";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { WahaGroup, WahaParticipant } from "@/types/whatsapp";
+import type { WahaGroup, WahaGroupCollection, WahaParticipant } from "@/types/whatsapp";
 
 export type WhatsAppSession = {
   organizationId: string;
@@ -123,7 +123,7 @@ export async function stopWahaSession(session: string) {
 export async function createWahaSession(session: string) {
   return wahaRequest<unknown>("/api/sessions", {
     method: "POST",
-    body: JSON.stringify({ name: session }),
+    body: JSON.stringify({ name: session, config: { engine: "GOWS" } }),
   });
 }
 
@@ -140,7 +140,10 @@ export async function getWahaQr(session: string) {
 }
 
 export async function getWahaGroups(session: string) {
-  return wahaRequest<WahaGroup[]>(`/api/${encodeURIComponent(session)}/groups`);
+  const result = await wahaRequest<WahaGroupCollection>(`/api/${encodeURIComponent(session)}/groups`);
+  if (Array.isArray(result)) return result;
+  if ("groups" in result && Array.isArray(result.groups)) return result.groups;
+  return Object.entries(result).map(([id, group]) => ({ ...group, id: group.id || id }));
 }
 
 export async function getWahaGroupParticipants(session: string, groupId: string) {
