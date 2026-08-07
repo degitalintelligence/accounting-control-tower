@@ -121,9 +121,22 @@ export async function stopWahaSession(session: string) {
 }
 
 export async function createWahaSession(session: string) {
+  const config = getWahaConfig();
+  if (!config.webhookUrl) throw new Error("WAHA_WEBHOOK_URL belum dikonfigurasi.");
+  if (!config.webhookToken) throw new Error("WAHA_WEBHOOK_TOKEN belum dikonfigurasi.");
   return wahaRequest<unknown>("/api/sessions", {
     method: "POST",
-    body: JSON.stringify({ name: session, config: { engine: "GOWS" } }),
+    body: JSON.stringify({
+      name: session,
+      config: {
+        engine: config.engine,
+        webhooks: [{
+          url: config.webhookUrl,
+          events: ["message"],
+          customHeaders: [{ name: "x-waha-token", value: config.webhookToken }],
+        }],
+      },
+    }),
   });
 }
 

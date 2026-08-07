@@ -6,7 +6,11 @@ export function getWahaConfig(): WahaConfig {
   if (!baseUrl) {
     throw new Error("WAHA_BASE_URL atau WAHA_API_URL belum dikonfigurasi.");
   }
-  return { baseUrl: baseUrl.replace(/\/$/, ""), session: process.env.WAHA_SESSION, apiKey: process.env.WAHA_API_KEY };
+  const webhookUrl = process.env.WAHA_WEBHOOK_URL;
+  const webhookToken = process.env.WAHA_WEBHOOK_TOKEN ?? process.env.WAHA_WEBHOOK_SECRET;
+  const engine = (process.env.WHATSAPP_DEFAULT_ENGINE ?? "GOWS").toUpperCase();
+  if (engine !== "WEBJS" && engine !== "GOWS") throw new Error("WHATSAPP_DEFAULT_ENGINE harus WEBJS atau GOWS.");
+  return { baseUrl: baseUrl.replace(/\/$/, ""), session: process.env.WAHA_SESSION, apiKey: process.env.WAHA_API_KEY, webhookUrl, webhookToken, engine };
 }
 
 export function verifyWahaToken(provided: string | null): boolean {

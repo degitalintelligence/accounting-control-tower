@@ -31,6 +31,9 @@ export type WahaConfig = {
   baseUrl: string;
   apiKey?: string;
   session?: string;
+  webhookUrl?: string;
+  webhookToken?: string;
+  engine: "WEBJS" | "GOWS";
 };
 
 export type WahaGroup = {
