@@ -13,7 +13,7 @@ type Group = { id: string; connection_id: string; client_id: string | null; prov
 type Mapping = { id: string; wa_group_id: string; provider_participant_id: string; phone: string | null; display_name: string | null; profile_id: string | null; is_verified: boolean };
 type Member = { profile_id: string; name: string; is_active: boolean };
 type Client = { id: string; name: string };
-type DiscoveredGroup = { id?: unknown; name?: string; subject?: string; title?: string; groupId?: unknown; groupMetadata?: { id?: unknown; subject?: string; name?: string } };
+type DiscoveredGroup = { id?: unknown; name?: string; subject?: string; title?: string; formattedTitle?: string; groupId?: unknown; chatId?: unknown; groupMetadata?: { id?: unknown; subject?: string; name?: string; title?: string }; chat?: { id?: unknown; name?: string; subject?: string; title?: string }; _data?: { id?: unknown; name?: string; subject?: string; notifyName?: string }; [key: string]: unknown };
 type DiscoveredParticipant = { id?: unknown; lid?: unknown; phone?: string; displayName?: string; name?: string };
 
 type Props = {
@@ -67,9 +67,6 @@ function SearchableGroupSelect({ groups, value, onChange, getId, getName }: { gr
   const inputRef = useRef<HTMLInputElement>(null);
   const options = useMemo(() => groups.map((group, index) => { const rawId = getId(group).trim(); return { group, rawId, key: `${rawId || "discovered-group"}-${index}`, name: getName(group).trim() || `Grup WhatsApp ${index + 1}` }; }), [groups, getId, getName]);
   const filtered = useMemo(() => options.filter(({ rawId, name }) => `${name} ${rawId}`.toLowerCase().includes(query.trim().toLowerCase())), [options, query]);
-  // #region debug-point A:group-key-state
-  useMemo(() => { const ids = filtered.map(({ rawId }) => rawId); const counts = ids.reduce<Record<string, number>>((result, id) => ({ ...result, [id]: (result[id] ?? 0) + 1 }), {}); const duplicateIds = Object.entries(counts).filter(([, count]) => count > 1).map(([id]) => id); fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-group-key", runId: "pre-fix", hypothesisId: "A", location: "whitelist-wizard.tsx:SearchableGroupSelect", msg: "[DEBUG] Filtered group keys observed", data: { totalGroups: groups.length, filteredGroups: filtered.length, emptyIds: ids.filter((id) => !id).length, duplicateIds } }) }).catch(() => {}); }, [filtered, groups.length]);
-  // #endregion
   const selected = options.find(({ rawId }) => rawId === value);
   return <div className="relative"><button type="button" className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 text-left text-sm" onClick={() => { setOpen((current) => !current); window.setTimeout(() => inputRef.current?.focus(), 0); }}><span className={selected ? "text-slate-900" : "text-slate-500"}>{selected?.name ?? "Pilih grup yang ditemukan"}</span><ChevronDown className="size-4 text-slate-500" /></button>{open && <div className="absolute z-20 mt-1 w-full rounded-md border border-slate-200 bg-white p-2 shadow-lg"><div className="flex items-center gap-2 rounded-md border border-slate-200 px-2"><Search className="size-4 text-slate-400" /><input ref={inputRef} aria-label="Cari grup WhatsApp" className="h-9 min-w-0 flex-1 text-sm outline-none" placeholder="Cari nama atau ID grup..." value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="mt-2 max-h-60 overflow-y-auto">{filtered.length > 0 ? filtered.map(({ key, rawId, name }) => <button type="button" key={key} className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-blue-50 ${rawId === value ? "bg-blue-50 text-blue-900" : "text-slate-700"}`} onClick={() => { onChange(rawId); setOpen(false); setQuery(""); }}>{name}{rawId === value && <Check className="size-4" />}</button>) : <p className="px-2 py-3 text-sm text-slate-500">Tidak ada grup yang cocok.</p>}</div></div>}</div>;
 }
@@ -91,12 +88,15 @@ export function WhatsAppWhitelistWizard(props: Props) {
     const record = value as Record<string, unknown>;
     if (typeof record._serialized === "string") return record._serialized;
     if (typeof record.serialized === "string") return record.serialized;
+    if (typeof record.wid === "string") return record.wid;
+    if (typeof record.chatId === "string") return record.chatId;
     if (typeof record.user === "string" && typeof record.server === "string") return `${record.user}@${record.server}`;
+    if (record.id !== value) return discoveredValue(record.id);
     return "";
   };
-  const discoveredGroupId = (group: DiscoveredGroup) => discoveredValue(group.id) || discoveredValue(group.groupId) || discoveredValue(group.groupMetadata?.id);
+  const discoveredGroupId = (group: DiscoveredGroup) => discoveredValue(group.id) || discoveredValue(group.JID) || discoveredValue(group.groupId) || discoveredValue(group.chatId) || discoveredValue(group.groupMetadata?.id) || discoveredValue(group.chat?.id) || discoveredValue(group._data?.id);
   const discoveredGroupName = (group: DiscoveredGroup) => {
-    const name = [group.subject, group.name, group.title, group.groupMetadata?.subject, group.groupMetadata?.name].find((value) => typeof value === "string" && value.trim())?.trim();
+    const name = [group.subject, group.name, group.Name, group.title, group.formattedTitle, group.groupMetadata?.subject, group.groupMetadata?.name, group.groupMetadata?.title, group.chat?.name, group.chat?.subject, group.chat?.title, group._data?.name, group._data?.subject, group._data?.notifyName].find((value): value is string => typeof value === "string" && value.trim() !== "")?.trim();
     const id = discoveredGroupId(group).trim();
     return name || (id ? `Grup WhatsApp · ${id}` : "Grup WhatsApp · ID tidak tersedia");
   };

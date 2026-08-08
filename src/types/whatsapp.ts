@@ -1,7 +1,7 @@
 export type WahaMessage = {
   id?: string;
   _data?: {
-    id?: { _serialized?: string; id?: string };
+    id?: { _serialized?: string; id?: string; remote?: string; fromMe?: boolean };
     notifyName?: string;
     body?: string;
     type?: string;
@@ -9,6 +9,8 @@ export type WahaMessage = {
     from?: string;
     author?: string;
     chatId?: string;
+    lid?: string;
+    subtype?: string;
   };
   body?: string;
   type?: string;
@@ -16,6 +18,7 @@ export type WahaMessage = {
   from?: string;
   author?: string;
   chatId?: string;
+  lid?: string;
   fromMe?: boolean;
   hasMedia?: boolean;
   media?: Record<string, unknown> | null;
@@ -38,6 +41,8 @@ export type WahaConfig = {
 
 export type WahaGroup = {
   id?: string;
+  JID?: string;
+  Name?: string;
   groupMetadata?: {
     id?: WahaSerializedId;
     subject?: string;
@@ -51,7 +56,7 @@ export type WahaGroup = {
   addressingMode?: string;
 };
 
-export type WahaGroupCollection = WahaGroup[] | { groups?: WahaGroup[] } | Record<string, WahaGroup>;
+export type WahaGroupCollection = WahaGroup[] | { groups?: WahaGroup[] } | { Data?: WahaGroup[] } | Record<string, WahaGroup>;
 
 export type WahaSerializedId = {
   user?: string;

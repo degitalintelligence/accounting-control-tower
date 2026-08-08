@@ -156,6 +156,7 @@ export async function getWahaGroups(session: string) {
   const result = await wahaRequest<WahaGroupCollection>(`/api/${encodeURIComponent(session)}/groups`);
   if (Array.isArray(result)) return result;
   if ("groups" in result && Array.isArray(result.groups)) return result.groups;
+  if ("Data" in result && Array.isArray(result.Data)) return result.Data;
   return Object.entries(result).map(([id, group]) => ({ ...group, id: group.id || id }));
 }
 

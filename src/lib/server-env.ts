@@ -46,9 +46,6 @@ export const productionRequiredEnv: readonly ServerEnvName[] = [
   "SUPABASE_STORAGE_BUCKET",
   "NEXT_PUBLIC_APP_URL",
   "CRON_SECRET",
-  "WAHA_BASE_URL",
-  "WAHA_WEBHOOK_URL",
-  "WAHA_WEBHOOK_TOKEN",
 ];
 
 export function validateProductionEnv() {

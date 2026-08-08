@@ -1,24 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { verifyWahaToken } from "@/lib/whatsapp/config";
+import { isOperationalMessage, messageSenderId, messageString, messageTimestamp, providerMessageId } from "@/lib/whatsapp/payload";
 import type { WahaMessage, WahaWebhookPayload } from "@/types/whatsapp";
 
 export const runtime = "nodejs";
-
-function providerMessageId(message: WahaMessage): string | null {
-  return message.id ?? message._data?.id?._serialized ?? message._data?.id?.id ?? null;
-}
-
-function stringValue(message: WahaMessage, key: "body" | "type" | "from" | "author" | "chatId"): string | null {
-  const direct = message[key];
-  if (typeof direct === "string") return direct;
-  const nested = message._data?.[key];
-  return typeof nested === "string" ? nested : null;
-}
-
-function timestamp(message: WahaMessage): number {
-  return message.timestamp ?? message._data?.t ?? Math.floor(Date.now() / 1000);
-}
 
 export async function POST(request: NextRequest) {
   if (!verifyWahaToken(request.headers.get("x-waha-token"))) {
@@ -38,8 +24,8 @@ export async function POST(request: NextRequest) {
 
   const message = payload.payload;
   const providerId = providerMessageId(message);
-  const groupId = stringValue(message, "chatId") ?? stringValue(message, "from");
-  if (!providerId || !groupId || !payload.session) {
+  const groupId = messageString(message, "chatId") ?? messageString(message, "from");
+  if (!providerId || !groupId || !payload.session || !isOperationalMessage(message)) {
     return NextResponse.json({ error: "Payload message tidak lengkap." }, { status: 400 });
   }
 
@@ -58,12 +44,12 @@ export async function POST(request: NextRequest) {
     p_wa_group_id: group.data.id,
     p_organization_id: group.data.organization_id,
     p_provider_message_id: providerId,
-    p_sender_participant_id: stringValue(message, "author") ?? stringValue(message, "from"),
-    p_content: stringValue(message, "body"),
-    p_message_type: stringValue(message, "type") ?? "text",
+    p_sender_participant_id: messageSenderId(message),
+    p_content: messageString(message, "body"),
+    p_message_type: messageString(message, "type") ?? "text",
     p_media_metadata: message.media ?? {},
     p_raw_payload: payload,
-    p_received_at: new Date(timestamp(message) * 1000).toISOString(),
+    p_received_at: new Date(messageTimestamp(message) * 1000).toISOString(),
     p_event_type: "whatsapp_message_received",
     p_event_payload: { provider: "waha", session_id: payload.session, group_id: groupId, provider_message_id: providerId },
   } as never);
