@@ -2,32 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { assistReview, OpenRouterError } from "@/lib/ai/openrouter-client";
 import { requireActiveOrganization } from "@/lib/organization/active";
 import { logAudit } from "@/lib/audit/logger";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { aiReviewSchema, validationMessage, workItemIdQuerySchema } from "@/lib/validation/schemas";
-import { getAuthContext, hasPermission } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, hasPermission } from "@/lib/authorization";
 import { resolveOrganizationLocale } from "@/lib/ai/locale";
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
 type Assignment = { profile_id: string; role: string; unassigned_at: string | null };
 type AuthContext = { admin: ReturnType<typeof createServiceRoleClient>; userId: string; organizationId: string; membershipRole: string; locale: Awaited<ReturnType<typeof resolveOrganizationLocale>>; item: { id: string; organization_id: string; client_id: string; title: string; description: string | null; acceptance_criteria: string | null; status: string; checklist_template_id: string | null; assignments: Assignment[] } };
 
-async function authorize(id: string): Promise<AuthContext | NextResponse> {
-  const client = await createClient();
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const admin = createServiceRoleClient();
-  const membershipResult = await admin.from("memberships").select("organization_id, client_id, role").eq("profile_id", user.id).eq("is_active", true);
-  const membership = membershipResult as unknown as { data: { organization_id: string; client_id: string | null; role: string }[] | null; error: ErrorShape | null };
-  if (membership.error || !membership.data) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
-  const organizationIds = [...new Set(membership.data.map((entry) => entry.organization_id))];
-  if (organizationIds.length !== 1) return NextResponse.json({ error: "Organisasi aktif tidak tunggal." }, { status: 409 });
-  const organizationId = organizationIds[0];
+async function authorize(id: string) {
+  const authContext = await getAuthContext();
+  if (authContext.response) return { response: authContext.response };
+  const { admin, organizationId, userId, memberships } = authContext.context;
+
   const itemResult = await admin.from("work_items").select("id, organization_id, client_id, title, description, acceptance_criteria, status, checklist_template_id, assignments(profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
   const item = itemResult as unknown as { data: AuthContext["item"] | null; error: ErrorShape | null };
-  if (item.error || !item.data) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
-  if (!membership.data.some((entry) => entry.organization_id === organizationId && (entry.client_id === null || entry.client_id === item.data!.client_id))) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
-  const scopedMembership = membership.data.find((entry) => entry.organization_id === organizationId && (entry.client_id === null || entry.client_id === item.data!.client_id));
-  return { admin, userId: user.id, organizationId, membershipRole: scopedMembership?.role ?? "", locale: await resolveOrganizationLocale(admin, organizationId), item: item.data };
+  if (item.error || !item.data) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
+  if (!canAccessClient(authContext.context, item.data.client_id)) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
+
+  const scopedMembership = memberships.find((entry) => entry.client_id === null || entry.client_id === item.data!.client_id);
+  return { admin, userId, organizationId, membershipRole: scopedMembership?.role ?? "", locale: await resolveOrganizationLocale(admin, organizationId), item: item.data };
 }
 
 function canUseAssistant(auth: AuthContext) {
@@ -52,7 +47,7 @@ export async function GET(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const id = parsed.data.work_item_id;
   const auth = await authorize(id);
-  if (auth instanceof NextResponse) return auth;
+  if (auth.response) return auth.response;
   const permissionContext = await getAuthContext();
   if (permissionContext.response) return permissionContext.response;
   if (!canUseAssistant(auth) && !(await hasPermission(permissionContext.context, "ai_review.view"))) return NextResponse.json({ error: "Anda tidak berwenang melihat AI Notes." }, { status: 403 });
@@ -68,7 +63,7 @@ export async function POST(request: NextRequest) {
   const body = parsedBody.data;
   const id = body.work_item_id;
   const auth = await authorize(id);
-  if (auth instanceof NextResponse) return auth;
+  if (auth.response) return auth.response;
   const permissionContext = await getAuthContext();
   if (permissionContext.response) return permissionContext.response;
   if (!canUseAssistant(auth) && !(await hasPermission(permissionContext.context, "ai_review.use"))) return NextResponse.json({ error: "Anda tidak berwenang menggunakan AI review assistant." }, { status: 403 });
