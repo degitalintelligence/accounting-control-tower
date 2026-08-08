@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       "completed_at",
     ];
     if (withDetail) {
-      columns.push("assignments:assignments!inner(id, profile_id, role, assigned_at, unassigned_at)");
+      columns.push("assignments:assignments(id, profile_id, role, assigned_at, unassigned_at)");
     }
 
     let query = admin

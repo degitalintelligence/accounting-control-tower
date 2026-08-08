@@ -115,6 +115,7 @@ The current repository order is lexical by complete filename. Dependencies that 
 083_fix_archive_organization_ambiguous_column.sql
 084_harden_client_scope_rls_policies.sql
 085_dashboard_analytics_client_scope.sql
+086_fix_archived_org_trigger_event_type.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.
