@@ -98,11 +98,11 @@ export default function LoginPage() {
             </form>
           )}
         </CardContent>
-101→        <CardFooter className="justify-center border-t bg-slate-50/50 py-4">
-102→          <Link
-103→            href="/register"
-104→            className="relative z-10 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
-105→          >
+        <CardFooter className="justify-center border-t bg-slate-50/50 py-4">
+          <Link
+            href="/register"
+            className="relative z-10 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
+          >
             {t("auth.noAccount")}{" "}
             <span className="font-semibold text-blue-600 underline-offset-4 hover:underline">
               {t("auth.registerNow")}

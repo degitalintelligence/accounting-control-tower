@@ -224,11 +224,11 @@ function RegisterContent() {
             </form>
           )}
         </CardContent>
-227→        <CardFooter className="justify-center border-t bg-slate-50/50 py-4">
-228→          <Link
-229→            href="/login"
-230→            className="relative z-10 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
-231→          >
+        <CardFooter className="justify-center border-t bg-slate-50/50 py-4">
+          <Link
+            href="/login"
+            className="relative z-10 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
+          >
             {session ? "Bukan akun Anda?" : t("auth.hasAccount")}{" "}
             <span className="font-semibold text-blue-600 underline-offset-4 hover:underline">
               {session ? "Masuk dengan akun lain" : t("auth.loginNow")}
