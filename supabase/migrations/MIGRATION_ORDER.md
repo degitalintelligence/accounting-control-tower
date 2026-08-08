@@ -122,6 +122,7 @@ The current repository order is lexical by complete filename. Dependencies that 
 090_automate_template_placeholders.sql
 091_remove_one_org_per_user_limit.sql
 092_fix_create_organization_rpc_audit_logs.sql
+093_harden_organization_creation.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.
