@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { canAccessOptionalClient, getAuthContext } from "@/lib/authorization";
+import { canAccessOptionalClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.view");
+  if (denied) return denied;
   const { id } = await context.params;
   const meetingResult = await auth.context.admin.from("meetings").select("client_id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null).maybeSingle();
   const meeting = meetingResult as unknown as { data: { client_id: string | null } | null; error: { message: string } | null };

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -24,6 +24,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
+
+    const permissionDenied = await requirePermission(authContext.context, "work_items.view");
+    if (permissionDenied) return permissionDenied;
+
     const { admin, organizationId } = authContext.context;
 
     // Verifikasi work item exists dan milik org yang sama

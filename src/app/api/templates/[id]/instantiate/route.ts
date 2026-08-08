@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import type { InstantiateInput } from "@/types/template";
-import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,6 +51,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.create");
+    if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId } = authContext.context;
 

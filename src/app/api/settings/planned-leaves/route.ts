@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, hasPermission } from "@/lib/authorization";
+import { getAuthContext, hasPermission, requirePermission } from "@/lib/authorization";
 import type { AuthContext } from "@/lib/authorization";
 import { plannedLeaveCreateSchema, validationMessage } from "@/lib/validation/schemas";
 
@@ -12,6 +12,10 @@ async function canAccessProfile(admin: AuthContext["admin"], organizationId: str
 export async function GET(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+
+  const guard = await requirePermission(auth.context, "planned_leaves.view");
+  if (guard) return guard;
+
   const { admin, organizationId, userId, isOrgWide, clientIds } = auth.context;
   const canManage = await hasPermission(auth.context, "planned_leaves.manage");
   const profileId = request.nextUrl.searchParams.get("profile_id");

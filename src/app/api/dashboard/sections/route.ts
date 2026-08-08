@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Profile = { display_name: string } | null;
 type Assignment = { profile_id: string; role: string; profiles: Profile };
@@ -46,6 +46,8 @@ function relativeTime(value: string) {
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "workspace.view");
+  if (denied) return denied;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
   let query = admin

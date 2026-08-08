@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canAccessOptionalClient } from "@/lib/authorization";
+import { getAuthContext, canAccessOptionalClient, requirePermission } from "@/lib/authorization";
 
 export async function GET(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "members.view");
+  if (denied) return denied;
   const { admin, organizationId } = auth.context;
   const workItemId = request.nextUrl.searchParams.get("work_item_id");
   const clientId = request.nextUrl.searchParams.get("client_id");

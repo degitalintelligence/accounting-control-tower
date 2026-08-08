@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { structuredSupabaseError } from "@/lib/supabase/error";
 
 export async function PATCH() {
   const authorization = await getAuthContext();
   if (authorization.response) return authorization.response;
+
+  const guard = await requirePermission(authorization.context, "notifications.manage");
+  if (guard) return guard;
+
   const { admin, organizationId, userId } = authorization.context;
 
   const result = await (admin as { from: (table: string) => ReturnType<typeof admin.from> }).from("notifications")

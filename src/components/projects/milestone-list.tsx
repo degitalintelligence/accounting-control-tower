@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Milestone } from "@/types/project";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface MilestoneListProps {
   projectId: string;
@@ -30,6 +31,7 @@ interface MilestoneListProps {
 }
 
 export function MilestoneList({ projectId, onChanged }: MilestoneListProps) {
+  const { has } = usePermissions();
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -265,14 +267,16 @@ export function MilestoneList({ projectId, onChanged }: MilestoneListProps) {
         <h3 className="text-sm font-medium text-slate-900">
           Milestone ({milestones.length})
         </h3>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAddDialogOpen(true)}
-        >
-          <Plus className="size-3.5" />
-          Tambah Milestone
-        </Button>
+        {has("work_items.manage") && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddDialogOpen(true)}
+          >
+            <Plus className="size-3.5" />
+            Tambah Milestone
+          </Button>
+        )}
       </div>
 
       {/* Error */}
@@ -370,7 +374,11 @@ export function MilestoneList({ projectId, onChanged }: MilestoneListProps) {
                   <button
                     type="button"
                     onClick={() => handleToggle(milestone)}
-                    className="mt-0.5 shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    disabled={!has("work_items.manage") && !has("work_items.execute")}
+                    className={cn(
+                      "mt-0.5 shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                      (!has("work_items.manage") && !has("work_items.execute")) && "cursor-not-allowed opacity-50"
+                    )}
                     aria-label={milestone.is_completed ? `Tandai ${milestone.name} belum selesai` : `Tandai ${milestone.name} selesai`}
                   >
                     {milestone.is_completed ? (
@@ -406,29 +414,31 @@ export function MilestoneList({ projectId, onChanged }: MilestoneListProps) {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(milestone)}
-                      className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                      aria-label={`Edit ${milestone.name}`}
-                    >
-                      <Edit className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(milestone.id)}
-                      disabled={deletingId === milestone.id}
-                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                      aria-label={`Hapus ${milestone.name}`}
-                    >
-                      {deletingId === milestone.id ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-3.5" />
-                      )}
-                    </button>
-                  </div>
+                  {has("work_items.manage") && (
+                    <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(milestone)}
+                        className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        aria-label={`Edit ${milestone.name}`}
+                      >
+                        <Edit className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(milestone.id)}
+                        disabled={deletingId === milestone.id}
+                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        aria-label={`Hapus ${milestone.name}`}
+                      >
+                        {deletingId === milestone.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

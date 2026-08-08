@@ -21,12 +21,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import type { WorkItemStatus } from "@/types/work-item";
+import type { WorkItemStatus, Assignment } from "@/types/work-item";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface StatusTransitionButtonProps {
   workItemId: string;
   currentStatus: WorkItemStatus;
+  assignments: Assignment[];
   onTransitionComplete: () => void;
 }
 
@@ -74,6 +77,7 @@ const TRANSITION_MAP: Record<WorkItemStatus, { to: WorkItemStatus; label: string
 export function StatusTransitionButton({
   workItemId,
   currentStatus,
+  assignments,
   onTransitionComplete,
 }: StatusTransitionButtonProps) {
   const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
@@ -85,11 +89,38 @@ export function StatusTransitionButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useI18n();
+  const { has } = usePermissions();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const available = TRANSITION_MAP[currentStatus] ?? [];
   const isTerminal = currentStatus === "completed" || currentStatus === "cancelled";
 
-  if (isTerminal || available.length === 0) {
+  // RBAC Logic
+  const isManager = has("work_items.manage");
+  const myAssignment = assignments.find((a) => a.profile_id === currentUserId);
+  const myRole = myAssignment?.role;
+
+  // Filter transitions based on role
+  const allowedTransitions = available.filter((transition) => {
+    if (isManager) return true;
+    if (!myRole) return false;
+
+    // Maker transitions
+    if (myRole === "maker") {
+      return ["assigned", "in_progress", "submitted", "blocked"].includes(transition.to);
+    }
+    // Checker transitions
+    if (myRole === "checker") {
+      return ["under_review", "approved", "revision_required"].includes(transition.to);
+    }
+    // Approver transitions
+    if (myRole === "approver") {
+      return ["completed", "revision_required"].includes(transition.to);
+    }
+    return false;
+  });
+
+  if (isTerminal || allowedTransitions.length === 0) {
     return null;
   }
 
@@ -170,7 +201,7 @@ export function StatusTransitionButton({
           <DropdownMenuGroup>
             <DropdownMenuLabel>Transisi ke:</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {available.map((transition) => (
+            {allowedTransitions.map((transition) => (
               <DropdownMenuItem key={transition.to} onClick={() => handleSelect(transition)}>
                 {transition.label}
                 <span className="ml-auto text-[11px] text-slate-400">

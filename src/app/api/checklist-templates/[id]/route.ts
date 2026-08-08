@@ -3,20 +3,20 @@ import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
-async function authorize(context: Context) {
+async function authorize(context: Context, permission: string = "checklists.manage") {
   const auth = await getAuthContext();
   if (auth.response) return { response: auth.response };
   const { id } = await context.params;
   const result = await auth.context.admin.from("checklist_templates").select("id, organization_id, name, description, target_role, created_at, updated_at, checklist_items!inner(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)").eq("id", id).eq("organization_id", auth.context.organizationId).eq("is_active", true).is("deleted_at", null).is("checklist_items.deleted_at", null).single();
   const data = result as unknown as { data: Record<string, unknown> | null; error: { message: string } | null };
   if (data.error || !data.data) return { response: NextResponse.json({ error: "Template checklist tidak ditemukan." }, { status: 404 }) };
-  const denied = await requirePermission(auth.context, "checklists.manage");
+  const denied = await requirePermission(auth.context, permission);
   if (denied) return { response: denied };
   return { context: auth.context, id, data: data.data };
 }
 
 export async function GET(_: NextRequest, route: Context) {
-  const auth = await authorize(route);
+  const auth = await authorize(route, "checklists.view");
   if (auth.response) return auth.response;
   return NextResponse.json({ data: auth.data });
 }

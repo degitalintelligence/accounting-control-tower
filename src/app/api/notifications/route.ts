@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import type { NotificationRecord } from "@/types/notification";
 import { structuredSupabaseError } from "@/lib/supabase/error";
 
 export async function GET(request: NextRequest) {
   const authorization = await getAuthContext();
   if (authorization.response) return authorization.response;
+
+  const guard = await requirePermission(authorization.context, "notifications.view");
+  if (guard) return guard;
+
   const { admin, organizationId, userId } = authorization.context;
 
   const page = Math.max(1, Number(request.nextUrl.searchParams.get("page") ?? "1") || 1);

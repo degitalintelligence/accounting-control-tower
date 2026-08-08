@@ -5,6 +5,8 @@ import { Activity, AlertTriangle, CheckCircle2, ClipboardList, FileBarChart, Ref
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 
 type ReportData = {
   summary: { total: number; active: number; completed: number; overdue: number; delivered: number; pending_delivery: number; on_time_rate: number };
@@ -17,6 +19,7 @@ const stageLabels: Record<string, string> = {
 };
 
 export default function ReportsPage() {
+  const { has } = usePermissions();
   const [data, setData] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,9 +36,14 @@ export default function ReportsPage() {
   }
 
   useEffect(() => {
+    if (!has("reports.view")) return;
     const timer = window.setTimeout(() => { void loadReports(); }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [has]);
+
+  if (!has("reports.view")) {
+    return <main className="page-canvas"><AccessDenied /></main>;
+  }
 
   const summaryCards = data ? [
     [ClipboardList, "Total pekerjaan", data.summary.total, "text-blue-600", "bg-blue-50"],

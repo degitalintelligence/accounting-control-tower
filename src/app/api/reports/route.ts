@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "reports.view");
+  if (denied) return denied;
 
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
   const result = await (admin as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<unknown> }).rpc(

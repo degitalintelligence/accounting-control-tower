@@ -342,6 +342,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
+    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 

@@ -7,7 +7,7 @@ import { getIncompleteRequiredChecklist } from "@/lib/checklists";
 import type { WorkItemStatus, AssignmentRole } from "@/types/work-item";
 import { transitionSchema, validationMessage } from "@/lib/validation/schemas";
 import { structuredSupabaseError } from "@/lib/supabase/error";
-import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -30,6 +30,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
+
+    const permissionDenied = await requirePermission(authContext.context, "work_items.execute");
+    if (permissionDenied) return permissionDenied;
+
     const { admin, organizationId } = authContext.context;
 
     let payload: unknown;

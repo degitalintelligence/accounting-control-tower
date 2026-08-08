@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canAccessOptionalClient } from "@/lib/authorization";
+import { getAuthContext, canAccessOptionalClient, requirePermission } from "@/lib/authorization";
 
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.view");
+  if (denied) return denied;
   let query = auth.context.admin.from("meetings").select("id, title, meeting_at, status, summary, notes, attendance, discussion, action_items, blockers, next_steps, parsed_at, client_id, project_id, created_at").eq("organization_id", auth.context.organizationId).is("deleted_at", null).order("meeting_at", { ascending: false }).limit(50);
   if (!auth.context.isOrgWide) query = query.in("client_id", auth.context.clientIds);
   const result = await query;
@@ -15,6 +17,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.create");
+  if (denied) return denied;
   const body = await request.json() as { draft_key?: string; title?: string; notes?: string; meeting_at?: string; client_id?: string; project_id?: string; attendance?: string; discussion?: string; action_items?: string; blockers?: string; next_steps?: string };
   if (!body.title?.trim()) return NextResponse.json({ error: "Judul meeting wajib diisi." }, { status: 400 });
   if (body.draft_key) {

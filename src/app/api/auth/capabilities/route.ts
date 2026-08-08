@@ -11,6 +11,8 @@ const permissionMap = {
   dead: "dead_letters.view",
   deadManage: "dead_letters.manage",
   health: "job_health.view",
+  notifications: "notifications.view",
+  notificationsManage: "notifications.manage",
 } as const;
 
 export async function GET() {

@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, Download, FileText, Loader2, Upload } from "lucid
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
 
 type EvidenceRequirement = {
   id: string;
@@ -42,6 +43,8 @@ export function EvidencePanel({ workItemId }: { workItemId: string }) {
   const [selectedRequirement, setSelectedRequirement] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { t } = useI18n();
+  const { has } = usePermissions();
+  const canExecute = has("work_items.execute");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,11 +99,13 @@ export function EvidencePanel({ workItemId }: { workItemId: string }) {
             <CardTitle className="text-sm">{t("work.evidence")}</CardTitle>
             <p className="text-xs text-slate-500 mt-1">{data.required_completed}/{data.required_total} {t("work.evidenceRequired")}</p>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600">
-            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-            {t("work.upload")}
-            <input type="file" className="hidden" disabled={uploading} onChange={upload} />
-          </label>
+          {canExecute && (
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600">
+              {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              {t("work.upload")}
+              <input type="file" className="hidden" disabled={uploading} onChange={upload} />
+            </label>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

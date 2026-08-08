@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 /**
  * GET /api/dashboard/upcoming-deadlines
@@ -8,6 +8,8 @@ import { getAuthContext } from "@/lib/authorization";
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "workspace.view");
+  if (denied) return denied;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
   // Fetch top 5 deadlines for all active workflow statuses.

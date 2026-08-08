@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canAccessOptionalClient } from "@/lib/authorization";
+import { getAuthContext, canAccessOptionalClient, requirePermission } from "@/lib/authorization";
 import { extractTextFromFile, isSupportedDocument, FileParserError } from "@/lib/ai/file-parser";
 
 const MAX_TEXT = 50000;
@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "ai_review.view");
+  if (denied) return denied;
   const intakeId = request.nextUrl.searchParams.get("intake_id");
   if (intakeId) {
     const intakeResult = await auth.context.admin
@@ -52,6 +54,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "ai_review.use");
+  if (denied) return denied;
   const form = await request.formData();
   const file = form.get("file");
   const pastedText = form.get("text")?.toString() ?? "";

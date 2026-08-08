@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canAccessClient } from "@/lib/authorization";
+import { getAuthContext, canAccessClient, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 export async function POST(request: NextRequest, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "ai_review.decide");
+  if (denied) return denied;
   const { id } = await context.params;
   const body = await request.json() as { title?: string; client_id?: string; maker_id?: string | null; due_at?: string | null; type?: string; description?: string | null };
   const draftResult = await auth.context.admin.from("ai_draft_items").select("id, title, description, type, client_id, maker_id, maker_name, due_at, status, deleted_at, meeting_id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null).single();

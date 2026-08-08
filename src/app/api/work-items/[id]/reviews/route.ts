@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 import { logAudit } from "@/lib/audit/logger";
 import { publishNotificationEvent } from "@/lib/notification/publisher";
 import type { WorkItemStatus } from "@/types/work-item";
@@ -22,9 +22,9 @@ async function authorize(id: string) {
   if (!canAccessClient(authContext.context, item.data.client_id)) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
 
   const assignment = item.data.assignments.find((entry) => entry.profile_id === userId && !entry.unassigned_at);
-  const activeMembership = authContext.context.memberships.find((m) => m.client_id === null || m.client_id === item.data!.client_id);
+  const activeMembership = authContext.context.memberships.find((m) => m.organization_id === organizationId && (m.client_id === null || m.client_id === item.data!.client_id));
   const role = assignment?.role ?? (["owner", "administrator"].includes(activeMembership?.role ?? "") ? "administrator" : null);
-  return { admin, userId, organizationId, item: item.data, role };
+  return { admin, userId, organizationId, item: item.data, role, authContext: authContext.context };
 }
 
 async function getChecklistState(admin: Admin, item: { id: string; checklist_template_id: string | null }) {
@@ -43,6 +43,10 @@ export async function GET(_request: NextRequest, context: Context) {
   const { id } = await context.params;
   const auth = await authorize(id);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.authContext!, "work_items.view");
+  if (permissionDenied) return permissionDenied;
+
   const { admin } = auth;
   const reviewsResult = await admin!.from("reviews").select("id, work_item_id, reviewer_id, decision, comment, checklist_template_id, created_at, review_findings(id, review_id, checklist_item_id, finding_type, description, severity, created_at), profiles!reviews_reviewer_id_fkey(display_name)").eq("work_item_id", id).order("created_at", { ascending: false });
   const approvalsResult = await admin!.from("approvals").select("id, work_item_id, approver_id, decision, comment, created_at, profiles!approvals_approver_id_fkey(display_name)").eq("work_item_id", id).order("created_at", { ascending: false });
@@ -56,6 +60,10 @@ export async function POST(request: NextRequest, context: Context) {
   const { id } = await context.params;
   const auth = await authorize(id);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.authContext!, "work_items.execute");
+  if (permissionDenied) return permissionDenied;
+
   const { admin, item, userId, organizationId, role } = auth;
   let payload: unknown;
   try {

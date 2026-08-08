@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { getRequiredServerEnv } from "@/lib/server-env";
 import { createHash } from "crypto";
 
@@ -8,6 +8,10 @@ type Context = { params: Promise<{ id: string }> };
 export async function POST(request: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.context, "work_items.manage");
+  if (permissionDenied) return permissionDenied;
+
   const { id } = await context.params;
   let meetingQuery = auth.context.admin.from("meetings").select("id, client_id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null);
   if (!auth.context.isOrgWide) meetingQuery = meetingQuery.in("client_id", auth.context.clientIds);
@@ -33,6 +37,10 @@ export async function POST(request: Request, context: Context) {
 export async function GET(_: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.context, "work_items.view");
+  if (permissionDenied) return permissionDenied;
+
   const { id } = await context.params;
   let meetingQuery = auth.context.admin.from("meetings").select("id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null);
   if (!auth.context.isOrgWide) meetingQuery = meetingQuery.in("client_id", auth.context.clientIds);

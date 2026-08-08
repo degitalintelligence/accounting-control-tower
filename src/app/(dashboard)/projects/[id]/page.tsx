@@ -39,6 +39,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { WorkItemStatus, WorkItemPriority } from "@/types/work-item";
 import { EditProjectDialog } from "@/components/projects/edit-project-dialog";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -155,6 +157,7 @@ export default function ProjectDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { has } = usePermissions();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,6 +167,7 @@ export default function ProjectDetailPage({
   const [editOpen, setEditOpen] = useState(false);
 
   const fetchProject = useCallback(async () => {
+    if (!has("work_items.view")) return;
     setLoading(true);
     setError(null);
     try {
@@ -205,6 +209,14 @@ export default function ProjectDetailPage({
     return (
       <div className="page-canvas">
         <DetailSkeleton />
+      </div>
+    );
+  }
+
+  if (!has("work_items.view")) {
+    return (
+      <div className="page-canvas">
+        <AccessDenied />
       </div>
     );
   }
@@ -278,28 +290,32 @@ export default function ProjectDetailPage({
             </div>
 
           <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditOpen(true)}
-            >
-              <Edit className="size-3.5" />
-              Edit detail
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              {deleting ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="size-3.5" />
-              )}
-              Hapus
-            </Button>
+            {has("work_items.manage") && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Edit className="size-3.5" />
+                  Edit detail
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  {deleting ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                  Hapus
+                </Button>
+              </>
+            )}
           </div>
           </div>
 
@@ -434,14 +450,16 @@ export default function ProjectDetailPage({
                   <h3 className="text-sm font-medium text-slate-900">
                     Tugas ({project.work_items.length})
                   </h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLinkDialogOpen(true)}
-                  >
-                    <LinkIcon className="size-3.5" />
-                    Kelola Tugas
-                  </Button>
+                  {has("work_items.manage") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLinkDialogOpen(true)}
+                    >
+                      <LinkIcon className="size-3.5" />
+                      Kelola Tugas
+                    </Button>
+                  )}
                 </div>
 
                 {project.work_items.length === 0 ? (

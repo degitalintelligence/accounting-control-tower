@@ -4,6 +4,7 @@ import { Suspense, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { TemplateCard } from "@/components/templates/template-card";
 import { CreateTemplateDialog } from "@/components/templates/create-template-dialog";
+import { InstantiateDialog } from "@/components/templates/instantiate-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,6 +19,8 @@ import {
 import { ChevronLeft, ChevronRight, FileText, Plus, Search } from "lucide-react";
 import { useTemplates } from "@/hooks/use-templates";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 
 const TYPE_OPTIONS = [
   { value: "", key: "work.allTypes" }, { value: "routine", key: "work.routine" }, { value: "project", key: "work.project" }, { value: "ad_hoc", key: "work.adHoc" }, { value: "report", key: "work.report" },
@@ -27,9 +30,16 @@ function TemplatesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
+  const { has } = usePermissions();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [instantiateOpen, setInstantiateOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<{ id: string; name: string } | null>(null);
   const searchTimeoutRef = useRef<number | null>(null);
+
+  if (!has("sop.view")) {
+    return <AccessDenied />;
+  }
 
   const type = searchParams.get("type") ?? undefined;
   const clientId = searchParams.get("client_id") ?? undefined;
@@ -106,13 +116,15 @@ function TemplatesPageContent() {
               {t("templates.description")}
             </p>
           </div>
-          <Button
-            onClick={() => setCreateDialogOpen(true)}
-            className="cta-primary shrink-0"
-          >
-            <Plus className="size-4" />
-            {t("templates.create")}
-          </Button>
+          {has("sop.manage") && (
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              className="cta-primary shrink-0"
+            >
+              <Plus className="size-4" />
+              {t("templates.create")}
+            </Button>
+          )}
         </div>
 
         {/* Filter bar */}
@@ -187,12 +199,14 @@ function TemplatesPageContent() {
             <p className="text-sm text-slate-400 mb-4">
               {t("templates.emptyDescription")}
             </p>
-            <Button
-              onClick={() => setCreateDialogOpen(true)}
-              className="cta-primary"
-            >
-              Buat Template
-            </Button>
+            {has("sop.manage") && (
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="cta-primary"
+              >
+                Buat Template
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -206,6 +220,10 @@ function TemplatesPageContent() {
                 priority={tpl.priority}
                 latest_version={tpl.latest_version}
                 client_name={tpl.client_name}
+                onInstantiate={has("work_items.create") ? (id) => {
+                  setSelectedTemplate({ id, name: tpl.name });
+                  setInstantiateOpen(true);
+                } : undefined}
               />
             ))}
           </div>
@@ -239,6 +257,16 @@ function TemplatesPageContent() {
         onOpenChange={setCreateDialogOpen}
         onSuccess={handleCreateSuccess}
       />
+
+      {/* Instantiate dialog */}
+      {selectedTemplate && (
+        <InstantiateDialog
+          open={instantiateOpen}
+          onOpenChange={setInstantiateOpen}
+          templateId={selectedTemplate.id}
+          templateName={selectedTemplate.name}
+        />
+      )}
     </>
   );
 }

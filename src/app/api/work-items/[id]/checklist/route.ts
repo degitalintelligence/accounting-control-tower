@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checklistResponseSchema, validationMessage } from "@/lib/validation/schemas";
-import { getAuthContext, hasPermission } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -23,6 +23,9 @@ async function authorize(context: Context) {
 export async function GET(_request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth.response) return auth.response;
+  const permissionDenied = await requirePermission(auth.authContext, "work_items.view");
+  if (permissionDenied) return permissionDenied;
+
   if (!auth.templateId) return NextResponse.json({ data: { template: null, responses: [], required_total: 0, required_completed: 0 } });
   const templateResult = await auth.admin!.from("checklist_templates").select("id, organization_id, name, description, target_role, is_active, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)").eq("id", auth.templateId).eq("organization_id", auth.organizationId).single();
   const responseResult = await auth.admin!.from("checklist_responses").select("id, work_item_id, checklist_item_id, profile_id, value, file_id, created_at, updated_at").eq("work_item_id", auth.id);
@@ -38,8 +41,10 @@ export async function GET(_request: NextRequest, context: Context) {
 export async function PATCH(request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth.response) return auth.response;
-  const permissionDenied = await hasPermission(auth.authContext, "work_items.execute");
-  if (!permissionDenied) return NextResponse.json({ error: "Anda tidak memiliki permission untuk aksi ini." }, { status: 403 });
+
+  const permissionDenied = await requirePermission(auth.authContext, "work_items.execute");
+  const hasExecutePermission = !permissionDenied;
+
   const parsed = checklistResponseSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });
   const body = parsed.data;
@@ -47,7 +52,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   const templateRole = await auth.admin!.from("checklist_templates").select("target_role").eq("id", auth.templateId).single();
   const templateRoleData = templateRole as unknown as { data: { target_role: string } | null };
   const assigned = auth.assignments.some((entry) => entry.profile_id === auth.userId && !entry.unassigned_at && entry.role === templateRoleData.data?.target_role);
-  if (!assigned && !permissionDenied) return NextResponse.json({ error: "Anda tidak berwenang mengubah checklist ini." }, { status: 403 });
+  if (!assigned && !hasExecutePermission) return permissionDenied || NextResponse.json({ error: "Anda tidak berwenang mengubah checklist ini." }, { status: 403 });
   const item = await auth.admin!.from("checklist_items").select("id, input_type, validation_rules").eq("id", body.checklist_item_id).eq("checklist_template_id", auth.templateId).single();
   const itemData = item as unknown as { data: { id: string; input_type: string; validation_rules: Record<string, unknown> } | null; error: { message: string } | null };
   if (itemData.error || !itemData.data) return NextResponse.json({ error: "Item checklist tidak valid." }, { status: 400 });

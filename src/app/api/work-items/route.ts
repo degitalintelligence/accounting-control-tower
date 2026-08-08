@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logAudit } from "@/lib/audit/logger";
 import { validationMessage, workItemCreateSchema } from "@/lib/validation/schemas";
-import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 import { evaluateApprovalPolicy } from "@/lib/work-engine/approval-policy";
 
 /**
@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await getAuthContext();
     if (auth.response) return auth.response;
+    const denied = await requirePermission(auth.context, "work_items.view");
+    if (denied) return denied;
     const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
     const { searchParams } = request.nextUrl;
@@ -156,6 +158,8 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthContext();
     if (auth.response) return auth.response;
+    const denied = await requirePermission(auth.context, "work_items.create");
+    if (denied) return denied;
     const { admin, userId, organizationId } = auth.context;
 
     const parsed = workItemCreateSchema.safeParse(await request.json());

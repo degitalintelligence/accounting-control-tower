@@ -44,7 +44,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await getClientContext(id);
+  const auth = await requireClientManager(id);
   if (auth.response) return auth.response;
   const body = await request.json().catch(() => null);
   const parsed = clientUpdateSchema.safeParse(body);

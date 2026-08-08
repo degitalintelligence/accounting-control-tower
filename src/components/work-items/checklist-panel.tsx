@@ -6,9 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { WorkItemChecklist } from "@/types/checklist";
+import type { Assignment } from "@/types/work-item";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useAuthStore } from "@/stores/auth-store";
 
-export function ChecklistPanel({ workItemId }: { workItemId: string }) {
+export function ChecklistPanel({ workItemId, assignments = [] }: { workItemId: string; assignments?: Assignment[] }) {
   const [checklist, setChecklist] = useState<WorkItemChecklist | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -16,6 +19,8 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const { t } = useI18n();
+  const { has } = usePermissions();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   // Bersihkan timer debounce saat komponen unmount
   useEffect(() => {
@@ -55,6 +60,12 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
 
   const items = checklist.template.items ?? [];
   const responseMap = new Map(checklist.responses.map((response) => [response.checklist_item_id, response]));
+  
+  // RBAC: Hanya assigned user dengan role yang sesuai target_role template, atau user dengan permission execute.
+  const canExecute = has("work_items.execute");
+  const myAssignment = assignments.find(a => a.profile_id === currentUserId && !a.unassigned_at);
+  const isTargetRole = myAssignment?.role === checklist.template.target_role;
+  const isAllowedToEdit = canExecute || isTargetRole;
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -79,11 +90,11 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
                   {item.label} {item.is_required && <span className="text-red-500">*</span>}
                 </label>
                 {item.input_type === "checkbox" || item.input_type === "confirmation" ? (
-                  <Button type="button" size="sm" variant={completed ? "secondary" : "outline"} disabled={saving === item.id} onClick={() => save(item.id, completed ? "" : "true")}>
+                  <Button type="button" size="sm" variant={completed ? "secondary" : "outline"} disabled={saving === item.id || !isAllowedToEdit} onClick={() => save(item.id, completed ? "" : "true")}>
                     {saving === item.id ? <Loader2 className="size-3.5 animate-spin" /> : completed ? t("common.completed") : t("common.markComplete")}
                   </Button>
                 ) : item.input_type === "file" ? (
-                  <Input type="file" disabled={saving === item.id} onChange={async (event) => {
+                  <Input type="file" disabled={saving === item.id || !isAllowedToEdit} onChange={async (event) => {
                     const file = event.target.files?.[0];
                     if (file) {
                       const form = new FormData();
@@ -98,7 +109,7 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
                     }
                   }} />
                 ) : (
-                  <Input type={item.input_type === "url" ? "url" : item.input_type} value={drafts[item.id] ?? value} disabled={saving === item.id} onChange={(event) => {
+                  <Input type={item.input_type === "url" ? "url" : item.input_type} value={drafts[item.id] ?? value} disabled={saving === item.id || !isAllowedToEdit} onChange={(event) => {
                     const next = event.target.value;
                     setDrafts((prev) => ({ ...prev, [item.id]: next }));
                     if (debounceTimers.current[item.id]) clearTimeout(debounceTimers.current[item.id]);

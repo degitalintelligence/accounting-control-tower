@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthContext, canAccessOptionalClient } from "@/lib/authorization";
+import { getAuthContext, canAccessOptionalClient, requirePermission } from "@/lib/authorization";
 import { extractTasksFromMessage } from "@/lib/ai/openrouter-client";
 import { requireActiveOrganization } from "@/lib/organization/active";
 
@@ -7,6 +7,8 @@ type Context = { params: Promise<{ id: string }> };
 export async function POST(_: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.manage");
+  if (denied) return denied;
   const { id } = await context.params;
   let meetingQuery = auth.context.admin.from("meetings").select("id, notes, attendance, discussion, action_items, blockers, next_steps, client_id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null);
   if (!auth.context.isOrgWide) meetingQuery = meetingQuery.in("client_id", auth.context.clientIds);

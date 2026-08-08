@@ -18,6 +18,8 @@ import {
 import { ChevronLeft, ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
 import { useProjects } from "@/hooks/use-projects";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 
 const STATUS_OPTIONS = [
   { value: "", key: "work.allStatus" }, { value: "draft", key: "status.draft" }, { value: "assigned", key: "status.assigned" }, { value: "in_progress", key: "status.inProgress" }, { value: "blocked", key: "status.blocked" }, { value: "submitted", key: "status.submitted" }, { value: "under_review", key: "status.underReview" }, { value: "revision_required", key: "status.revisionRequired" }, { value: "awaiting_approval", key: "status.awaitingApproval" }, { value: "approved", key: "status.approved" }, { value: "completed", key: "status.completed" }, { value: "cancelled", key: "status.cancelled" },
@@ -27,9 +29,14 @@ function ProjectsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
+  const { has } = usePermissions();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
+
+  if (!has("work_items.view")) {
+    return <AccessDenied />;
+  }
 
   const status = searchParams.get("status") ?? undefined;
   const search = searchParams.get("search") ?? undefined;
@@ -105,13 +112,15 @@ function ProjectsPageContent() {
                 {t("projects.description")}
               </p>
             </div>
-            <Button
-              onClick={() => setCreateDialogOpen(true)}
-              className="cta-primary shrink-0"
-            >
-              <Plus className="size-4" />
-              {t("projects.create")}
-            </Button>
+            {has("work_items.manage") && (
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="cta-primary shrink-0"
+              >
+                <Plus className="size-4" />
+                {t("projects.create")}
+              </Button>
+            )}
           </div>
 
           {/* Filter bar */}
@@ -186,12 +195,14 @@ function ProjectsPageContent() {
             <p className="text-sm text-slate-400 mb-4">
               {t("projects.emptyDescription")}
             </p>
-            <Button
-              onClick={() => setCreateDialogOpen(true)}
-              className="cta-primary"
-            >
-              {t("projects.create")}
-            </Button>
+            {has("work_items.manage") && (
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="cta-primary"
+              >
+                {t("projects.create")}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

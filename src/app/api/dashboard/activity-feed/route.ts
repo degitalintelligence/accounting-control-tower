@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "workspace.view");
+  if (denied) return denied;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
   const logsQuery = admin

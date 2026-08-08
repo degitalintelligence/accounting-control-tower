@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getRequiredServerEnv } from "@/lib/server-env";
-import { canAccessClient, getAuthContext } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string; fileId: string }> };
 
 export async function GET(_request: NextRequest, context: Context) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const authContext = await getAuthContext();
   if (authContext.response) return authContext.response;
+
+  // Hardening: Wajib memiliki permission view
+  const guard = await requirePermission(authContext.context, "work_items.view");
+  if (guard) return guard;
+
   const { admin, organizationId } = authContext.context;
   const { id, fileId } = await context.params;
   const item = await admin.from("work_items").select("id, client_id").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();

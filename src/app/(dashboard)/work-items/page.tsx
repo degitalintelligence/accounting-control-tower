@@ -11,14 +11,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ChevronLeft, ChevronRight, FolderOpen } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkItems } from "@/hooks/use-work-items";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 import type { WorkItemStatus, WorkItemType, WorkItemPriority } from "@/types/work-item";
 
 function WorkItemsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
+  const { has } = usePermissions();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  if (!has("work_items.view")) {
+    return <AccessDenied />;
+  }
 
   // Read filters from URL
   const status = searchParams.get("status") as WorkItemStatus | null;
@@ -162,12 +169,14 @@ function WorkItemsPageContent() {
             <p className="text-sm text-slate-400 mb-4">
               Buat work item pertama Anda untuk memulai.
             </p>
-            <Button
-              onClick={() => setCreateDialogOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold"
-            >
-              Buat Work Item
-            </Button>
+            {has("work_items.create") && (
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-bold"
+              >
+                Buat Work Item
+              </Button>
+            )}
           </div>
         ) : (
           <WorkItemView view={view} items={items} />

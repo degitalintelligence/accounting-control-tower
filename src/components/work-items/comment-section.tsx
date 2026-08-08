@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, Send, Loader2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { formatDate } from "@/lib/i18n";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface Comment {
   id: string;
@@ -55,6 +56,7 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { locale, t } = useI18n();
+  const { has } = usePermissions();
 
   const fetchComments = useCallback(async () => {
     try {
@@ -105,30 +107,32 @@ export function CommentSection({ workItemId }: CommentSectionProps) {
   return (
     <div className="space-y-4">
       {/* Add comment form */}
-      <form onSubmit={handleAddComment} className="space-y-2">
-        <textarea
-          rows={3}
-          placeholder={t("work.commentPlaceholder")}
-          value={newComment}
-          onChange={(e) => setNewComment(e.currentTarget.value)}
-          className="flex w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 resize-none"
-        />
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            size="sm"
-            disabled={submitting || !newComment.trim()}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {submitting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Send className="size-3.5" />
-            )}
-            {t("work.sendComment")}
-          </Button>
-        </div>
-      </form>
+      {has("work_items.execute") && (
+        <form onSubmit={handleAddComment} className="space-y-2">
+          <textarea
+            rows={3}
+            placeholder={t("work.commentPlaceholder")}
+            value={newComment}
+            onChange={(e) => setNewComment(e.currentTarget.value)}
+            className="flex w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 resize-none"
+          />
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={submitting || !newComment.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {submitting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Send className="size-3.5" />
+              )}
+              {t("work.sendComment")}
+            </Button>
+          </div>
+        </form>
+      )}
 
       {/* Error */}
       {error && (

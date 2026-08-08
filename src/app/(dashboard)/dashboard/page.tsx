@@ -15,11 +15,22 @@ import { InsightsCard } from "@/components/dashboard/insights-card";
 import { KpiGrid } from "@/components/dashboard/kpi-grid";
 import { OverdueAgingCard } from "@/components/dashboard/overdue-aging-card";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 
 export default function DashboardPage() {
   const { stats, kpis, insights, sections, loading, error, partialFailures, insightLoading, insightError, generateInsights, refetch } = useDashboard();
   const user = useAuthStore((s) => s.user);
   const { t } = useI18n();
+  const { has } = usePermissions();
+
+  if (!has("workspace.view")) {
+    return (
+      <main className="flex-1 min-h-screen bg-canvas p-4 sm:p-6">
+        <AccessDenied />
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 min-h-screen bg-canvas p-4 sm:p-6">

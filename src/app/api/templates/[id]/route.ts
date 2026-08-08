@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
-    const permissionDenied = await requirePermission(authContext.context, "work_items.view");
+    const permissionDenied = await requirePermission(authContext.context, "sop.view");
     if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId } = authContext.context;
@@ -150,7 +150,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
-    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    const permissionDenied = await requirePermission(authContext.context, "sop.manage");
     if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId } = authContext.context;
@@ -279,7 +279,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
-    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    const permissionDenied = await requirePermission(authContext.context, "sop.manage");
     if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId } = authContext.context;

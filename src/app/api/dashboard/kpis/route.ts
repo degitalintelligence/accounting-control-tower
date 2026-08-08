@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 import type { DashboardKpis } from "@/types/dashboard";
 
 function errorDetails(error: { message?: string; code?: string; hint?: string; details?: string } | null) {
@@ -9,6 +9,8 @@ function errorDetails(error: { message?: string; code?: string; hint?: string; d
 export async function GET(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "workspace.view");
+  if (denied) return denied;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
   const params = request.nextUrl.searchParams;
   const from = params.get("from");

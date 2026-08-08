@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface WorkItemFiltersProps {
   activeTab: string;
@@ -70,6 +71,7 @@ export function WorkItemFilters({
 }: WorkItemFiltersProps) {
   const router = useRouter();
   const { t } = useI18n();
+  const { has } = usePermissions();
   const searchParams = useSearchParams();
 
   const currentSearch = searchParams.get("search") ?? "";
@@ -116,13 +118,15 @@ export function WorkItemFilters({
             {t("work.description")}
           </p>
         </div>
-        <Button
-          onClick={onCreateClick}
-          className="bg-orange-500 hover:bg-orange-600 text-white font-bold shrink-0"
-        >
-          <Plus className="size-4" />
-          {t("work.create")}
-        </Button>
+        {has("work_items.create") && (
+          <Button
+            onClick={onCreateClick}
+            className="bg-orange-500 hover:bg-orange-600 text-white font-bold shrink-0"
+          >
+            <Plus className="size-4" />
+            {t("work.create")}
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}

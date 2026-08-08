@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 import { StatusBadge } from "@/components/work-items/status-badge";
 import { PriorityBadge } from "@/components/work-items/priority-badge";
 import { StatusTransitionButton } from "@/components/work-items/status-transition-button";
@@ -310,6 +312,7 @@ export default function WorkItemDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { has } = usePermissions();
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [workItem, setWorkItem] = useState<WorkItem | null>(null);
@@ -327,6 +330,7 @@ export default function WorkItemDetailPage({
   const [reportError, setReportError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!has("work_items.view")) return;
     setLoading(true);
     setError(null);
 
@@ -390,6 +394,10 @@ export default function WorkItemDetailPage({
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!has("work_items.manage")) {
+      setAssignError("Anda tidak memiliki izin untuk menugaskan pekerjaan.");
+      return;
+    }
     if (!assignRole || !currentUserId) {
       setAssignError("Sesi pengguna belum siap. Silakan coba lagi.");
       return;
@@ -426,6 +434,14 @@ export default function WorkItemDetailPage({
     return (
       <div className="page-canvas">
         <DetailSkeleton />
+      </div>
+    );
+  }
+
+  if (!has("work_items.view")) {
+    return (
+      <div className="page-canvas">
+        <AccessDenied />
       </div>
     );
   }
@@ -491,9 +507,12 @@ export default function WorkItemDetailPage({
               <StatusTransitionButton
                 workItemId={id}
                 currentStatus={workItem.status}
+                assignments={assignments}
                 onTransitionComplete={fetchData}
               />
-              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Ubah detail</Button>
+              {has("work_items.manage") && (
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Ubah detail</Button>
+              )}
             </div>
           </div>
 
@@ -540,7 +559,9 @@ export default function WorkItemDetailPage({
                       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                         <label className="space-y-1 text-sm"><span className="text-slate-500">Stage</span><Select value={reportStage} onValueChange={(value) => setReportStage(value as ReportStage)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(REPORT_STAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
                         <label className="space-y-1 text-sm"><span className="text-slate-500">Referensi delivery</span><input value={deliveryReference} onChange={(event) => setDeliveryReference(event.target.value)} placeholder="Nomor email, portal, atau dokumen" className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" /></label>
-                        <Button onClick={saveReportStage} disabled={reportSaving} className="bg-orange-500 text-white hover:bg-orange-600">{reportSaving ? <Loader2 className="size-4 animate-spin" /> : "Simpan"}</Button>
+                        {has("work_items.manage") && (
+                          <Button onClick={saveReportStage} disabled={reportSaving} className="bg-orange-500 text-white hover:bg-orange-600">{reportSaving ? <Loader2 className="size-4 animate-spin" /> : "Simpan"}</Button>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-slate-500">{Object.entries(REPORT_STAGE_LABELS).map(([value, label]) => <span key={value} className={`rounded-full px-2 py-1 ${value === reportStage ? "bg-blue-100 font-semibold text-blue-700" : "bg-slate-100"}`}>{label}</span>)}</div>
                       {reportError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{reportError}</p>}
@@ -570,14 +591,16 @@ export default function WorkItemDetailPage({
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm">Penugasan</CardTitle>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAssignDialogOpen(true)}
-                      >
-                        <UserCircle className="size-3.5" />
-                        Tugaskan
-                      </Button>
+                      {has("work_items.manage") && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAssignDialogOpen(true)}
+                        >
+                          <UserCircle className="size-3.5" />
+                          Tugaskan
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent><AssignmentPicker workItemId={id} assignments={assignments} onChanged={fetchData} /></CardContent>
@@ -653,7 +676,7 @@ export default function WorkItemDetailPage({
               </TabsContent>
 
               <TabsContent value="checklist" className="mt-4">
-                <ChecklistPanel workItemId={id} />
+                <ChecklistPanel workItemId={id} assignments={assignments} />
                 <Card className="mt-4"><CardHeader><CardTitle className="text-sm">Dependency</CardTitle></CardHeader><CardContent><DependencyPanel workItemId={id} /></CardContent></Card>
               </TabsContent>
 

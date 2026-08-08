@@ -4,6 +4,8 @@ import { getAuthContext, requirePermission } from "@/lib/authorization";
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "sop.view");
+  if (denied) return denied;
   const result = await auth.context.admin.from("sop_templates").select("id, organization_id, name, description, created_at, updated_at, sop_versions(id, version_number, content, effective_from, review_date, status, owner_id, created_at)").eq("organization_id", auth.context.organizationId).is("deleted_at", null).order("created_at", { ascending: false });
   const data = result as unknown as { data: unknown[] | null; error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal memuat SOP." }, { status: 500 });

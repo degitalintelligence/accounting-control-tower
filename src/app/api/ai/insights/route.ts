@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateDashboardInsights, OpenRouterError, type DashboardInsights } from "@/lib/ai/openrouter-client";
 import { requireActiveOrganization } from "@/lib/organization/active";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type ErrorShape = { message: string; code?: string; hint?: string; details?: string };
 type WorkItemMetric = { status: string; type: string; due_at: string | null; completed_at: string | null; created_at: string };
@@ -40,6 +40,10 @@ function metricsContext(metrics: Metrics) {
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+
+  const guard = await requirePermission(auth.context, "ai_review.view");
+  if (guard) return guard;
+
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
   const now = new Date();

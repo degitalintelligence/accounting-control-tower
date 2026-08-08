@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WaInboxItem } from "@/components/whatsapp/wa-inbox-item";
 import { useWaInbox, type WaConversationMessage } from "@/hooks/use-wa-inbox";
+import { usePermissions } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/settings/settings-tabs";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
@@ -30,7 +32,13 @@ function ConversationMessages({ messages }: { messages: WaConversationMessage[] 
 
 export default function WaInboxPage() {
   const [period, setPeriod] = useState("7d");
+  const { has } = usePermissions();
   const { items, summaries, messages, loading, error, refetch, confirmSuggestion, rejectSuggestion, claimSuggestion, unclaimSuggestion, requestClarification } = useWaInbox();
+
+  if (!has("integrations.manage")) {
+    return <main className="page-canvas"><AccessDenied /></main>;
+  }
+
   const suggestions = items.filter((item) => item.type === "suggestion");
 
   return (

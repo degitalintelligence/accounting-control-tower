@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { canAccessOptionalClient, getAuthContext } from "@/lib/authorization";
+import { canAccessOptionalClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.view");
+  if (denied) return denied;
   const { id } = await context.params;
   let meetingQuery = auth.context.admin.from("meetings").select("id, title, meeting_at, status, summary, notes, attendance, discussion, action_items, blockers, next_steps, parsed_at, decisions, client_id, project_id, created_at, updated_at").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null);
   if (!auth.context.isOrgWide) meetingQuery = meetingQuery.in("client_id", auth.context.clientIds);
@@ -18,6 +20,8 @@ export async function GET(_: Request, context: Context) {
 export async function PATCH(request: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.manage");
+  if (denied) return denied;
   const { id } = await context.params;
   const body = await request.json() as { title?: string; meeting_at?: string | null; client_id?: string | null; project_id?: string | null; attendance?: string; discussion?: string; action_items?: string; blockers?: string; next_steps?: string; notes?: string };
   if (body.title !== undefined && !body.title.trim()) return NextResponse.json({ error: "Judul meeting wajib diisi." }, { status: 400 });
@@ -41,6 +45,8 @@ export async function PATCH(request: Request, context: Context) {
 export async function DELETE(_: Request, context: Context) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "work_items.manage");
+  if (denied) return denied;
   const { id } = await context.params;
   let currentQuery = auth.context.admin.from("meetings").select("id, status, client_id").eq("id", id).eq("organization_id", auth.context.organizationId).is("deleted_at", null);
   if (!auth.context.isOrgWide) currentQuery = currentQuery.in("client_id", auth.context.clientIds);

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
-    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    const permissionDenied = await requirePermission(authContext.context, "sop.manage");
     if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId } = authContext.context;

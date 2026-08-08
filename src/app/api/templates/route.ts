@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
-    const permissionDenied = await requirePermission(authContext.context, "work_items.view");
+    const permissionDenied = await requirePermission(authContext.context, "sop.view");
     if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
 
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
-    const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
+    const permissionDenied = await requirePermission(authContext.context, "sop.manage");
     if (permissionDenied) return permissionDenied;
 
     const { admin, organizationId } = authContext.context;

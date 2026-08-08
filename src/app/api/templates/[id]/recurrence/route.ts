@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isValidTimezone, previewOccurrences, validateRRule } from "@/lib/recurrence/rules";
 import { holidayHandlingValues } from "@/lib/recurrence/rules";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -17,12 +17,16 @@ async function authorize(request: NextRequest, context: Context) {
   const template = await admin.from("task_templates").select("id").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
   const result = template as unknown as { data: { id: string } | null; error: { message: string } | null };
   if (result.error || !result.data) return { response: NextResponse.json({ error: "Template tidak ditemukan." }, { status: 404 }) };
-  return { admin, templateId: id, organizationId };
+  return { admin, templateId: id, organizationId, authContext: auth.context };
 }
 
 export async function GET(request: NextRequest, context: Context) {
   const auth = await authorize(request, context);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.authContext!, "sop.view");
+  if (permissionDenied) return permissionDenied;
+
   const result = await auth.admin.from("recurrence_rules").select("id, template_id, rrule, timezone, generation_lead_days, holiday_handling, skip_weekends, created_at, updated_at").eq("template_id", auth.templateId).is("deleted_at", null).maybeSingle();
   const data = result as unknown as { data: unknown | null; error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal memuat aturan pengulangan." }, { status: 500 });
@@ -34,6 +38,10 @@ export async function GET(request: NextRequest, context: Context) {
 export async function PUT(request: NextRequest, context: Context) {
   const auth = await authorize(request, context);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.authContext!, "sop.manage");
+  if (permissionDenied) return permissionDenied;
+
   const body = await request.json() as { rrule?: string; timezone?: string; generation_lead_days?: number; holiday_handling?: string; skip_weekends?: boolean };
   const validationError = validateRRule(body.rrule);
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
@@ -56,6 +64,10 @@ export async function PUT(request: NextRequest, context: Context) {
 export async function DELETE(request: NextRequest, context: Context) {
   const auth = await authorize(request, context);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.authContext!, "sop.manage");
+  if (permissionDenied) return permissionDenied;
+
   const result = await auth.admin.from("recurrence_rules").update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("template_id", auth.templateId).is("deleted_at", null);
   const data = result as unknown as { error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal menghapus aturan pengulangan." }, { status: 500 });

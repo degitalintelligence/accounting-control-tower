@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext, canAccessClient } from "@/lib/authorization";
+import { getAuthContext, canAccessClient, requirePermission } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 type Item = { id: string; title: string; client_id: string; organization_id: string; deleted_at: string | null };
@@ -17,6 +17,10 @@ async function authorize(context: Context) {
 export async function GET(_: NextRequest, route: Context) {
   const auth = await authorize(route);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.context!, "work_items.view");
+  if (permissionDenied) return permissionDenied;
+
   const result = await auth.context!.admin.from("dependencies").select("id, work_item_id, depends_on_id, dependency_type, created_at, depends_on:work_items!dependencies_depends_on_id_fkey(id, title, status, due_at)").eq("work_item_id", auth.item!.id);
   const data = result as unknown as { data: unknown[] | null; error: { message: string } | null };
   if (data.error) return NextResponse.json({ error: "Gagal memuat dependency." }, { status: 500 });
@@ -26,6 +30,10 @@ export async function GET(_: NextRequest, route: Context) {
 export async function POST(request: NextRequest, route: Context) {
   const auth = await authorize(route);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.context!, "work_items.manage");
+  if (permissionDenied) return permissionDenied;
+
   const body = await request.json() as { depends_on_id?: string; dependency_type?: string };
   if (!body.depends_on_id || body.depends_on_id === auth.item!.id) return NextResponse.json({ error: "depends_on_id tidak valid." }, { status: 400 });
   const dependency = await auth.context!.admin.from("work_items").select("id, client_id").eq("id", body.depends_on_id).eq("organization_id", auth.context!.organizationId).is("deleted_at", null).single();
@@ -40,6 +48,10 @@ export async function POST(request: NextRequest, route: Context) {
 export async function DELETE(request: NextRequest, route: Context) {
   const auth = await authorize(route);
   if (auth.response) return auth.response;
+
+  const permissionDenied = await requirePermission(auth.context!, "work_items.manage");
+  if (permissionDenied) return permissionDenied;
+
   const body = await request.json() as { dependency_id?: string };
   if (!body.dependency_id) return NextResponse.json({ error: "dependency_id wajib diisi." }, { status: 400 });
   const result = await auth.context!.admin.from("dependencies").delete().eq("id", body.dependency_id).eq("work_item_id", auth.item!.id);
