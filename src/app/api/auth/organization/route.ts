@@ -13,9 +13,6 @@ export async function POST(request: Request) {
 
   const rawBody = await request.json().catch(() => null);
   const parsed = schema.safeParse(rawBody);
-  // #region debug-point A:organization-payload
-  void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "return-workspace-400", runId: "post-fix", hypothesisId: "A", location: "src/app/api/auth/organization/route.ts:validation", msg: "[DEBUG] Organization switch payload validation", data: { valid: parsed.success, organizationIdLength: typeof rawBody?.organization_id === "string" ? rawBody.organization_id.length : 0 } }) }).catch(() => {});
-  // #endregion
   if (!parsed.success) return NextResponse.json({ error: "Organisasi belum valid." }, { status: 400 });
 
   const admin = createServiceRoleClient();

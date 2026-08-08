@@ -3,9 +3,6 @@ import { getSuggestionContext, suggestionError } from "@/lib/whatsapp/suggestion
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET(request: Request) {
-  // #region debug-point wa-review-queue
-  void fetch("http://127.0.0.1:7777/event", { method: "POST", body: JSON.stringify({ sessionId: "wa-inbox-pivot", runId: "phase-2-pre-fix", hypothesisId: "review-queue", location: "src/app/api/wa-suggestions/route.ts", msg: "[DEBUG] WA suggestion queue request", data: { hasStatus: Boolean(new URL(request.url).searchParams.get("status")), hasGroup: Boolean(new URL(request.url).searchParams.get("group_id")) }, ts: Date.now() }) }).catch(() => {});
-  // #endregion
   const { user, organizationId, admin } = await getSuggestionContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!organizationId || !admin) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });

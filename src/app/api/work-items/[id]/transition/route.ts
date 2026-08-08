@@ -244,7 +244,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             from_status: fromStatus,
             to_status: toStatus,
           },
-          dedupKey: `status_changed:${id}:${toStatus}:${updated?.updated_at ?? new Date().toISOString()}`,
+          dedupKey: `status_changed:${id}:${toStatus}`,
         });
       } catch (notificationError) {
         console.error("[POST /transition] Gagal mempublikasikan event notifikasi:", {

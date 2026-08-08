@@ -12,9 +12,6 @@ const createOrganizationSchema = z.object({
 export async function POST(request: Request) {
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
-  // #region debug-point A:auth-state
-  void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "multi-organization-409", runId: "pre-fix", hypothesisId: "A", location: "src/app/api/organizations/route.ts:POST", msg: "[DEBUG] Organization creation auth state", data: { authenticated: Boolean(user) } }) }).catch(() => {});
-  // #endregion
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = createOrganizationSchema.safeParse(await request.json().catch(() => null));
@@ -26,9 +23,6 @@ export async function POST(request: Request) {
     p_timezone: parsed.data.timezone,
     p_currency: parsed.data.currency.toUpperCase(),
   });
-  // #region debug-point B:rpc-result
-  void fetch(process.env.DEBUG_SERVER_URL ?? "http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: process.env.DEBUG_SESSION_ID ?? "multi-organization-409", runId: "pre-fix", hypothesisId: "B", location: "src/app/api/organizations/route.ts:rpc", msg: "[DEBUG] Organization creation RPC result", data: { ok: !error, errorCode: error?.code ?? null, organizationReturned: Boolean(data) } }) }).catch(() => {});
-  // #endregion
 
   if (error) {
     const duplicate = error.code === "23505" || error.message.includes("ORGANIZATION_ALREADY_EXISTS");

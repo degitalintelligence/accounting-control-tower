@@ -1,4 +1,5 @@
 import "server-only";
+import { timingSafeEqual } from "node:crypto";
 import type { WahaConfig } from "@/types/whatsapp";
 
 export function getWahaConfig(): WahaConfig {
@@ -15,5 +16,9 @@ export function getWahaConfig(): WahaConfig {
 
 export function verifyWahaToken(provided: string | null): boolean {
   const expected = process.env.WAHA_WEBHOOK_TOKEN ?? process.env.WAHA_WEBHOOK_SECRET;
-  return Boolean(expected && provided && provided === expected);
+  if (!expected || !provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }

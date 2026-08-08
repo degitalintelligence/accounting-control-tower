@@ -172,14 +172,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     await ensureChecklistResponses(admin, id, profile_id, assignmentRole);
 
     // Auto-transition: draft → assigned jika assign maker dan status masih draft
+    // Lewati RPC transition_work_item (jalur state machine terpusat + mencatat history otomatis).
     if (assignmentRole === "maker" && workItem.status === "draft") {
-      const transitionResult = await admin
-        .from("work_items")
-        .update({
-          status: "assigned",
-          updated_at: new Date().toISOString(),
-        } as never)
-        .eq("id", id);
+      const transitionResult = await admin.rpc("transition_work_item" as never, {
+        p_work_item_id: id,
+        p_to_status: "assigned",
+        p_actor_id: user.id,
+        p_reason: null,
+      } as never);
 
       const { error: transitionError } = transitionResult as unknown as {
         error: { message: string; code: string; hint: string; details: string } | null;
@@ -192,15 +192,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
           hint: transitionError.hint,
           details: transitionError.details,
         });
-      } else {
-        // Catat status history untuk auto-transition
-        await admin.from("work_item_status_history").insert({
-          work_item_id: id,
-          from_status: "draft",
-          to_status: "assigned",
-          changed_by: user.id,
-          reason: "Auto-transition: maker assigned",
-        } as never);
       }
     }
 

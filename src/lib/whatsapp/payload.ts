@@ -18,6 +18,8 @@ export function messageSenderId(message: WahaMessage): string | null {
 export function isOperationalMessage(message: WahaMessage): boolean {
   const type = messageString(message, "type")?.toLowerCase();
   if (type === "e2e_notification" || type === "notification") return false;
+  // Abaikan pesan outbound/echo dari akun operasional sendiri
+  if (message.fromMe === true || message._data?.id?.fromMe === true) return false;
   const body = messageString(message, "body")?.trim();
   return Boolean(body || message.hasMedia || message.media);
 }

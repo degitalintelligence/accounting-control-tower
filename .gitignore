@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+
+# leftover / debug artifacts
+debug-*.md
+events *.json
+/test-results/
+/acct-ctrl-temp/
 
 # vercel
 .vercel

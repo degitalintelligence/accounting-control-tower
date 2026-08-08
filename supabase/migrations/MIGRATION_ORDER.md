@@ -71,7 +71,7 @@ The current repository order is lexical by complete filename. Dependencies that 
 046_complete_checklist_workflow.sql
 046_grant_ai_policies_access.sql
 047_grant_planned_leaves_access.sql
-048_whatsapp_connection_retirement.sql
+048_whatsapp_connection_retirement.sql <!-- historical duplicate of 045 (idempotent redeploy of same function/index), retained for history; do not run both blindly on a fresh DB -->
 049_whatsapp_conversation_summaries.sql
 050_fix_whatsapp_summary_event_lookup.sql
 051_allow_ai_intake_worker_claim.sql
@@ -83,13 +83,13 @@ The current repository order is lexical by complete filename. Dependencies that 
 057_whatsapp_outbound_delivery_tracking.sql
 058_whatsapp_reply_session_context.sql
 059_fix_action_suggestion_upsert_constraint.sql
-060_fix_legacy_ai_suggestion_upsert.sql
 059_workspace_rbac_permissions.sql
+060_fix_legacy_ai_suggestion_upsert.sql
 060_harden_rbac_authorization.sql
 061_harden_membership_mutation_rls.sql
+062_granular_rbac_permissions.sql
 063_fix_ai_extraction_upsert_index.sql
 064_fix_action_suggestion_conflicts.sql
-062_granular_rbac_permissions.sql
 065_complete_work_item_ai_retry_isolation.sql
 065_whatsapp_review_claims.sql
 066_fix_whatsapp_review_claim_ambiguity.sql
@@ -111,6 +111,8 @@ The current repository order is lexical by complete filename. Dependencies that 
 080_waha_cleanup_after_organization_archive.sql
 081_general_operations_roles.sql
 082_reconcile_archived_waha_sessions.sql
+083_fix_archive_organization_ambiguous_column.sql
+084_harden_client_scope_rls_policies.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.
