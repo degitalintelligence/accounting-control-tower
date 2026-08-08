@@ -62,8 +62,9 @@ export function CreateWorkItemDialog({
   const [checklistTemplates, setChecklistTemplates] = useState<{ id: string; name: string; target_role: string }[]>([]);
 
   useEffect(() => {
+    if (!open) return;
     void fetch("/api/checklist-templates").then((response) => response.ok ? response.json() : null).then((body) => setChecklistTemplates(body?.data ?? [])).catch(() => undefined);
-  }, []);
+  }, [open]);
 
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));

@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import type { Database } from '../../../src/lib/supabase/types';
 
 type LiveConfig = {
   url: string;
@@ -9,7 +10,7 @@ type LiveConfig = {
 };
 
 type LiveFixture = LiveConfig & {
-  admin: SupabaseClient<any, 'acct_ctrl'>;
+  admin: SupabaseClient<Database, 'acct_ctrl'>;
   organizationId: string;
   clientId: string;
   userId: string;
@@ -53,12 +54,12 @@ export function getLiveConfig() {
 
 export function createLiveAdmin() {
   const live = config();
-  return createClient(live.url, live.serviceRoleKey, { db: { schema: 'acct_ctrl' }, auth: { autoRefreshToken: false, persistSession: false } });
+  return createClient<Database, 'acct_ctrl'>(live.url, live.serviceRoleKey, { db: { schema: 'acct_ctrl' }, auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 export async function createLiveFixture(): Promise<LiveFixture> {
   const live = config();
-  const admin = createClient(live.url, live.serviceRoleKey, { db: { schema: 'acct_ctrl' }, auth: { autoRefreshToken: false, persistSession: false } });
+  const admin: SupabaseClient<Database, 'acct_ctrl'> = createClient<Database, 'acct_ctrl'>(live.url, live.serviceRoleKey, { db: { schema: 'acct_ctrl' }, auth: { autoRefreshToken: false, persistSession: false } });
   const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
   const email = `live-integration-${suffix}@invalid.test`;
   const password = `${randomUUID()}Aa1!`;

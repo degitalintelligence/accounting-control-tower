@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { WorkItemCard } from "./work-item-card";
 import type { WorkItem, WorkItemStatus } from "@/types/work-item";
 
@@ -19,8 +20,15 @@ function Card({ item }: { item: WorkItem }) {
 }
 
 export function WorkItemView({ view, items }: { view: string; items: WorkItem[] }) {
+  // Kelompokkan item per status sekali (hindari items.filter berulang per status di board view)
+  const boardGroups = useMemo(() => {
+    const groups = new Map<WorkItemStatus, WorkItem[]>(statuses.map((status) => [status.value, []]));
+    for (const item of items) groups.get(item.status)?.push(item);
+    return groups;
+  }, [items]);
+
   if (view === "board") {
-    return <div className="grid grid-cols-1 gap-3 overflow-x-auto md:grid-cols-4 xl:grid-cols-8">{statuses.map((status) => <section key={status.value} className="min-w-[220px] rounded-xl bg-slate-100/70 p-2"><h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{status.label} <span className="font-normal">({items.filter((item) => item.status === status.value).length})</span></h2><div className="space-y-2">{items.filter((item) => item.status === status.value).map((item) => <Card key={item.id} item={item} />)}</div></section>)}</div>;
+    return <div className="grid grid-cols-1 gap-3 overflow-x-auto md:grid-cols-4 xl:grid-cols-8">{statuses.map((status) => { const statusItems = boardGroups.get(status.value) ?? []; return <section key={status.value} className="min-w-[220px] rounded-xl bg-slate-100/70 p-2"><h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{status.label} <span className="font-normal">({statusItems.length})</span></h2><div className="space-y-2">{statusItems.map((item) => <Card key={item.id} item={item} />)}</div></section>; })}</div>;
   }
 
   if (view === "calendar") {

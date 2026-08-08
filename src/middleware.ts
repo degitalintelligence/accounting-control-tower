@@ -26,13 +26,29 @@ const securityHeaders = {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /**
+   * HTML navigasi disajikan tanpa cache (no-store) sehingga setelah deploy
+   * browser/proxy tidak menampilkan build lama. Aset statis (_next/static)
+   * sudah content-hashed dan di-cache immutable (lihat next.config.ts).
+   * `_next/static`, `_next/image`, dan favicon tidak lewat matcher ini.
+   */
+  const isHtmlNavigation = request.headers.get("accept")?.includes("text/html") === true;
+
+  const applySecurityHeaders = (response: NextResponse) => {
+    Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
+    if (isHtmlNavigation) {
+      response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+      response.headers.set("Pragma", "no-cache");
+    }
+    return response;
+  };
+
   const category = rateLimitCategory(pathname, request.method);
   if (category) {
     const decision = consumeRateLimit(`${category.name}:${getClientAddress(request.headers)}`, category.limit, category.windowMs);
     if (!decision.allowed) {
       const response = NextResponse.json({ error: "Terlalu banyak permintaan. Silakan coba lagi nanti." }, { status: 429, headers: rateLimitHeaders(decision) });
-      Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
-      return response;
+      return applySecurityHeaders(response);
     }
   }
 
@@ -41,16 +57,23 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
   ) {
-    const response = NextResponse.next();
-    Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
-    return response;
+    return applySecurityHeaders(NextResponse.next());
   }
 
   // Skip bypass routes (e.g. WhatsApp webhook — no auth needed)
   if (bypassRoutes.includes(pathname)) {
-    const response = NextResponse.next();
-    Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
-    return response;
+    return applySecurityHeaders(NextResponse.next());
+  }
+
+  const isOnPublicRoute = publicRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  );
+
+  // Callback and password-reset pages establish/consume auth state themselves.
+  // Login still performs the lookup so the existing logged-in redirect remains.
+  const requiresAuthLookup = !isOnPublicRoute || pathname === "/login";
+  if (!requiresAuthLookup) {
+    return applySecurityHeaders(NextResponse.next());
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,7 +82,7 @@ export async function middleware(request: NextRequest) {
   if (!supabaseUrl || !supabaseAnonKey) {
     // Jika env vars tidak ada di middleware, ini bisa menyebabkan 500.
     // Kita return response dasar agar tidak crash.
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -91,25 +114,21 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isOnPublicRoute = publicRoutes.some(
-    (route) => pathname === route || pathname.startsWith(route + "/")
-  );
-
   // Tidak ada user dan bukan di halaman publik → redirect ke login
   if (!user && !isOnPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
   // Sudah login dan mengakses login page → redirect ke dashboard
   if (user && isOnPublicRoute && pathname !== "/reset-password") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
-  return supabaseResponse;
+  return applySecurityHeaders(supabaseResponse);
 }
 
 export const config = {

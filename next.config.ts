@@ -22,6 +22,14 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
+      // Aset statis hasil build di-hash oleh kontennya, jadi aman di-cache
+      // sangat lama (immutable). Halaman HTML di-set no-store via middleware.
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [

@@ -1,39 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import type { CreateTemplateInput } from "@/types/template";
 import type { WorkItemType } from "@/types/work-item";
 import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * GET /api/templates
@@ -50,20 +20,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.view");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      console.error("[GET /api/templates] Gagal ambil org:", { message: orgError });
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     const { searchParams } = request.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
@@ -118,9 +80,9 @@ export async function GET(request: NextRequest) {
       )
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      .eq("is_active", true);
+    if (!isOrgWide) query = query.in("client_id", clientIds);
+    query = query.order("created_at", { ascending: false }).range(from, to);
 
     if (type) {
       query = query.eq("type", type);
@@ -195,20 +157,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      console.error("[POST /api/templates] Gagal ambil org:", { message: orgError });
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId } = authContext.context;
 
     const body = (await request.json()) as CreateTemplateInput;
 

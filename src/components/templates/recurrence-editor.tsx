@@ -31,8 +31,12 @@ export function RecurrenceEditor({ templateId }: { templateId: string }) {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setMessage(null);
+    queueMicrotask(() => {
+      if (active) {
+        setLoading(true);
+        setMessage(null);
+      }
+    });
     fetch(`/api/templates/${templateId}/recurrence`)
       .then(async (response) => {
         const body = await response.json().catch(() => null);

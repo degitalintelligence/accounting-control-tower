@@ -48,13 +48,14 @@ export async function GET() {
   if (auth.response) return auth.response;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
 
-  const result = await admin
+  let query = admin
     .from("work_items")
     .select("id, client_id, title, type, priority, status, risk_level, due_at, created_at, created_by, parent_id, progress_percent, health_flag, is_rollup_parent, assignments:assignments(profile_id, role, profiles!assignments_profile_id_fkey(display_name))")
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
-    .order("due_at", { ascending: true, nullsFirst: false })
-    .limit(250);
+    .order("due_at", { ascending: true, nullsFirst: false });
+  if (!isOrgWide) query = query.in("client_id", clientIds);
+  const result = await query.limit(250);
   const rows = result as unknown as { data: WorkItem[] | null; error: { message: string; code?: string; hint?: string; details?: string } | null };
   if (rows.error) {
     console.error("[GET /api/dashboard/sections] Supabase error:", {
@@ -108,12 +109,19 @@ export async function GET() {
       return { id: item.id, fileIcon, title: item.title, submitter, submitterInitials: initials(submitter), time: relativeTime(item.created_at), risk, riskLabel: risk === "high" ? "High Risk" : risk === "medium" ? "Needs Review" : "Low Risk" };
     });
 
-  const parents = items.filter((item) => item.is_rollup_parent || (!item.parent_id && items.some((child) => child.parent_id === item.id))).slice(0, 5);
+  const childrenByParent = new Map<string, WorkItem[]>();
+  for (const item of items) {
+    if (!item.parent_id) continue;
+    const children = childrenByParent.get(item.parent_id) ?? [];
+    children.push(item);
+    childrenByParent.set(item.parent_id, children);
+  }
+  const parents = items.filter((item) => item.is_rollup_parent || (!item.parent_id && childrenByParent.has(item.id))).slice(0, 5);
   const closing = parents.map((parent) => ({
     id: parent.id,
     name: parent.title,
     progress: Number(parent.progress_percent ?? 0),
-    children: items.filter((child) => child.parent_id === parent.id).map((child) => {
+    children: (childrenByParent.get(parent.id) ?? []).map((child) => {
       const assignee = child.assignments.find((assignment) => assignment.role === "maker")?.profiles?.display_name ?? "Unassigned";
       const checkStatus = child.status === "completed" || child.status === "approved" ? "done" : child.status === "blocked" || child.health_flag === "overdue" ? "danger" : "partial";
       return { id: child.id, name: child.title, assignee, assigneeInitials: initials(assignee), status: statusLabel(child.status), checkStatus, progress: Number(child.progress_percent ?? 0) };

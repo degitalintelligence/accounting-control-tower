@@ -93,7 +93,10 @@ export function useWorkItems(initialFilter: WorkItemFilter = {}): UseWorkItemsRe
   }, [filter, page, limit]);
 
   useEffect(() => {
-    queueMicrotask(() => fetchItems());
+    const timer = setTimeout(() => {
+      void fetchItems();
+    }, 250);
+    return () => clearTimeout(timer);
   }, [fetchItems]);
 
   const setFilter = useCallback((patch: Partial<WorkItemFilter>) => {

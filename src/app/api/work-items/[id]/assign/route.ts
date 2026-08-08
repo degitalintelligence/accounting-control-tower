@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import { validateAssignment } from "@/lib/work-engine/assignments";
 import { publishNotificationEvent } from "@/lib/notification";
@@ -10,36 +10,6 @@ import { validateAssigneeAvailability } from "@/lib/work-engine/planned-leave";
 import { canAccessClient, getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * POST /api/work-items/[id]/assign
@@ -59,20 +29,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
-
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId } = authContext.context;
 
     const requestBody = await request.json();
     const parsed = assignmentSchema.safeParse({
@@ -244,24 +206,23 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const admin = createServiceRoleClient();
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
     if (permissionDenied) return permissionDenied;
-    const { organizationId, error } = await getUserOrganizationId(admin, user.id);
-    if (error || !organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
     const { id } = await context.params;
     const body = await request.json() as { assignment_id?: string; reason?: string };
     if (!body.assignment_id) return NextResponse.json({ error: "assignment_id wajib diisi." }, { status: 400 });
-    const existingResult = await admin
+    let existingQuery = admin
       .from("assignments")
-      .select("id, profile_id, role, work_item_id, work_items!inner(organization_id)")
+      .select("id, profile_id, role, work_item_id, work_items!inner(organization_id, client_id)")
       .eq("id", body.assignment_id)
       .eq("work_item_id", id)
       .eq("work_items.organization_id", organizationId)
-      .is("unassigned_at", null)
-      .single();
+      .is("unassigned_at", null);
+    if (!isOrgWide) existingQuery = existingQuery.in("work_items.client_id", clientIds);
+    const existingResult = await existingQuery.single();
     const existing = existingResult as unknown as { data: { id: string; profile_id: string; role: AssignmentRole } | null; error: { message: string } | null };
     if (existing.error || !existing.data) return NextResponse.json({ error: "Assignment aktif tidak ditemukan." }, { status: 404 });
     const updated = await admin.from("assignments").update({ unassigned_at: new Date().toISOString(), reason: body.reason?.trim() || "Reassign" } as never).eq("id", body.assignment_id);

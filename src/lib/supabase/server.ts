@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
 /**
@@ -8,7 +8,7 @@ import type { Database } from "./types";
  * Use in Server Components / Server Actions that need user session.
  * Schema: acct_ctrl.
  */
-export async function createClient() {
+export async function createClient(): Promise<SupabaseClient<Database, "acct_ctrl">> {
   let cookieStore;
   try {
     cookieStore = await cookies();
@@ -19,7 +19,7 @@ export async function createClient() {
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !supabaseAnonKey) throw new Error("Missing Supabase public environment variables.");
     
-    return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    return createServerClient<Database, "acct_ctrl">(supabaseUrl, supabaseAnonKey, {
       db: { schema: "acct_ctrl" },
       cookies: {
         getAll: () => [],
@@ -35,7 +35,7 @@ export async function createClient() {
     throw new Error("Missing Supabase public environment variables.");
   }
 
-  return createServerClient<Database>(
+  return createServerClient<Database, "acct_ctrl">(
     supabaseUrl,
     supabaseAnonKey,
     {
@@ -66,7 +66,7 @@ export async function createClient() {
  * NEVER import this from client components.
  * Schema: acct_ctrl.
  */
-export function createServiceRoleClient() {
+export function createServiceRoleClient(): SupabaseClient<Database, "acct_ctrl"> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -74,7 +74,7 @@ export function createServiceRoleClient() {
     throw new Error("Missing Supabase service role environment variables.");
   }
 
-  return createSupabaseClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+  return createSupabaseClient<Database, "acct_ctrl">(supabaseUrl, supabaseServiceRoleKey, {
     db: { schema: "acct_ctrl" },
     auth: {
       persistSession: false,
@@ -83,7 +83,7 @@ export function createServiceRoleClient() {
   });
 }
 
-export function createPublicAuthClient() {
+export function createPublicAuthClient(): SupabaseClient<Database, "acct_ctrl"> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -91,7 +91,7 @@ export function createPublicAuthClient() {
     throw new Error("Missing Supabase public environment variables.");
   }
 
-  return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createSupabaseClient<Database, "acct_ctrl">(supabaseUrl, supabaseAnonKey, {
     db: { schema: "acct_ctrl" },
     auth: {
       persistSession: false,

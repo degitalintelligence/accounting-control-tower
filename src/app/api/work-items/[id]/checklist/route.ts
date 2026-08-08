@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { getUserOrganizationId } from "@/lib/checklists";
+import { createClient } from "@/lib/supabase/server";
 import { checklistResponseSchema, validationMessage } from "@/lib/validation/schemas";
 import { getAuthContext, hasPermission } from "@/lib/authorization";
 
@@ -10,27 +9,22 @@ async function authorize(context: Context) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  const admin = createServiceRoleClient();
-  const organizationId = await getUserOrganizationId(admin, user.id);
-  if (!organizationId) return { response: NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 }) };
+  const auth = await getAuthContext();
+  if (auth.response) return { response: auth.response };
+  const { admin, organizationId, clientIds, isOrgWide } = auth.context;
   const { id } = await context.params;
   const workItem = await admin.from("work_items").select("id, client_id, checklist_template_id, assignments(profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
   const data = workItem as unknown as { data: { id: string; client_id: string | null; checklist_template_id: string | null; assignments: { profile_id: string; role: string; unassigned_at: string | null }[] } | null; error: { message: string } | null };
   if (data.error || !data.data) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
-  const auth = await getAuthContext();
-  if (auth.response) return { response: auth.response };
-  if (!auth.context.isOrgWide && (!data.data.client_id || !auth.context.clientIds.includes(data.data.client_id))) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
-  return { admin, id, userId: user.id, templateId: data.data.checklist_template_id, assignments: data.data.assignments };
+  if (!isOrgWide && (!data.data.client_id || !clientIds.includes(data.data.client_id))) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
+  return { admin, id, userId: user.id, organizationId, templateId: data.data.checklist_template_id, assignments: data.data.assignments, authContext: auth.context };
 }
 
 export async function GET(_request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth.response) return auth.response;
   if (!auth.templateId) return NextResponse.json({ data: { template: null, responses: [], required_total: 0, required_completed: 0 } });
-  const organizationId = await getUserOrganizationId(auth.admin!, auth.userId);
-  const templateResult = organizationId
-    ? await auth.admin!.from("checklist_templates").select("id, organization_id, name, description, target_role, is_active, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)").eq("id", auth.templateId).eq("organization_id", organizationId).single()
-    : { data: null, error: { message: "Organisasi tidak ditemukan." } };
+  const templateResult = await auth.admin!.from("checklist_templates").select("id, organization_id, name, description, target_role, is_active, created_at, updated_at, checklist_items(id, checklist_template_id, label, input_type, is_required, sort_order, validation_rules, created_at)").eq("id", auth.templateId).eq("organization_id", auth.organizationId).single();
   const responseResult = await auth.admin!.from("checklist_responses").select("id, work_item_id, checklist_item_id, profile_id, value, file_id, created_at, updated_at").eq("work_item_id", auth.id);
   const templateData = templateResult as unknown as { data: Record<string, unknown> | null; error: { message: string } | null };
   const responsesData = responseResult as unknown as { data: Record<string, unknown>[] | null; error: { message: string } | null };
@@ -44,9 +38,7 @@ export async function GET(_request: NextRequest, context: Context) {
 export async function PATCH(request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth.response) return auth.response;
-  const permissionContext = await getAuthContext();
-  if (permissionContext.response) return permissionContext.response;
-  const permissionDenied = await hasPermission(permissionContext.context, "work_items.execute");
+  const permissionDenied = await hasPermission(auth.authContext, "work_items.execute");
   if (!permissionDenied) return NextResponse.json({ error: "Anda tidak memiliki permission untuk aksi ini." }, { status: 403 });
   const parsed = checklistResponseSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: validationMessage(parsed.error) }, { status: 400 });

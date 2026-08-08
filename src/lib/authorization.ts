@@ -7,6 +7,11 @@ import type { AppLocale } from "@/lib/i18n";
 
 const ACTIVE_ORGANIZATION_COOKIE = "acct_ctrl_active_organization";
 
+// Request-local only: AuthContext objects are created per request and are never
+// shared with another request. Caching the promise also deduplicates concurrent
+// permission checks without caching authorization state across requests.
+const permissionCache = new WeakMap<AuthContext, Map<string, Promise<boolean>>>();
+
 type AdminClient = ReturnType<typeof createServiceRoleClient>;
 
 export type MembershipAccess = {
@@ -114,6 +119,26 @@ export function canManageOrganization(role: string | null | undefined) {
 }
 
 export async function hasPermission(context: AuthContext, permissionKey: string) {
+  let contextCache = permissionCache.get(context);
+  if (!contextCache) {
+    contextCache = new Map<string, Promise<boolean>>();
+    permissionCache.set(context, contextCache);
+  }
+
+  const cached = contextCache.get(permissionKey);
+  if (cached) return cached;
+
+  const lookup = hasPermissionUncached(context, permissionKey);
+  contextCache.set(permissionKey, lookup);
+  lookup.catch(() => {
+    // Do not retain failed lookups; a transient database error must not poison
+    // later authorization checks in the same request context.
+    if (contextCache?.get(permissionKey) === lookup) contextCache.delete(permissionKey);
+  });
+  return lookup;
+}
+
+async function hasPermissionUncached(context: AuthContext, permissionKey: string) {
   const { data, error } = await context.admin
     .from("memberships")
     .select("role_id, role, organization_id, organization_roles!inner(organization_id, is_active, deleted_at)")

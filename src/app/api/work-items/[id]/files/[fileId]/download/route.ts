@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { getUserOrganizationId } from "@/lib/checklists";
+import { createClient } from "@/lib/supabase/server";
 import { getRequiredServerEnv } from "@/lib/server-env";
+import { canAccessClient, getAuthContext } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string; fileId: string }> };
 
@@ -9,16 +9,14 @@ export async function GET(_request: NextRequest, context: Context) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const admin = createServiceRoleClient();
-  const organizationId = await getUserOrganizationId(admin, user.id);
-  if (!organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
+  const authContext = await getAuthContext();
+  if (authContext.response) return authContext.response;
+  const { admin, organizationId } = authContext.context;
   const { id, fileId } = await context.params;
   const item = await admin.from("work_items").select("id, client_id").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
   const itemData = item as unknown as { data: { id: string; client_id: string | null } | null; error: { message: string } | null };
   if (itemData.error || !itemData.data) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
-  const membership = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
-  const memberships = membership as unknown as { data: { client_id: string | null }[] | null };
-  if (!memberships.data?.some((entry) => entry.client_id === null || entry.client_id === itemData.data!.client_id)) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
+  if (!canAccessClient(authContext.context, itemData.data.client_id)) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
   const relation = await admin.from("work_item_files").select("file_id, files(storage_path, filename, scan_status)").eq("work_item_id", id).eq("file_id", fileId).single();
   const relationData = relation as unknown as { data: { file_id: string; files: { storage_path: string; filename: string; scan_status: string } | null } | null; error: { message: string } | null };
   if (relationData.error || !relationData.data?.files) return NextResponse.json({ error: "File tidak ditemukan." }, { status: 404 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,15 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const { t } = useI18n();
+
+  // Bersihkan timer debounce saat komponen unmount
+  useEffect(() => {
+    const timers = debounceTimers.current;
+    return () => { for (const timer of Object.values(timers)) clearTimeout(timer); };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,7 +98,15 @@ export function ChecklistPanel({ workItemId }: { workItemId: string }) {
                     }
                   }} />
                 ) : (
-                  <Input type={item.input_type === "url" ? "url" : item.input_type} value={value} disabled={saving === item.id} onChange={(event) => save(item.id, event.target.value)} />
+                  <Input type={item.input_type === "url" ? "url" : item.input_type} value={drafts[item.id] ?? value} disabled={saving === item.id} onChange={(event) => {
+                    const next = event.target.value;
+                    setDrafts((prev) => ({ ...prev, [item.id]: next }));
+                    if (debounceTimers.current[item.id]) clearTimeout(debounceTimers.current[item.id]);
+                    debounceTimers.current[item.id] = setTimeout(() => {
+                      setDrafts((prev) => { const copy = { ...prev }; delete copy[item.id]; return copy; });
+                      void save(item.id, next);
+                    }, 400);
+                  }} />
                 )}
               </div>
             </div>

@@ -21,10 +21,12 @@ export function EditWorkItemDialog({ open, onOpenChange, workItem, onSaved }: { 
 
   useEffect(() => {
     if (!open) return;
-    setTitle(workItem.title);
-    setDescription(workItem.description ?? "");
-    setDueAt(workItem.due_at?.slice(0, 16) ?? "");
-    setChecklistTemplateId(workItem.checklist_template_id ?? "");
+    queueMicrotask(() => {
+      setTitle(workItem.title);
+      setDescription(workItem.description ?? "");
+      setDueAt(workItem.due_at?.slice(0, 16) ?? "");
+      setChecklistTemplateId(workItem.checklist_template_id ?? "");
+    });
     void fetch("/api/checklist-templates").then((response) => response.ok ? response.json() : null).then((body) => setChecklistTemplates(body?.data ?? [])).catch(() => setChecklistTemplates([]));
   }, [open, workItem]);
 

@@ -40,38 +40,36 @@ export async function GET(request: NextRequest) {
     const overdueOnly = searchParams.get("overdue_only") === "true";
     const filter = searchParams.get("filter");
 
+    const withDetail = searchParams.get("detail") !== "0";
+    const withCount = searchParams.get("count") !== "0";
+
+    const columns = [
+      "id",
+      "organization_id",
+      "client_id",
+      "project_id",
+      "parent_id",
+      "type",
+      "title",
+      "description",
+      "status",
+      "priority",
+      "risk_level",
+      "due_at",
+      "start_at",
+      "is_optional",
+      "created_by",
+      "created_at",
+      "updated_at",
+      "completed_at",
+    ];
+    if (withDetail) {
+      columns.push("assignments:assignments!inner(id, profile_id, role, assigned_at, unassigned_at)");
+    }
+
     let query = admin
       .from("work_items")
-      .select(
-        `
-        id,
-        organization_id,
-        client_id,
-        project_id,
-        parent_id,
-        type,
-        title,
-        description,
-        status,
-        priority,
-        risk_level,
-        due_at,
-        start_at,
-        is_optional,
-        created_by,
-        created_at,
-        updated_at,
-        completed_at,
-        assignments:assignments!inner(
-          id,
-          profile_id,
-          role,
-          assigned_at,
-          unassigned_at
-        )
-      `,
-        { count: "exact" }
-      )
+      .select(columns.join(",\n"), withCount ? { count: "exact" } : undefined)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })

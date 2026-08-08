@@ -9,6 +9,7 @@ type Bucket = { count: number; resetAt: number };
 
 const buckets = new Map<string, Bucket>();
 const MAX_BUCKETS = 10_000;
+const DEFAULT_WINDOW_MS = 60_000;
 
 export function consumeRateLimit(
   key: string,
@@ -16,28 +17,45 @@ export function consumeRateLimit(
   windowMs: number,
   now = Date.now()
 ): RateLimitDecision {
+  // Keep the limiter fail-closed for malformed runtime input. The public API
+  // remains unchanged, but NaN/Infinity/zero must not disable enforcement.
+  const safeLimit = normalizePositiveInteger(limit, 1);
+  const safeWindowMs = normalizePositiveInteger(windowMs, DEFAULT_WINDOW_MS);
   const current = buckets.get(key);
   if (!current || current.resetAt <= now) {
-    const resetAt = now + windowMs;
+    const resetAt = now + safeWindowMs;
     buckets.set(key, { count: 1, resetAt });
     pruneBuckets(now);
-    return { allowed: true, limit, remaining: Math.max(0, limit - 1), resetAt };
+    return { allowed: true, limit: safeLimit, remaining: Math.max(0, safeLimit - 1), resetAt };
   }
 
   current.count += 1;
   return {
-    allowed: current.count <= limit,
-    limit,
-    remaining: Math.max(0, limit - current.count),
+    allowed: current.count <= safeLimit,
+    limit: safeLimit,
+    remaining: Math.max(0, safeLimit - current.count),
     resetAt: current.resetAt,
   };
 }
 
+function normalizePositiveInteger(value: number, fallback: number) {
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
 function pruneBuckets(now: number) {
   if (buckets.size <= MAX_BUCKETS) return;
+
   for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now || buckets.size > MAX_BUCKETS) buckets.delete(key);
-    if (buckets.size <= MAX_BUCKETS) break;
+    if (bucket.resetAt <= now) buckets.delete(key);
+  }
+
+  // Bound memory even when an attacker supplies many unique keys and all
+  // active buckets have not expired yet. This is local-process limiting only;
+  // it is not distributed across workers/instances without an existing store.
+  while (buckets.size > MAX_BUCKETS) {
+    const oldestKey = buckets.keys().next().value as string | undefined;
+    if (oldestKey === undefined) break;
+    buckets.delete(oldestKey);
   }
 }
 

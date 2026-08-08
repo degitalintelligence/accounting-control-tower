@@ -1,39 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import type { InstantiateInput } from "@/types/template";
+import { canAccessClient, getAuthContext } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * Hitung due date dari deadline rule atau input user.
@@ -78,15 +49,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId } = authContext.context;
 
     // Ambil template
     const tplResult = await admin
@@ -109,6 +75,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
+    if (!canAccessClient(authContext.context, template.client_id as string | null)) return NextResponse.json({ error: "Template tidak ditemukan atau tidak aktif." }, { status: 404 });
 
     // Ambil versi terbaru
     const verResult = await admin

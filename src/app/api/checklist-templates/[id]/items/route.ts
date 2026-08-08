@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { getUserOrganizationId } from "@/lib/checklists";
+import { createClient } from "@/lib/supabase/server";
 import { checklistItemCreateSchema, checklistItemUpdateSchema, validationMessage } from "@/lib/validation/schemas";
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 
@@ -10,17 +9,15 @@ async function authorize(context: Context) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  const admin = createServiceRoleClient();
-  const organizationId = await getUserOrganizationId(admin, user.id);
-  if (!organizationId) return { response: NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 }) };
-  const { id } = await context.params;
-  const template = await admin.from("checklist_templates").select("id").eq("id", id).eq("organization_id", organizationId).single();
-  const templateData = template as unknown as { data: { id: string } | null; error: { message: string } | null };
-  if (templateData.error || !templateData.data) return { response: NextResponse.json({ error: "Template checklist tidak ditemukan." }, { status: 404 }) };
   const auth = await getAuthContext();
   if (auth.response) return { response: auth.response };
   const denied = await requirePermission(auth.context, "checklists.manage");
   if (denied) return { response: denied };
+  const { admin, organizationId } = auth.context;
+  const { id } = await context.params;
+  const template = await admin.from("checklist_templates").select("id").eq("id", id).eq("organization_id", organizationId).single();
+  const templateData = template as unknown as { data: { id: string } | null; error: { message: string } | null };
+  if (templateData.error || !templateData.data) return { response: NextResponse.json({ error: "Template checklist tidak ditemukan." }, { status: 404 }) };
   return { admin, id };
 }
 

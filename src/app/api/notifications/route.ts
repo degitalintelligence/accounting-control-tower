@@ -13,14 +13,22 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  const result = await admin
-    .from("notifications")
-    .select("id, event_type, title, body, data, channel, read_at, created_at", { count: "exact" })
-    .eq("organization_id", organizationId)
-    .eq("profile_id", userId)
-    .order("read_at", { ascending: true, nullsFirst: true })
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  const [result, unreadResult] = await Promise.all([
+    admin
+      .from("notifications")
+      .select("id, event_type, title, body, data, channel, read_at, created_at", { count: "exact" })
+      .eq("organization_id", organizationId)
+      .eq("profile_id", userId)
+      .order("read_at", { ascending: true, nullsFirst: true })
+      .order("created_at", { ascending: false })
+      .range(from, to),
+    admin
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("profile_id", userId)
+      .is("read_at", null),
+  ]);
   const notifications = result as unknown as {
     data: NotificationRecord[] | null;
     count: number | null;
@@ -32,12 +40,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Gagal memuat notifikasi." }, { status: 500 });
   }
 
-  const unreadResult = await admin
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("profile_id", userId)
-    .is("read_at", null);
   const unread = unreadResult as unknown as { count: number | null; error: { message: string } | null };
 
   if (unread.error) {

@@ -48,7 +48,12 @@ export default function ClientsPage() {
     }
   }
 
-  useEffect(() => { void loadClients(); }, []);
+  useEffect(() => {
+    const load = async () => {
+      await loadClients();
+    };
+    void load();
+  }, []);
 
   const filteredClients = useMemo(() => {
     const query = search.trim().toLowerCase();

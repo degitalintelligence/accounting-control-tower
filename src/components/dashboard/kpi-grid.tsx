@@ -6,8 +6,8 @@ import type { DashboardKpis } from "@/types/dashboard";
 import { useI18n } from "@/components/i18n-provider";
 
 export function KpiGrid({ kpis }: { kpis: DashboardKpis | null }) {
-  if (!kpis) return null;
   const { locale } = useI18n();
+  if (!kpis) return null;
   const text = locale === "id-ID" ? {
     approval: "First-pass approval", reviews: "review", average: "Rata-rata review", hours: "jam", measured: "item terukur", compliance: "SOP compliance", sample: "sample", autonomous: "Autonomous completion", eligible: "eligible", intervention: "Intervensi manager", event: "event terukur",
   } : {

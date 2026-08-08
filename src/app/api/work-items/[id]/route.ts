@@ -1,40 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import { validationMessage, workItemUpdateSchema } from "@/lib/validation/schemas";
 import { canAccessClient, getAuthContext, hasPermission, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * GET /api/work-items/[id]
@@ -52,15 +22,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
-
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const { admin, organizationId } = authContext.context;
 
     const wiResult = await admin
       .from("work_items")
@@ -126,9 +90,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
-    const clientAccess = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
-    const clientRows = clientAccess as unknown as { data: { client_id: string | null }[] | null };
-    if (!clientRows.data?.some((membership) => membership.client_id === null || membership.client_id === workItem.client_id)) {
+    if (!canAccessClient(authContext.context, workItem.client_id as string | null)) {
       return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
     }
 
@@ -179,20 +141,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
-
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId } = authContext.context;
 
     // Ambil data lama untuk audit
     const fetchResult = await admin
@@ -215,9 +169,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
     const existingClientId = existing.client_id as string | null | undefined;
-    const clientScope = await admin.from("memberships").select("client_id").eq("profile_id", user.id).eq("organization_id", organizationId).eq("is_active", true);
-    const clientScopeData = clientScope as unknown as { data: { client_id: string | null }[] | null };
-    if (!clientScopeData.data?.some((membership) => membership.client_id === null || membership.client_id === existingClientId)) {
+    if (!canAccessClient(authContext.context, existingClientId)) {
       return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
     }
 
@@ -260,10 +212,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (Object.prototype.hasOwnProperty.call(updateData, "due_at") && updateData.due_at !== existing.due_at) {
       const assignmentsResult = await admin.from("assignments").select("id").eq("work_item_id", id).is("unassigned_at", null).limit(1);
       const assignments = assignmentsResult as unknown as { data: { id: string }[] | null; error: { message: string } | null };
-      const permissionContext = await getAuthContext();
-      if (permissionContext.response) return permissionContext.response;
-      const canManageDueDate = await hasPermission(permissionContext.context, "work_items.due_date.manage");
-      const canChangeOverdueDueDate = await hasPermission(permissionContext.context, "work_items.overdue.manage");
+      const canManageDueDate = await hasPermission(authContext.context, "work_items.due_date.manage");
+      const canChangeOverdueDueDate = await hasPermission(authContext.context, "work_items.overdue.manage");
       if (assignments.error) return NextResponse.json({ error: "Gagal memvalidasi kebijakan due date." }, { status: 500 });
       if (assignments.data?.length && !canManageDueDate) return NextResponse.json({ error: "Due date work item yang sudah di-assign hanya dapat diubah oleh manager atau admin." }, { status: 403 });
       if (existing.due_at && new Date(existing.due_at as string).getTime() < Date.now() && !canChangeOverdueDueDate) return NextResponse.json({ error: "Due date yang sudah overdue membutuhkan otorisasi elevated." }, { status: 403 });
@@ -342,20 +292,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
-
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId } = authContext.context;
 
     const delFetchResult = await admin
       .from("work_items")

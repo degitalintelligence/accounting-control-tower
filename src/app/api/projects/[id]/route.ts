@@ -1,37 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; clientIds: string[]; isOrgWide: boolean; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return { organizationId: null, clientIds: [], isOrgWide: false, error: membership.error?.message ?? "User tidak memiliki membership aktif." };
-  }
-  const memberships = await admin.from("memberships").select("client_id").eq("profile_id", userId).eq("organization_id", membership.data.organization_id).eq("is_active", true);
-  const rows = (memberships.data ?? []) as { client_id: string | null }[];
-  return { organizationId: membership.data.organization_id, clientIds: [...new Set(rows.flatMap((row) => row.client_id ? [row.client_id] : []))], isOrgWide: rows.some((row) => row.client_id === null), error: null };
-}
 
 /**
  * GET /api/projects/[id]
@@ -49,19 +21,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.view");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Ambil project + work_item
     let projectQuery = admin
@@ -230,19 +195,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
     const authContext = await getAuthContext();
     if (authContext.response) return authContext.response;
     const permissionDenied = await requirePermission(authContext.context, "work_items.manage");
     if (permissionDenied) return permissionDenied;
 
-    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Ambil data lama untuk audit
     let fetchQuery = admin
@@ -382,15 +340,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
 
-    const { organizationId, clientIds, isOrgWide, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Ambil project + work_item_id
     let fetchQuery = admin

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { getUserOrganizationId } from "@/lib/checklists";
 import { getRequiredServerEnv } from "@/lib/server-env";
 import { createHash } from "node:crypto";
-import { getAuthContext, requirePermission } from "@/lib/authorization";
+import { canAccessClient, getAuthContext, requirePermission, type AuthContext } from "@/lib/authorization";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -13,6 +12,7 @@ type WorkItemAccess = {
   userId: string;
   organizationId: string;
   clientId: string | null;
+  authContext: AuthContext;
 };
 
 async function authorize(context: Context): Promise<WorkItemAccess | NextResponse> {
@@ -20,9 +20,9 @@ async function authorize(context: Context): Promise<WorkItemAccess | NextRespons
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const admin = createServiceRoleClient();
-  const organizationId = await getUserOrganizationId(admin, user.id);
-  if (!organizationId) return NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 });
+  const authContext = await getAuthContext();
+  if (authContext.response) return authContext.response;
+  const { admin, organizationId } = authContext.context;
 
   const { id } = await context.params;
   const itemResult = await admin
@@ -35,18 +35,11 @@ async function authorize(context: Context): Promise<WorkItemAccess | NextRespons
   const item = itemResult as unknown as { data: { id: string; organization_id: string; client_id: string | null } | null; error: { message: string } | null };
   if (item.error || !item.data) return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
 
-  const memberships = await admin
-    .from("memberships")
-    .select("client_id")
-    .eq("profile_id", user.id)
-    .eq("organization_id", organizationId)
-    .eq("is_active", true);
-  const membershipData = memberships as unknown as { data: { client_id: string | null }[] | null };
-  if (!membershipData.data?.some((membership) => membership.client_id === null || membership.client_id === item.data!.client_id)) {
+  if (!canAccessClient(authContext.context, item.data.client_id)) {
     return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
   }
 
-  return { admin, id, userId: user.id, organizationId, clientId: item.data.client_id };
+  return { admin, id, userId: user.id, organizationId, clientId: item.data.client_id, authContext: authContext.context };
 }
 
 function errorResponse(message: string, status = 500) {
@@ -103,9 +96,7 @@ export async function GET(_request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   const auth = await authorize(context);
   if (auth instanceof NextResponse) return auth;
-  const permissionContext = await getAuthContext();
-  if (permissionContext.response) return permissionContext.response;
-  const permissionDenied = await requirePermission(permissionContext.context, "work_items.execute");
+  const permissionDenied = await requirePermission(auth.authContext, "work_items.execute");
   if (permissionDenied) return permissionDenied;
 
   const workItemStatus = await auth.admin.from("work_items").select("status").eq("id", auth.id).single();

@@ -1,38 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
+import { getAuthContext } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * Helper: validasi project exists dan milik org yang sama.
@@ -81,20 +52,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Validasi project access
-    const memberships = await admin.from("memberships").select("client_id").eq("organization_id", organizationId).eq("profile_id", user.id).eq("is_active", true);
-    const clientIds = [...new Set((memberships.data ?? []).map((item: { client_id: string | null }) => item.client_id).filter((value: string | null): value is string => Boolean(value)))];
-    const access = await validateProjectAccess(admin, id, organizationId, clientIds, (memberships.data ?? []).some((item: { client_id: string | null }) => item.client_id === null));
+    const access = await validateProjectAccess(admin, id, organizationId, clientIds, isOrgWide);
     if (!access.valid) {
       return NextResponse.json({ error: access.error }, { status: 404 });
     }
@@ -166,20 +130,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Validasi project access
-    const memberships = await admin.from("memberships").select("client_id").eq("organization_id", organizationId).eq("profile_id", user.id).eq("is_active", true);
-    const clientIds = [...new Set((memberships.data ?? []).map((item: { client_id: string | null }) => item.client_id).filter((value: string | null): value is string => Boolean(value)))];
-    const access = await validateProjectAccess(admin, id, organizationId, clientIds, (memberships.data ?? []).some((item: { client_id: string | null }) => item.client_id === null));
+    const access = await validateProjectAccess(admin, id, organizationId, clientIds, isOrgWide);
     if (!access.valid) {
       return NextResponse.json({ error: access.error }, { status: 404 });
     }

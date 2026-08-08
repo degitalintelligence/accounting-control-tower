@@ -15,6 +15,7 @@ export interface Database {
   acct_ctrl: {
     Tables: {
       organizations: {
+        Relationships: [];
         Row: {
           id: string;
           name: string;
@@ -43,7 +44,47 @@ export interface Database {
           deleted_at?: string | null;
         };
       };
+      clients: {
+        Relationships: [];
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          slug: string;
+          timezone: string;
+          holiday_calendar: Json;
+          settings: Json;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          slug: string;
+          timezone?: string;
+          holiday_calendar?: Json;
+          settings?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          slug?: string;
+          timezone?: string;
+          holiday_calendar?: Json;
+          settings?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
       profiles: {
+        Relationships: [];
         Row: {
           id: string;
           display_name: string;
@@ -82,6 +123,7 @@ export interface Database {
         };
       };
       memberships: {
+        Relationships: [];
         Row: {
           id: string;
           profile_id: string;
@@ -117,6 +159,26 @@ export interface Database {
         };
       };
       assignments: {
+        Relationships: [
+          {
+            foreignKeyName: "assignments_work_item_id_fkey";
+            columns: ["work_item_id"];
+            referencedRelation: "work_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assignments_profile_id_fkey";
+            columns: ["profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assignments_assigned_by_fkey";
+            columns: ["assigned_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
         Row: {
           id: string;
           work_item_id: string;
@@ -149,6 +211,32 @@ export interface Database {
         };
       };
       work_items: {
+        Relationships: [
+          {
+            foreignKeyName: "work_items_organization_id_fkey";
+            columns: ["organization_id"];
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "work_items_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "work_items_parent_id_fkey";
+            columns: ["parent_id"];
+            referencedRelation: "work_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "work_items_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
         Row: {
           id: string;
           organization_id: string;
@@ -279,7 +367,161 @@ export interface Database {
           delivery_reference?: string | null;
         };
       };
+      ai_intake_items: {
+        Relationships: [];
+        Row: {
+          id: string;
+          organization_id: string;
+          client_id: string | null;
+          created_by: string | null;
+          filename: string | null;
+          mime_type: string | null;
+          source_text: string;
+          source_kind: string;
+          status: string;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+          queued_at: string | null;
+          processing_started_at: string | null;
+          completed_at: string | null;
+          failed_at: string | null;
+          attempt_count: number;
+          extraction_version: string;
+          claimed_by: string | null;
+          claim_token: string | null;
+          lease_expires_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          client_id?: string | null;
+          created_by?: string | null;
+          filename?: string | null;
+          mime_type?: string | null;
+          source_text?: string;
+          source_kind?: string;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+          queued_at?: string | null;
+          processing_started_at?: string | null;
+          completed_at?: string | null;
+          failed_at?: string | null;
+          attempt_count?: number;
+          extraction_version?: string;
+          claimed_by?: string | null;
+          claim_token?: string | null;
+          lease_expires_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          client_id?: string | null;
+          created_by?: string | null;
+          filename?: string | null;
+          mime_type?: string | null;
+          source_text?: string;
+          source_kind?: string;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+          queued_at?: string | null;
+          processing_started_at?: string | null;
+          completed_at?: string | null;
+          failed_at?: string | null;
+          attempt_count?: number;
+          extraction_version?: string;
+          claimed_by?: string | null;
+          claim_token?: string | null;
+          lease_expires_at?: string | null;
+        };
+      };
+      ai_draft_items: {
+        Relationships: [];
+        Row: {
+          id: string;
+          organization_id: string;
+          intake_id: string | null;
+          meeting_id: string | null;
+          title: string;
+          description: string | null;
+          type: string;
+          client_id: string | null;
+          project_id: string | null;
+          maker_id: string | null;
+          maker_name: string | null;
+          due_at: string | null;
+          source_context: string | null;
+          confidence: number | null;
+          clarification_needed: boolean;
+          clarification_question: string | null;
+          status: string;
+          created_by: string | null;
+          confirmed_work_item_id: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+          source_task_key: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          intake_id?: string | null;
+          meeting_id?: string | null;
+          title: string;
+          description?: string | null;
+          type?: string;
+          client_id?: string | null;
+          project_id?: string | null;
+          maker_id?: string | null;
+          maker_name?: string | null;
+          due_at?: string | null;
+          source_context?: string | null;
+          confidence?: number | null;
+          clarification_needed?: boolean;
+          clarification_question?: string | null;
+          status?: string;
+          created_by?: string | null;
+          confirmed_work_item_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+          source_task_key?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          intake_id?: string | null;
+          meeting_id?: string | null;
+          title?: string;
+          description?: string | null;
+          type?: string;
+          client_id?: string | null;
+          project_id?: string | null;
+          maker_id?: string | null;
+          maker_name?: string | null;
+          due_at?: string | null;
+          source_context?: string | null;
+          confidence?: number | null;
+          clarification_needed?: boolean;
+          clarification_question?: string | null;
+          status?: string;
+          created_by?: string | null;
+          confirmed_work_item_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+          source_task_key?: string | null;
+        };
+      };
       whatsapp_retention_policies: {
+        Relationships: [];
         Row: {
           organization_id: string;
           retention_days: number;
@@ -492,6 +734,54 @@ export interface Database {
           created_at?: string;
         };
       };
+      dead_letter_events: {
+        Relationships: [];
+        Row: {
+          id: string;
+          organization_id: string;
+          outbox_event_id: string | null;
+          event_type: string;
+          payload: Json;
+          error_message: string | null;
+          retry_count: number;
+          last_retry_at: string | null;
+          created_at: string;
+          status: string;
+          last_error: string | null;
+          replayed_at: string | null;
+          replayed_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          outbox_event_id?: string | null;
+          event_type: string;
+          payload?: Json;
+          error_message?: string | null;
+          retry_count?: number;
+          last_retry_at?: string | null;
+          created_at?: string;
+          status?: string;
+          last_error?: string | null;
+          replayed_at?: string | null;
+          replayed_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          outbox_event_id?: string | null;
+          event_type?: string;
+          payload?: Json;
+          error_message?: string | null;
+          retry_count?: number;
+          last_retry_at?: string | null;
+          created_at?: string;
+          status?: string;
+          last_error?: string | null;
+          replayed_at?: string | null;
+          replayed_by?: string | null;
+        };
+      };
       whatsapp_delivery_attempts: {
         Relationships: [];
         Row: {
@@ -528,9 +818,8 @@ export interface Database {
         };
         Update: never;
       };
-      [key: string]: unknown;
     };
-    Views: Record<string, unknown>;
+    Views: Record<string, never>;
     Functions: {
       instantiate_template_instance: {
         Args: {
@@ -659,9 +948,97 @@ export interface Database {
         Args: { p_limit?: number };
         Returns: { raw_payloads_cleaned: number; messages_deleted: number }[];
       };
+      approve_planned_leave: {
+        Args: {
+          p_leave_id: string;
+          p_actor_id: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      reject_planned_leave: {
+        Args: {
+          p_leave_id: string;
+          p_actor_id: string;
+          p_reason: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      cancel_planned_leave: {
+        Args: {
+          p_leave_id: string;
+          p_actor_id: string;
+          p_reason?: string | null;
+        };
+        Returns: Record<string, unknown>;
+      };
+      find_business_task_duplicates: {
+        Args: {
+          p_organization_id: string;
+          p_client_id: string;
+          p_type: string;
+          p_title: string;
+          p_business_period?: string | null;
+          p_entity_id?: string | null;
+          p_section_id?: string | null;
+          p_exclude_work_item_id?: string | null;
+        };
+        Returns: {
+          id: string;
+          client_id: string;
+          entity_id: string | null;
+          section_id: string | null;
+          type: string;
+          title: string;
+          status: string;
+          due_at: string | null;
+          business_period: string | null;
+        }[];
+      };
       claim_outbox_event: {
         Args: { p_worker_id: string; p_event_type?: string | null; p_lease_seconds?: number };
         Returns: Database["acct_ctrl"]["Tables"]["outbox_events"]["Row"][];
+      };
+      replay_dead_letter_event: {
+        Args: {
+          p_dead_letter_id: string;
+          p_actor_id: string;
+        };
+        Returns: Database["acct_ctrl"]["Tables"]["outbox_events"]["Row"];
+      };
+      confirm_ai_draft_item: {
+        Args: {
+          p_draft_id: string;
+          p_organization_id: string;
+          p_confirmed_by: string;
+          p_client_id: string;
+          p_title: string;
+          p_type?: string;
+          p_description?: string | null;
+          p_due_at?: string | null;
+          p_maker_id?: string | null;
+          p_project_id?: string | null;
+        };
+        Returns: {
+          draft_id: string;
+          work_item_id: string;
+        }[];
+      };
+      confirm_action_suggestion_choice: {
+        Args: {
+          p_suggestion_id: string;
+          p_organization_id: string;
+          p_confirmed_by: string;
+          p_action_type: string;
+          p_client_id?: string | null;
+          p_target_work_item_id?: string | null;
+          p_duplicate_action?: string;
+          p_decision_note?: string | null;
+        };
+        Returns: {
+          suggestion_id: string;
+          work_item_id: string | null;
+          project_id: string | null;
+        }[];
       };
     };
     Enums: Record<string, unknown>;

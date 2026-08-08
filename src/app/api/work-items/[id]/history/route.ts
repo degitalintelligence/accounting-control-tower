@@ -1,37 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { canAccessClient, getAuthContext } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * GET /api/work-items/[id]/history
@@ -51,27 +22,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
-
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
+    const { admin, organizationId } = authContext.context;
 
     // Verifikasi work item exists dan milik org yang sama
     const wiResult = await admin
       .from("work_items")
-      .select("id")
+      .select("id, organization_id, client_id")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .single();
 
     const { data: workItem, error: wiError } = wiResult as unknown as {
-      data: { id: string } | null;
+      data: { id: string; organization_id: string; client_id: string | null } | null;
       error: { message: string } | null;
     };
 
@@ -80,6 +45,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { error: "Work item tidak ditemukan." },
         { status: 404 }
       );
+    }
+    if (!canAccessClient(authContext.context, workItem.client_id)) {
+      return NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 });
     }
 
     const { searchParams } = request.nextUrl;
@@ -135,7 +103,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     // 2. Batch lookup actor names dari profiles
     const rows = auditRows ?? [];
-    const actorIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean))];
+    const actorIds = [
+      ...new Set(
+        rows
+          .map((r) => r.actor_id)
+          .filter((actorId): actorId is string => Boolean(actorId))
+      ),
+    ];
 
     let actorMap: Record<string, string> = {};
     if (actorIds.length > 0) {

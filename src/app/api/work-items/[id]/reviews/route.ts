@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { canAccessClient, getAuthContext } from "@/lib/authorization";
 import { logAudit } from "@/lib/audit/logger";
 import { publishNotificationEvent } from "@/lib/notification/publisher";
 import type { WorkItemStatus } from "@/types/work-item";
@@ -10,22 +11,20 @@ type ErrorShape = { message: string; code?: string; hint?: string; details?: str
 type Admin = ReturnType<typeof createServiceRoleClient>;
 
 async function authorize(id: string) {
-  const client = await createClient();
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  const authContext = await getAuthContext();
+  if (authContext.response) return { response: authContext.response };
+  const { admin, organizationId, userId, isOrgWide, clientIds } = authContext.context;
 
-  const admin = createServiceRoleClient();
-  const membershipResult = await admin.from("memberships").select("organization_id, role").eq("profile_id", user.id).eq("is_active", true).limit(1).single();
-  const membership = membershipResult as unknown as { data: { organization_id: string; role: string } | null; error: ErrorShape | null };
-  if (membership.error || !membership.data) return { response: NextResponse.json({ error: "Organisasi tidak ditemukan." }, { status: 403 }) };
-
-  const itemResult = await admin.from("work_items").select("id, organization_id, status, risk_level, checklist_template_id, assignments(id, profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", membership.data.organization_id).is("deleted_at", null).single();
-  const item = itemResult as unknown as { data: { id: string; organization_id: string; status: WorkItemStatus; risk_level: string; checklist_template_id: string | null; assignments: { id: string; profile_id: string; role: string; unassigned_at: string | null }[] } | null; error: ErrorShape | null };
+  const itemResult = await admin.from("work_items").select("id, organization_id, status, risk_level, checklist_template_id, client_id, assignments(id, profile_id, role, unassigned_at)").eq("id", id).eq("organization_id", organizationId).is("deleted_at", null).single();
+  const item = itemResult as unknown as { data: { id: string; organization_id: string; status: WorkItemStatus; risk_level: string; checklist_template_id: string | null; client_id: string | null; assignments: { id: string; profile_id: string; role: string; unassigned_at: string | null }[] } | null; error: ErrorShape | null };
   if (item.error || !item.data) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
 
-  const assignment = item.data.assignments.find((entry) => entry.profile_id === user.id && !entry.unassigned_at);
-  const role = assignment?.role ?? (membership.data.role === "admin" ? "admin" : null);
-  return { admin, userId: user.id, organizationId: membership.data.organization_id, item: item.data, role };
+  if (!canAccessClient(authContext.context, item.data.client_id)) return { response: NextResponse.json({ error: "Work item tidak ditemukan." }, { status: 404 }) };
+
+  const assignment = item.data.assignments.find((entry) => entry.profile_id === userId && !entry.unassigned_at);
+  const activeMembership = authContext.context.memberships.find((m) => m.client_id === null || m.client_id === item.data!.client_id);
+  const role = assignment?.role ?? (activeMembership?.role === "admin" ? "admin" : null);
+  return { admin, userId, organizationId, item: item.data, role };
 }
 
 async function getChecklistState(admin: Admin, item: { id: string; checklist_template_id: string | null }) {

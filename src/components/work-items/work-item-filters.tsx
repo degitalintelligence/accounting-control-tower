@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Plus, CalendarDays, Kanban, List, Network } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,17 @@ export function WorkItemFilters({
   const currentType = searchParams.get("type") ?? "";
   const currentPriority = searchParams.get("priority") ?? "";
 
+  const [searchInput, setSearchInput] = useState(currentSearch);
+
+  // Debounce perubahan search agar tidak trigger router.push per karakter
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== currentSearch) updateParam("search", searchInput);
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
   const views = [
     { value: "list", label: t("work.list"), icon: List },
     { value: "board", label: t("work.board"), icon: Kanban },
@@ -145,8 +157,8 @@ export function WorkItemFilters({
           <Input
             id="work-item-search"
             placeholder={t("work.searchPlaceholder")}
-            defaultValue={currentSearch}
-            onChange={(e) => updateParam("search", e.currentTarget.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.currentTarget.value)}
             className="pl-8 h-8 text-sm bg-white"
           />
         </div>

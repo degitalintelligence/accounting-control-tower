@@ -21,6 +21,16 @@ vi.mock("@/lib/supabase/server", () => ({
   createServiceRoleClient: vi.fn(() => mocks.admin),
 }));
 
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({
+    get: vi.fn(() => undefined),
+  })),
+}));
+
+vi.mock("@/lib/ai/locale", () => ({
+  resolveOrganizationLocale: vi.fn(async () => "id-ID"),
+}));
+
 vi.mock("@/lib/audit/logger", () => ({ logAudit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/notification", () => ({ publishNotificationEvent: vi.fn(async () => undefined) }));
 vi.mock("@/lib/notification/publisher", () => ({ publishNotificationEvent: vi.fn(async () => undefined) }));
@@ -35,7 +45,7 @@ vi.mock("@/lib/work-engine/status-machine", async () => {
 import { POST as transitionPost } from "@/app/api/work-items/[id]/transition/route";
 import { POST as reviewPost } from "@/app/api/work-items/[id]/reviews/route";
 
-const membership = { organization_id: TEST_ORGANIZATION_ID, role: "manager" };
+const membership = [{ organization_id: TEST_ORGANIZATION_ID, client_id: null, role: "manager", role_id: null }];
 const transitionItem = {
   id: TEST_WORK_ITEM_ID,
   organization_id: TEST_ORGANIZATION_ID,
@@ -47,6 +57,7 @@ const transitionItem = {
 function setupTransition(overrides: Record<string, unknown> = {}) {
   mocks.admin = createAdminMock({
     memberships: { data: membership, error: null },
+    organizations: { data: [{ id: TEST_ORGANIZATION_ID }], error: null },
     work_items: { data: { ...transitionItem, ...overrides }, error: null },
     assignments: { data: [{ role: "maker" }], error: null },
   });
@@ -54,11 +65,13 @@ function setupTransition(overrides: Record<string, unknown> = {}) {
 
 function setupReview(role: string, membershipOrganizationId = TEST_ORGANIZATION_ID, itemOrganizationId = membershipOrganizationId) {
   mocks.admin = createAdminMock({
-    memberships: { data: { organization_id: membershipOrganizationId, role: "manager" }, error: null },
+    memberships: { data: [{ organization_id: membershipOrganizationId, client_id: null, role: "manager", role_id: null }], error: null },
+    organizations: { data: [{ id: membershipOrganizationId }], error: null },
     work_items: {
       data: membershipOrganizationId === itemOrganizationId ? {
         id: TEST_WORK_ITEM_ID,
         organization_id: itemOrganizationId,
+        client_id: null,
         status: "awaiting_approval",
         risk_level: "critical",
         checklist_template_id: null,
@@ -86,7 +99,7 @@ describe("API integration foundation", () => {
     const response = await transitionPost(createMalformedJsonRequest() as never, routeContext());
     expect(response.status).toBe(400);
     expect(mocks.admin?.from).toHaveBeenCalledWith("memberships");
-    expect(mocks.admin?.from).toHaveBeenCalledTimes(1);
+    expect(mocks.admin?.from).not.toHaveBeenCalledWith("work_items");
   });
 
   it("menolak transisi high-risk dari role assignment yang tidak berwenang", async () => {

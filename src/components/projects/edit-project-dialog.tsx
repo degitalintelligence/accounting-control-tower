@@ -32,12 +32,15 @@ export function EditProjectDialog({ open, onOpenChange, project, onSaved }: Edit
 
   useEffect(() => {
     if (!open) return;
-    setObjective(project.objective ?? "");
-    setCriteria(project.success_criteria ?? "");
-    setStartDate(project.start_date?.slice(0, 10) ?? "");
-    setTargetDate(project.target_date?.slice(0, 10) ?? "");
-    setHours(project.budgeted_hours?.toString() ?? "");
-    setError(null);
+    const reset = () => {
+      setObjective(project.objective ?? "");
+      setCriteria(project.success_criteria ?? "");
+      setStartDate(project.start_date?.slice(0, 10) ?? "");
+      setTargetDate(project.target_date?.slice(0, 10) ?? "");
+      setHours(project.budgeted_hours?.toString() ?? "");
+      setError(null);
+    };
+    queueMicrotask(reset);
   }, [open, project]);
 
   async function save() {

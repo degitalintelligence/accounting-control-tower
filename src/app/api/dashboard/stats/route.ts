@@ -1,5 +1,23 @@
 import { NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/authorization";
+import { structuredSupabaseError } from "@/lib/supabase/error";
+
+type DashboardAnalyticsResult = {
+  data: Array<Record<string, unknown>> | null;
+  error: unknown;
+};
+
+type DashboardAnalyticsClient = {
+  rpc: (
+    name: string,
+    params: Record<string, string | string[]>
+  ) => Promise<DashboardAnalyticsResult>;
+};
+
+function statusForAnalyticsError(error: ReturnType<typeof structuredSupabaseError>) {
+  if (error.code === "PGRST205" || error.code === "PGRST106") return 503;
+  return 500;
+}
 
 /**
  * GET /api/dashboard/stats
@@ -8,92 +26,57 @@ import { getAuthContext } from "@/lib/authorization";
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
-  if (isOrgWide) {
-    const analytics = await (admin as unknown as { rpc: (name: string, params: Record<string, string>) => Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }> }).rpc("dashboard_analytics", { p_organization_id: organizationId });
-    if (!analytics.error && analytics.data?.[0]) return NextResponse.json(analytics.data[0]);
-  }
-  const scope = <T extends { in: (column: string, values: string[]) => T }>(query: T) => isOrgWide ? query : query.in("client_id", clientIds);
-
-  const now = new Date().toISOString();
-  const criticalResult = await scope(admin
-    .from("work_items")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .not("status", "in", "(completed,cancelled,draft)")
-    .lt("due_at", now));
-  const criticalOverdue = criticalResult.count;
-  if (criticalResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
-
-  const waitingResult = await scope(admin
-    .from("work_items")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("status", "under_review")
-    .is("deleted_at", null));
-  const waitingReview = waitingResult.count;
-  if (waitingResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
-
-  const blockedResult = await scope(admin
-    .from("work_items")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .eq("status", "blocked"));
-  const blocked = blockedResult.count;
-  if (blockedResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
-
-  const completedResult = await scope(admin
-    .from("work_items")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .eq("status", "completed"));
-  const totalCompleted = completedResult.count;
-  if (completedResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
-
-  const totalResult = await scope(admin
-    .from("work_items")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .not("status", "in", "(cancelled,draft)"));
-  const totalItems = totalResult.count;
-  if (totalResult.error) return NextResponse.json({ error: "Gagal mengambil statistik dashboard." }, { status: 500 });
-
-  const { data: completedItems } = (await scope(admin
-    .from("work_items")
-    .select("completed_at, due_at")
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .eq("status", "completed")
-    .not("completed_at", "is", null)
-    .not("due_at", "is", null))) as unknown as {
-    data: { completed_at: string; due_at: string }[] | null;
+  const rpcParams: Record<string, string | string[]> = {
+    p_organization_id: organizationId,
+    ...(isOrgWide ? {} : { p_client_ids: clientIds }),
   };
 
-  const onTimeItems = (completedItems ?? []).filter((item) =>
-    item.completed_at <= item.due_at
-  ).length;
+  try {
+    const analytics = await (admin as unknown as DashboardAnalyticsClient).rpc(
+      "dashboard_analytics",
+      rpcParams
+    );
 
-  const completedCount = totalCompleted ?? 0;
-  const onTimeRate =
-    completedCount > 0
-      ? Math.round((onTimeItems / completedCount) * 100)
-      : 0;
+    if (analytics.error) {
+      const error = structuredSupabaseError(analytics.error);
+      console.error("Dashboard analytics RPC failed", {
+        message: error.message,
+        code: error.code,
+        hint: error.hint,
+        details: error.details,
+      });
 
-  return NextResponse.json({
-    critical_overdue: criticalOverdue ?? 0,
-    waiting_review: waitingReview ?? 0,
-    blocked: blocked ?? 0,
-    on_time_rate: onTimeRate,
-    total_completed: completedCount,
-    total_items: totalItems ?? 0,
-    average_cycle_hours: null,
-    revision_rate: null,
-    high_risk_open: null,
-    overdue_weight: null,
-    audit_coverage_rate: null,
-  });
+      return NextResponse.json(
+        { error: "Statistik dashboard sedang tidak tersedia." },
+        { status: statusForAnalyticsError(error) }
+      );
+    }
+
+    if (!analytics.data?.[0]) {
+      console.error("Dashboard analytics RPC returned no row", {
+        organizationScope: "authenticated-organization",
+      });
+      return NextResponse.json(
+        { error: "Statistik dashboard sedang tidak tersedia." },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json(analytics.data[0]);
+  } catch (error) {
+    const structuredError = structuredSupabaseError(error);
+    console.error("Dashboard analytics RPC threw an exception", {
+      message: structuredError.message,
+      code: structuredError.code,
+      hint: structuredError.hint,
+      details: structuredError.details,
+    });
+
+    return NextResponse.json(
+      { error: "Statistik dashboard sedang tidak tersedia." },
+      { status: 500 }
+    );
+  }
 }

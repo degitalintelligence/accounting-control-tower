@@ -71,7 +71,8 @@ The current repository order is lexical by complete filename. Dependencies that 
 046_complete_checklist_workflow.sql
 046_grant_ai_policies_access.sql
 047_grant_planned_leaves_access.sql
-048_whatsapp_connection_retirement.sql <!-- historical duplicate of 045 (idempotent redeploy of same function/index), retained for history; do not run both blindly on a fresh DB -->
+048_whatsapp_connection_retirement.sql
+<!-- NOTE: 048 is a historical duplicate/redeploy of 045 (same function & index, idempotent). Retained for history; do not apply both blindly on a fresh DB. -->
 049_whatsapp_conversation_summaries.sql
 050_fix_whatsapp_summary_event_lookup.sql
 051_allow_ai_intake_worker_claim.sql
@@ -113,6 +114,7 @@ The current repository order is lexical by complete filename. Dependencies that 
 082_reconcile_archived_waha_sessions.sql
 083_fix_archive_organization_ambiguous_column.sql
 084_harden_client_scope_rls_policies.sql
+085_dashboard_analytics_client_scope.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

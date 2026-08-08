@@ -1,38 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit/logger";
+import { getAuthContext } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/**
- * Helper: ambil organization_id dari membership user.
- */
-async function getUserOrganizationId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string
-): Promise<{ organizationId: string | null; error: string | null }> {
-  const result = await admin
-    .from("memberships")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .eq("is_active", true)
-    .limit(1)
-    .single();
-
-  const membership = result as unknown as {
-    data: { organization_id: string } | null;
-    error: { message: string; code: string; hint: string; details: string } | null;
-  };
-
-  if (membership.error || !membership.data) {
-    return {
-      organizationId: null,
-      error: membership.error?.message ?? "User tidak memiliki membership aktif.",
-    };
-  }
-
-  return { organizationId: membership.data.organization_id, error: null };
-}
 
 /**
  * POST /api/projects/[id]/link-work-item
@@ -50,24 +21,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Validasi project exists dan milik org
-    const projResult = await admin
+    let projQuery = admin
       .from("projects")
       .select("id, work_item_id, work_items!projects_work_item_id_fkey!inner(organization_id, client_id, deleted_at)")
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
-      .is("work_items.deleted_at", null)
-      .single();
+      .is("work_items.deleted_at", null);
+    if (!isOrgWide) projQuery = projQuery.in("work_items.client_id", clientIds);
+    const projResult = await projQuery.single();
 
     const { data: project, error: projError } = projResult as unknown as {
       data: {
@@ -202,24 +169,20 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createServiceRoleClient();
+    const authContext = await getAuthContext();
+    if (authContext.response) return authContext.response;
 
-    const { organizationId, error: orgError } = await getUserOrganizationId(admin, user.id);
-    if (orgError || !organizationId) {
-      return NextResponse.json(
-        { error: "Organisasi tidak ditemukan untuk user ini." },
-        { status: 403 }
-      );
-    }
+    const { admin, organizationId, clientIds, isOrgWide } = authContext.context;
 
     // Validasi project exists dan milik org
-    const projResult = await admin
+    let projQuery = admin
       .from("projects")
-      .select(`id, work_item_id, work_items!projects_work_item_id_fkey!inner(organization_id, deleted_at)`)
+      .select(`id, work_item_id, work_items!projects_work_item_id_fkey!inner(organization_id, client_id, deleted_at)`)
       .eq("id", id)
       .eq("work_items.organization_id", organizationId)
-      .is("work_items.deleted_at", null)
-      .single();
+      .is("work_items.deleted_at", null);
+    if (!isOrgWide) projQuery = projQuery.in("work_items.client_id", clientIds);
+    const projResult = await projQuery.single();
 
     const { data: project, error: projError } = projResult as unknown as {
       data: { id: string } | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { DashboardKpis } from "@/types/dashboard";
 
 export interface DashboardStats {
@@ -73,20 +73,25 @@ export function useDashboard() {
   const [insightError, setInsightError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [partialFailures, setPartialFailures] = useState<string[]>([]);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const fetchAll = useCallback(async () => {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setLoading(true);
     setError(null);
     setPartialFailures([]);
 
     try {
       const responses = await Promise.allSettled([
-        fetch("/api/dashboard/stats"),
-        fetch("/api/dashboard/kpis"),
-        fetch("/api/dashboard/upcoming-deadlines"),
-        fetch("/api/dashboard/activity-feed"),
-        fetch("/api/dashboard/sections"),
+        fetch("/api/dashboard/stats", { signal: controller.signal }),
+        fetch("/api/dashboard/kpis", { signal: controller.signal }),
+        fetch("/api/dashboard/upcoming-deadlines", { signal: controller.signal }),
+        fetch("/api/dashboard/activity-feed", { signal: controller.signal }),
+        fetch("/api/dashboard/sections", { signal: controller.signal }),
       ]);
+      if (controller.signal.aborted) return;
       const names = ["statistik", "KPI", "deadline", "aktivitas", "bagian dashboard"];
       const failed = responses.flatMap((result, index) => result.status === "rejected" || (result.value && !result.value.ok) ? [names[index]] : []);
       setPartialFailures(failed);
@@ -99,9 +104,10 @@ export function useDashboard() {
       setActivity((data[3] ?? []) as ActivityItem[]);
       setSections(data[4] as DashboardSections | null);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -124,10 +130,9 @@ export function useDashboard() {
     queueMicrotask(() => fetchAll());
     const handleWorkspaceChange = () => { void fetchAll(); };
     window.addEventListener("workspace-changed", handleWorkspaceChange);
-    window.addEventListener("workspace-language-changed", handleWorkspaceChange);
     return () => {
       window.removeEventListener("workspace-changed", handleWorkspaceChange);
-      window.removeEventListener("workspace-language-changed", handleWorkspaceChange);
+      controllerRef.current?.abort();
     };
   }, [fetchAll]);
 
