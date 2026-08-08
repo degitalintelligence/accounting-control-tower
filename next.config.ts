@@ -20,6 +20,17 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  output: "standalone",
+  generateBuildId: async () => {
+    // Memastikan build ID unik untuk memicu invalidasi cache di browser/proxy
+    return process.env.GIT_COMMIT_SHA || new Date().getTime().toString();
+  },
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+      static: 180,
+    },
+  },
   async headers() {
     return [
       // Aset statis hasil build di-hash oleh kontennya, jadi aman di-cache

@@ -9,7 +9,7 @@ NEXT_TELEMETRY_DISABLED = "1"
 cmds = ["npm ci --legacy-peer-deps"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["rm -rf .next && npm run build && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static"]
 
 [start]
-cmd = "npm start -- --hostname 0.0.0.0"
+cmd = "node .next/standalone/server.js"
