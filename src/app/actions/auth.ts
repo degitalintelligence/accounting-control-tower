@@ -11,6 +11,7 @@ export type AuthActionState = {
   error?: string;
   message?: string;
   email?: string;
+  name?: string;
 } | null;
 
 const GENERIC_AUTH_ERROR = "Email atau kode tidak valid.";
@@ -80,38 +81,38 @@ export async function login(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function signUp(_prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
+export async function requestRegisterOtp(_prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const requestHeaders = await headers();
-  const supabase = await createClient();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const name = String(formData.get("name") ?? "").trim();
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const name = formData.get("name") as string;
-
-  if (!email || !password || !name) {
-    return { error: "Semua kolom wajib diisi." };
-  }
+  if (!email || !email.includes("@")) return { error: "Masukkan alamat email yang valid." };
+  if (!name) return { error: "Nama lengkap wajib diisi." };
 
   const address = getClientAddress(requestHeaders);
-  const decision = consumeRateLimit(`signup:${address}`, 3, 60 * 60_000); // Batasi 3 pendaftaran per jam per IP
-  if (!decision.allowed) return { error: "Terlalu banyak mencoba mendaftar. Silakan coba lagi nanti." };
+  const decision = consumeRateLimit(`register-otp:${address}:${email}`, 5, 15 * 60_000);
+  if (!decision.allowed) return { error: "Terlalu banyak permintaan kode. Silakan coba lagi nanti." };
 
-  const { error } = await supabase.auth.signUp({
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithOtp({
     email,
-    password,
     options: {
-      data: {
-        full_name: name,
-      },
+      // shouldCreateUser: true → akun auth dibuat bila email belum terdaftar.
+      // Email yang sudah terdaftar (mungkin dari app lain) cukup terima OTP
+      // untuk login, tanpa perlu tahu password lama.
+      shouldCreateUser: true,
+      data: { full_name: name },
       emailRedirectTo: getAppUrl("/auth/callback?next=/onboarding/organization"),
     },
   });
 
-  if (error) {
-    return { error: error.message };
-  }
+  if (error) return { error: error.message };
 
-  return { message: "Pendaftaran berhasil! Silakan periksa email Anda untuk verifikasi." };
+  return {
+    message: "Kode verifikasi telah dikirim ke email Anda. Periksa inbox atau folder spam.",
+    email,
+    name,
+  };
 }
 
 export async function requestEmailOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {

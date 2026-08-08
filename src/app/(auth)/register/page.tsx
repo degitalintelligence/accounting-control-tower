@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState, useActionState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { signUp, logout } from "@/app/actions/auth";
+import { requestRegisterOtp, verifyEmailOtp, logout } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,9 @@ function RegisterContent() {
   const [saving, setSaving] = useState(false);
   const { t } = useI18n();
 
-  const [signUpState, signUpAction, isSignUpPending] = useActionState(signUp, null);
+  const [registerState, registerAction, isRegisterPending] = useActionState(requestRegisterOtp, null);
+  const [verifyState, verifyAction, isVerifyPending] = useActionState(verifyEmailOtp, null);
+  const otpSent = Boolean(registerState?.email);
 
   useEffect(() => {
     const supabase = createClient();
@@ -166,8 +168,56 @@ function RegisterContent() {
                 </div>
               )}
             </div>
+          ) : otpSent ? (
+            <div className="space-y-4">
+              {verifyState?.error && (
+                <p className="text-sm text-destructive bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {verifyState.error}
+                </p>
+              )}
+              {verifyState?.message && (
+                <p className="text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                  {verifyState.message}
+                </p>
+              )}
+              <p className="text-sm text-slate-600">
+                Masukkan kode 6 digit yang dikirim ke{" "}
+                <strong className="text-slate-900">{registerState!.email}</strong> untuk membuat akun Anda.
+              </p>
+              <form action={verifyAction} className="space-y-4">
+                <input type="hidden" name="email" value={registerState!.email} />
+                <input type="hidden" name="next" value="/onboarding/organization" />
+                <div className="space-y-2">
+                  <Label htmlFor="token">Kode OTP</Label>
+                  <Input
+                    id="token"
+                    name="token"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    minLength={6}
+                    maxLength={6}
+                    placeholder="Kode 6 digit"
+                    required
+                    autoComplete="one-time-code"
+                    disabled={isVerifyPending}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-blue-600 font-bold text-white hover:bg-blue-700"
+                  disabled={isVerifyPending}
+                >
+                  {isVerifyPending ? t("auth.saving") : "Verifikasi & Buat Akun"}
+                </Button>
+              </form>
+              <div className="text-center">
+                <a href="/register" className="text-xs font-medium text-slate-500 hover:text-blue-600">
+                  Gunakan email lain
+                </a>
+              </div>
+            </div>
           ) : (
-            <form action={signUpAction} className="space-y-4">
+            <form action={registerAction} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">{t("auth.fullName")}</Label>
                 <Input
@@ -176,7 +226,7 @@ function RegisterContent() {
                   type="text"
                   placeholder={t("auth.fullNamePlaceholder")}
                   required
-                  disabled={isSignUpPending}
+                  disabled={isRegisterPending}
                 />
               </div>
               <div className="space-y-2">
@@ -187,39 +237,22 @@ function RegisterContent() {
                   type="email"
                   placeholder="nama@perusahaan.com"
                   required
-                  disabled={isSignUpPending}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="signup-password">Password</Label>
-                <Input
-                  id="signup-password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder={t("auth.passwordMin")}
-                  required
-                  disabled={isSignUpPending}
+                  disabled={isRegisterPending}
                 />
               </div>
 
-              {signUpState?.error && (
+              {registerState?.error && (
                 <p className="text-sm text-destructive bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {signUpState.error}
-                </p>
-              )}
-              {signUpState?.message && (
-                <p className="text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-                  {signUpState.message}
+                  {registerState.error}
                 </p>
               )}
 
               <Button
                 type="submit"
                 className="w-full bg-blue-600 font-bold text-white hover:bg-blue-700"
-                disabled={isSignUpPending}
+                disabled={isRegisterPending}
               >
-                {isSignUpPending ? t("auth.saving") : t("auth.registerNow")}
+                {isRegisterPending ? t("auth.saving") : "Kirim Kode Verifikasi"}
               </Button>
             </form>
           )}
