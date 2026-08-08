@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, ChevronUp, ChevronDown, Loader2, GripVertical } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, Loader2, GripVertical, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ interface TemplateStepEditorProps {
   titleTemplate: string;
   checklistTemplateId: string | null;
   checklistName?: string;
+  availableChecklists?: Array<{ id: string; name: string; target_role: string }>;
   onSaved?: () => void;
 }
 
@@ -48,12 +49,16 @@ export function TemplateStepEditor({
   titleTemplate,
   checklistTemplateId,
   checklistName,
+  availableChecklists = [],
   onSaved,
 }: TemplateStepEditorProps) {
   const [steps, setSteps] = useState<ChildBlueprint[]>(() => {
     if (initialSteps.length > 0) return [...initialSteps];
     return [];
   });
+  const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(
+    checklistTemplateId
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -111,6 +116,7 @@ export function TemplateStepEditor({
         body: JSON.stringify({
           title_template: titleTemplate,
           child_blueprint: steps,
+          checklist_template_id: selectedChecklistId,
         }),
       });
 
@@ -346,12 +352,46 @@ export function TemplateStepEditor({
         </Button>
       </div>
 
-      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-        {checklistTemplateId ? (
-          <>Checklist akan diwariskan ke versi baru{checklistName ? `: ${checklistName}` : "."}</>
-        ) : (
-          "Versi aktif belum memiliki checklist."
-        )}
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold text-blue-800">Checklist Pengendalian</Label>
+          <div className="flex items-center gap-2">
+            {selectedChecklistId && (
+              <a
+                href={`/checklists?id=${selectedChecklistId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                <ExternalLink className="size-3" />
+                Edit Butir Checklist
+              </a>
+            )}
+            <span className="text-[11px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full font-medium">Opsional</span>
+          </div>
+        </div>
+        
+        <Select
+          value={selectedChecklistId || "none"}
+          onValueChange={(val) => setSelectedChecklistId(val === "none" ? null : val)}
+        >
+          <SelectTrigger className="bg-white border-blue-200 text-blue-900 h-9">
+            <SelectValue placeholder="Pilih checklist..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Tanpa Checklist</SelectItem>
+            {availableChecklists.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name} ({c.target_role})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        <p className="text-[11px] text-blue-600/80 leading-relaxed">
+          Checklist ini akan dilampirkan pada setiap work item yang dibuat dari template ini. 
+          Staf wajib mengisi checklist sebelum pekerjaan bisa dikirim untuk review.
+        </p>
       </div>
     </div>
   );

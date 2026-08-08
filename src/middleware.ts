@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { consumeRateLimit, getClientAddress, rateLimitCategory, rateLimitHeaders } from "@/lib/rate-limit";
 
 /** Routes yang tidak butuh auth */
-const publicRoutes = ["/login", "/auth/callback", "/reset-password"];
+const publicRoutes = ["/login", "/register", "/auth/callback", "/reset-password"];
 const bypassRoutes = [
   "/api/wa-webhook",
   "/api/health",
@@ -70,8 +70,8 @@ export async function middleware(request: NextRequest) {
   );
 
   // Callback and password-reset pages establish/consume auth state themselves.
-  // Login still performs the lookup so the existing logged-in redirect remains.
-  const requiresAuthLookup = !isOnPublicRoute || pathname === "/login";
+  // Login and register still perform the lookup so the existing logged-in redirect remains.
+  const requiresAuthLookup = !isOnPublicRoute || pathname === "/login" || pathname === "/register";
   if (!requiresAuthLookup) {
     return applySecurityHeaders(NextResponse.next());
   }

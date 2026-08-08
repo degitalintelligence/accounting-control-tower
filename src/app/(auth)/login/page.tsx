@@ -5,15 +5,18 @@ import { login, requestEmailOtp, verifyEmailOtp } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import Link from "next/link";
+import { useI18n } from "@/components/i18n-provider";
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(loginAction, null);
   const [otpState, otpAction, isOtpPending] = useActionState(requestEmailOtp, null);
   const [verifyState, verifyAction, isVerifyPending] = useActionState(verifyEmailOtp, null);
   const [otpRequested, setOtpRequested] = useState(false);
+  const { t } = useI18n();
 
   async function loginAction(_prevState: unknown, formData: FormData) {
     return await login(formData);
@@ -95,6 +98,17 @@ export default function LoginPage() {
             </form>
           )}
         </CardContent>
+101→        <CardFooter className="justify-center border-t bg-slate-50/50 py-4">
+102→          <Link
+103→            href="/register"
+104→            className="relative z-10 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
+105→          >
+            {t("auth.noAccount")}{" "}
+            <span className="font-semibold text-blue-600 underline-offset-4 hover:underline">
+              {t("auth.registerNow")}
+            </span>
+          </Link>
+        </CardFooter>
       </Card>
     </div>
   );

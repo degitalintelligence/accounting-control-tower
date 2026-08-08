@@ -103,6 +103,7 @@ export interface WorkItem {
   // Computed/joined fields (optional, populated by API)
   assignments?: Assignment[];
   children?: WorkItem[];
+  clients?: { id: string; name: string };
 }
 
 export interface Assignment {

@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
       "created_at",
       "updated_at",
       "completed_at",
+      "clients:clients(id, name)"
     ];
     if (withDetail) {
       columns.push("assignments:assignments(id, profile_id, role, assigned_at, unassigned_at)");

@@ -204,6 +204,7 @@ function ProjectsPageContent() {
                 status={project.status ?? "draft"}
                 target_date={project.target_date}
                 stats={project.stats}
+                client_name={project.client_name}
               />
             ))}
           </div>

@@ -70,6 +70,40 @@ export async function login(formData: FormData) {
   redirect("/dashboard");
 }
 
+export async function signUp(_prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
+  const requestHeaders = await headers();
+  const supabase = await createClient();
+
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+  const name = formData.get("name") as string;
+
+  if (!email || !password || !name) {
+    return { error: "Semua kolom wajib diisi." };
+  }
+
+  const address = getClientAddress(requestHeaders);
+  const decision = consumeRateLimit(`signup:${address}`, 3, 60 * 60_000); // Batasi 3 pendaftaran per jam per IP
+  if (!decision.allowed) return { error: "Terlalu banyak mencoba mendaftar. Silakan coba lagi nanti." };
+
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: name,
+      },
+      emailRedirectTo: getAppUrl("/auth/callback?next=/onboarding/organization"),
+    },
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { message: "Pendaftaran berhasil! Silakan periksa email Anda untuk verifikasi." };
+}
+
 export async function requestEmailOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const requestHeaders = await headers();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();

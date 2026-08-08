@@ -16,6 +16,7 @@ interface TemplateCardProps {
   type: WorkItemType;
   priority: WorkItemPriority;
   latest_version: TemplateVersion | null;
+  client_name?: string;
   onInstantiate?: (id: string) => void;
 }
 
@@ -47,6 +48,7 @@ export function TemplateCard({
   type,
   priority,
   latest_version,
+  client_name,
   onInstantiate,
 }: TemplateCardProps) {
   const router = useRouter();
@@ -85,6 +87,13 @@ export function TemplateCard({
           {name}
         </h3>
       </div>
+
+      {/* Client Name */}
+      {client_name && (
+        <p className="mb-2 ml-6 text-[11px] font-medium text-slate-500">
+          {client_name}
+        </p>
+      )}
 
       {/* Description */}
       {description && (

@@ -16,7 +16,18 @@ const statuses: { value: WorkItemStatus; label: string }[] = [
 ];
 
 function Card({ item }: { item: WorkItem }) {
-  return <WorkItemCard id={item.id} title={item.title} type={item.type} status={item.status} priority={item.priority} due_at={item.due_at} assignments={item.assignments} />;
+  return (
+    <WorkItemCard
+      id={item.id}
+      title={item.title}
+      type={item.type}
+      status={item.status}
+      priority={item.priority}
+      due_at={item.due_at}
+      assignments={item.assignments}
+      clientName={item.clients?.name}
+    />
+  );
 }
 
 export function WorkItemView({ view, items }: { view: string; items: WorkItem[] }) {

@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
   if (isNewUser) {
     const invited = await admin.auth.admin.inviteUserByEmail(email, {
       data: { full_name: parsed.data.display_name },
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/register`,
     });
     if (invited.error || !invited.data.user) {
       return NextResponse.json({ error: "Undangan gagal diproses." }, { status: 400 });

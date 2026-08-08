@@ -102,6 +102,7 @@ const RISK_LABELS: Record<string, string> = {
 interface TemplateDetail extends TaskTemplate {
   template_versions: TemplateVersion[];
   recurrence_rules: unknown[];
+  client_name?: string;
 }
 
 type ChecklistSummary = { id: string; name: string; target_role: string; checklist_items?: { id: string; is_required: boolean }[] };
@@ -442,7 +443,12 @@ export default function TemplateDetailPage({
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
               {template.name}
             </h1>
-            <div className="flex items-center gap-2 flex-wrap">
+            {template.client_name && (
+              <p className="text-xs font-medium text-slate-500 -mt-1">
+                Client: {template.client_name}
+              </p>
+            )}
+            <div className="flex items-center gap-2 flex-wrap mt-2">
               <Badge className={TYPE_BADGE_CLASS[template.type]}>
                 {TYPE_LABELS[template.type]}
               </Badge>
@@ -714,6 +720,7 @@ export default function TemplateDetailPage({
                 titleTemplate={latestVersion.title_template}
                 checklistTemplateId={latestVersion.checklist_template_id}
                 checklistName={latestVersion.checklist_template_id ? checklistById.get(latestVersion.checklist_template_id)?.name : undefined}
+                availableChecklists={checklists}
                 onSaved={fetchData}
               />
             ) : (

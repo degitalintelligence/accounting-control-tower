@@ -160,12 +160,16 @@ export function CreateWorkItemDialog({
                 <SelectValue placeholder="Pilih jenis..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="routine">Rutin</SelectItem>
+                <SelectItem value="routine">Rutin (Sekali Jalan)</SelectItem>
                 <SelectItem value="project">Proyek</SelectItem>
                 <SelectItem value="ad_hoc">Ad Hoc</SelectItem>
                 <SelectItem value="report">Laporan</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Pilih <strong>Rutin (Sekali Jalan)</strong> untuk tugas operasional manual. 
+              Gunakan menu <strong>Template/SOP</strong> untuk pekerjaan yang berulang otomatis.
+            </p>
           </div>
 
           {/* Title */}

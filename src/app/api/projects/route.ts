@@ -66,7 +66,8 @@ export async function GET(request: NextRequest) {
           status,
           organization_id,
           client_id,
-          deleted_at
+          deleted_at,
+          clients:clients(id, name)
         )
       `,
         { count: "exact" }
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
           status: string;
           organization_id: string;
           client_id: string;
+          clients?: { id: string; name: string };
         };
       }> | null;
       error: { message: string; code: string; hint: string; details: string } | null;
@@ -163,6 +165,7 @@ export async function GET(request: NextRequest) {
       status: p.work_items.status,
       organization_id: p.work_items.organization_id,
       client_id: p.work_items.client_id,
+      client_name: p.work_items.clients?.name,
       stats: {
         total_milestones: milestoneStats[p.id]?.total ?? 0,
         completed_milestones: milestoneStats[p.id]?.completed ?? 0,

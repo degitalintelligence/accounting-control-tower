@@ -4,7 +4,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const next = request.nextUrl.searchParams.get("next");
-  const target = next === "/reset-password" || next === "/dashboard" || next === "/onboarding/organization" ? next : "/dashboard";
+  const target = next === "/reset-password" || next === "/register" || next === "/dashboard" || next === "/onboarding/organization" ? next : "/dashboard";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const redirectUrl = appUrl ? new URL(target, appUrl) : new URL("/login?error=auth_callback", request.url);
   const supabase = await createClient();

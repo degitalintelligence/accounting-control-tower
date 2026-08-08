@@ -19,6 +19,7 @@ interface WorkItemCardProps {
   priority: WorkItemPriority;
   due_at: string | null;
   assignments?: Assignment[];
+  clientName?: string;
 }
 
 const TYPE_CONFIG: Record<WorkItemType, { label: string; className: string }> = {
@@ -65,6 +66,7 @@ export function WorkItemCard({
   priority,
   due_at,
   assignments = [],
+  clientName,
 }: WorkItemCardProps) {
   const router = useRouter();
   const { locale, t } = useI18n();
@@ -97,9 +99,16 @@ export function WorkItemCard({
       </div>
 
       {/* Title */}
-      <h3 className="text-sm font-medium text-slate-900 line-clamp-2 mb-3">
+      <h3 className="text-sm font-medium text-slate-900 line-clamp-2 mb-1">
         {title}
       </h3>
+
+      {/* Client Name */}
+      {clientName && (
+        <p className="text-[11px] text-slate-500 mb-3 font-medium">
+          {clientName}
+        </p>
+      )}
 
       {/* Bottom row: due date + assignees */}
       <div className="flex items-center justify-between gap-3">

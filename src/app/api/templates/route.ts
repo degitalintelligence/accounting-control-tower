@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
         created_by,
         created_at,
         updated_at,
+        clients:clients(id, name),
         template_versions(
           id,
           template_id,
@@ -117,13 +118,15 @@ export async function GET(request: NextRequest) {
 
     // Sort versions per template descending (latest first) & ambil versi terbaru
     const templates = (data ?? []).map((t) => {
-      const item = t as Record<string, unknown>;
+      const item = t as Record<string, unknown> & { clients?: { id: string; name: string } };
       const versions = (item.template_versions as unknown[]) ?? [];
       versions.sort((a, b) => ((b as Record<string, number>).version_number ?? 0) - ((a as Record<string, number>).version_number ?? 0));
       return {
         ...item,
+        client_name: item.clients?.name,
         latest_version: versions[0] ?? null,
         template_versions: undefined,
+        clients: undefined,
       };
     });
 

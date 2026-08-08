@@ -119,6 +119,9 @@ The current repository order is lexical by complete filename. Dependencies that 
 087_seed_owner_full_permissions.sql
 088_seed_missing_work_items_execute.sql
 089_fix_create_organization_roles.sql
+090_automate_template_placeholders.sql
+091_remove_one_org_per_user_limit.sql
+092_fix_create_organization_rpc_audit_logs.sql
 ```
 
 The status of each historical migration is not inferred from filename presence. Before applying an unknown migration, reconcile database objects and deployment evidence first.

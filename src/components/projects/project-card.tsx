@@ -17,6 +17,7 @@ interface ProjectCardProps {
     total_milestones: number;
     completed_milestones: number;
   };
+  client_name?: string;
 }
 
 function formatTargetDate(iso: string): { label: string; isPast: boolean } {
@@ -47,6 +48,7 @@ export function ProjectCard({
   status,
   target_date,
   stats,
+  client_name,
 }: ProjectCardProps) {
   const router = useRouter();
   const targetInfo = target_date ? formatTargetDate(target_date) : null;
@@ -78,9 +80,16 @@ export function ProjectCard({
       </div>
 
       {/* Title */}
-      <h3 className="mb-1 line-clamp-2 text-base font-semibold text-slate-900">
+      <h3 className="mb-0.5 line-clamp-2 text-base font-semibold text-slate-900">
         {title}
       </h3>
+
+      {/* Client Name */}
+      {client_name && (
+        <p className="mb-3 text-[11px] font-medium text-slate-500">
+          {client_name}
+        </p>
+      )}
 
       {/* Objective (truncated) */}
       {objective && (

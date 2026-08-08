@@ -205,6 +205,7 @@ function TemplatesPageContent() {
                 type={tpl.type}
                 priority={tpl.priority}
                 latest_version={tpl.latest_version}
+                client_name={tpl.client_name}
               />
             ))}
           </div>

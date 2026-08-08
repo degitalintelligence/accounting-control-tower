@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   if (error) {
     const duplicate = error.code === "23505" || error.message.includes("ORGANIZATION_ALREADY_EXISTS");
-    return NextResponse.json({ error: duplicate ? "Anda sudah memiliki organisasi aktif." : "Organisasi gagal dibuat." }, { status: duplicate ? 409 : 500 });
+    return NextResponse.json({ error: duplicate ? "Nama atau slug organisasi sudah digunakan." : "Organisasi gagal dibuat." }, { status: duplicate ? 409 : 500 });
   }
 
   const organization = Array.isArray(data) ? data[0] : data;
