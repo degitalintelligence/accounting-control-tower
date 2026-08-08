@@ -41,19 +41,19 @@ const users = [
     email: "admin@kreasheet.com",
     password: "Admin123!",
     full_name: "Admin Kreasheet",
-    role: "admin",
+    role: "administrator",
   },
   {
     email: "manager@kreasheet.com",
     password: "Manager123!",
-    full_name: "Finance Manager",
-    role: "finance_manager",
+    full_name: "Team Leader",
+    role: "team_leader",
   },
   {
     email: "staff@kreasheet.com",
     password: "Staff123!",
-    full_name: "Finance Staff",
-    role: "finance_staff",
+    full_name: "Staff",
+    role: "staff",
   },
 ];
 
@@ -143,9 +143,9 @@ async function seed() {
   }
 
   console.log("\nDone. Test accounts:");
-  console.log("  admin@kreasheet.com / Admin123!");
-  console.log("  manager@kreasheet.com / Manager123!");
-  console.log("  staff@kreasheet.com / Staff123!");
+  console.log("  admin@kreasheet.com / Admin123! (administrator)");
+  console.log("  manager@kreasheet.com / Manager123! (team_leader)");
+  console.log("  staff@kreasheet.com / Staff123! (staff)");
 }
 
 seed().catch(console.error);

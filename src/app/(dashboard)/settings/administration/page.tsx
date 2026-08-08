@@ -7,11 +7,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { WhatsAppWhitelistWizard } from "@/components/whatsapp/whitelist-wizard";
 import { useI18n } from "@/components/i18n-provider";
+import { AccessDenied, SettingsTabs } from "@/components/settings/settings-tabs";
+import { usePermissions } from "@/hooks/use-permissions";
 
-type EscalationRule = { threshold_hours: number; level: "maker" | "team_lead" | "team_leader" | "accounting_manager" | "owner"; priority: "low" | "medium" | "high" | "critical"; recipient_roles?: string[] };
+type EscalationRule = { threshold_hours: number; level: "maker" | "team_leader" | "administrator" | "owner"; priority: "low" | "medium" | "high" | "critical"; recipient_roles?: string[] };
 type Policy = { id: string; name: string; description: string | null; client_id: string | null; is_active: boolean; rules?: EscalationRule[] };
 
-function defaultEscalationRule(): EscalationRule { return { threshold_hours: 24, level: "team_lead", priority: "high", recipient_roles: [] }; }
+function defaultEscalationRule(): EscalationRule { return { threshold_hours: 24, level: "team_leader", priority: "high", recipient_roles: [] }; }
 type AiPolicy = Policy & { provider: string; model: string | null; retention_days: number; require_human_confirmation: boolean; allow_sensitive_data: boolean; no_training_required: boolean };
 type Connection = { id: string; provider: string; session_id: string | null; status: string; retired_at?: string | null; last_health_check_at: string | null };
 type Group = { id: string; connection_id: string; client_id: string | null; provider_group_id: string; group_name: string | null; is_active: boolean };
@@ -38,20 +40,26 @@ type EscalationRecipient = { profile?: { id?: string; full_name?: string; name?:
 type EscalationInstance = { id: string; work_item_id: string; current_level: string; escalated_at: string; resolved_at: string | null; priority: string | null; client: { id: string; name: string } | null; threshold_hours: number | null; recipients: EscalationRecipient[]; notification_delivery_status: EscalationDelivery[]; notes?: string | null; escalation_policies?: { client_id: string | null; name: string }; work_items?: { client_id: string | null; title: string; status: string; due_at: string | null; priority?: string | null } };
 type DeadLetter = { id: string; event_type: string; status: string; retry_count: number; last_retry_at: string | null; replayed_at: string | null; created_at: string };
 type JobHealth = { name: string; status: string; pending: number; processing: number; failed: number; last_activity_at: string | null };
-type Capabilities = Record<"integrations" | "escalations" | "escalationManage" | "ai" | "audit" | "auditManage" | "dead" | "deadManage" | "health", boolean>;
 
 export default function AdministrationPage() {
   const { t } = useI18n();
+  const { has, hasAny } = usePermissions();
+  const canViewAdministration = hasAny(
+    "integrations.manage",
+    "escalations.view",
+    "audit.view",
+    "dead_letters.view",
+    "job_health.view"
+  );
   const tabs = [
-    ["whatsapp", t("admin.whatsapp"), MessageCircle],
-    ["escalation", t("admin.escalation"), ShieldCheck],
-    ["ai", t("admin.aiPolicy"), Cpu],
-    ["audit", t("admin.audit"), CheckCircle2],
-    ["dead", t("admin.deadQueue"), RotateCcw],
-    ["health", t("admin.health"), Activity],
+    ["whatsapp", t("admin.whatsapp"), MessageCircle, "integrations.manage"],
+    ["escalation", t("admin.escalation"), ShieldCheck, "escalations.view"],
+    ["ai", t("admin.aiPolicy"), Cpu, "integrations.manage"],
+    ["audit", t("admin.audit"), CheckCircle2, "audit.view"],
+    ["dead", t("admin.deadQueue"), RotateCcw, "dead_letters.view"],
+    ["health", t("admin.health"), Activity, "job_health.view"],
   ] as const;
   const [tab, setTab] = useState("whatsapp");
-  const [capabilities, setCapabilities] = useState<Capabilities>({ integrations: false, escalations: false, escalationManage: false, ai: false, audit: false, auditManage: false, dead: false, deadManage: false, health: false });
   const [wa, setWa] = useState<WhatsAppData>({ connections: [], groups: [], mappings: [] });
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -92,20 +100,15 @@ export default function AdministrationPage() {
     setMessage(null);
     setLoadError(null);
     try {
-      const capabilityResponse = await fetch("/api/auth/capabilities", { cache: "no-store" });
-      const capabilityBody = capabilityResponse.ok ? await capabilityResponse.json() : null;
-      if (!capabilityResponse.ok || !capabilityBody?.administration) throw new Error("Hak akses administrasi belum dapat dimuat.");
-      const nextCapabilities: Capabilities = { ...capabilities, ...capabilityBody.administration };
-      setCapabilities(nextCapabilities);
       const requests = [
-        nextCapabilities.integrations ? fetch("/api/admin/whatsapp") : Promise.resolve(null),
-        nextCapabilities.escalations ? fetch("/api/admin/escalations") : Promise.resolve(null),
-        nextCapabilities.audit ? fetch("/api/admin/audits") : Promise.resolve(null),
+        has("integrations.manage") ? fetch("/api/admin/whatsapp") : Promise.resolve(null),
+        has("escalations.view") ? fetch("/api/admin/escalations") : Promise.resolve(null),
+        has("audit.view") ? fetch("/api/admin/audits") : Promise.resolve(null),
         fetch("/api/wa-inbox"),
         fetch("/api/work-items?limit=100"),
-        nextCapabilities.dead ? fetch("/api/admin/dead-letters") : Promise.resolve(null),
-        nextCapabilities.health ? fetch("/api/admin/job-health") : Promise.resolve(null),
-        nextCapabilities.ai ? fetch("/api/admin/ai-policies") : Promise.resolve(null),
+        has("dead_letters.view") ? fetch("/api/admin/dead-letters") : Promise.resolve(null),
+        has("job_health.view") ? fetch("/api/admin/job-health") : Promise.resolve(null),
+        has("integrations.manage") ? fetch("/api/admin/ai-policies") : Promise.resolve(null),
         fetch("/api/settings/members"),
         fetch("/api/settings/roles"),
         fetch("/api/clients"),
@@ -136,7 +139,13 @@ export default function AdministrationPage() {
     }
   }
 
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (canViewAdministration) void load();
+      else setLoading(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [canViewAdministration]);
   useEffect(() => () => { if (qrUrl) URL.revokeObjectURL(qrUrl); }, [qrUrl]);
 
   function notify(type: "success" | "error", text: string) { setMessage({ type, text }); window.setTimeout(() => setMessage(null), 4500); }
@@ -147,7 +156,7 @@ export default function AdministrationPage() {
   }
 
   async function retryAllDeadLetters() {
-    if (!capabilities.deadManage || !deadLetters.length || busy) return;
+    if (!has("dead_letters.manage") || !deadLetters.length || busy) return;
     setBusy("retry-all-dead"); setMessage(null);
     let attempted = 0; let failed = 0; let batches = 0;
     try {
@@ -291,16 +300,202 @@ export default function AdministrationPage() {
     }
   }
 
+  if (!canViewAdministration) return <main className="page-canvas text-slate-900"><div className="mx-auto w-full max-w-6xl space-y-6"><SettingsTabs /><AccessDenied /></div></main>;
   if (loading) return <main className="page-canvas"><div className="mx-auto max-w-6xl space-y-5"><Skeleton /><Skeleton /><Skeleton /></div></main>;
   if (loadError) return <main className="page-canvas"><div className="mx-auto max-w-2xl rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"><h1 className="text-lg font-bold">Administrasi belum siap</h1><p className="mt-2 text-sm">{loadError}</p><Button className="mt-4" variant="outline" onClick={() => void load()}><RefreshCw className="size-4" />Coba lagi</Button></div></main>;
 
   return <main className="page-canvas text-slate-900"><div className="mx-auto w-full max-w-6xl space-y-6">
+    <SettingsTabs />
     <header><div className="flex flex-wrap items-center gap-2 text-xs font-medium text-blue-600"><KeyRound className="size-4" /> Control Center <ChevronRight className="size-3 text-slate-400" /> Administrasi</div><div className="mt-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Administrasi operasional</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Kelola integrasi, kebijakan kontrol, audit, antrean gagal, dan kesehatan sistem dari satu tempat.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Segarkan data</Button></div></header>
     <div className="grid gap-3 sm:grid-cols-3"><Summary icon={Wifi} label="Koneksi WhatsApp" value={`${wa.connections.filter((item) => item.status !== "retired").length}`} hint="aktif atau tersedia" /><Summary icon={ShieldCheck} label="Kebijakan aktif" value={`${policies.filter((item) => item.is_active).length + aiPolicies.filter((item) => item.is_active).length}`} hint="eskalasi dan AI" /><Summary icon={Activity} label="Worker bermasalah" value={`${jobHealth.filter((item) => item.status === "degraded").length}`} hint="perlu perhatian" /></div>
     {partialFailures.length > 0 && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><span>Data belum tersedia: {partialFailures.join(", ")}.</span><Button size="sm" variant="outline" onClick={() => void load()} className="border-amber-300 bg-white">Coba lagi</Button></div>}
     {message && <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>{message.text}</div>}
-    <div role="tablist" aria-label="Bagian administrasi" className="flex max-w-full gap-2 overflow-x-auto border-b border-slate-200 pb-2">{tabs.filter(([value]) => capabilities[value === "whatsapp" ? "integrations" : value === "escalation" ? "escalations" : value]).map(([value, label, Icon]) => <button key={value} id={`tab-${value}`} role="tab" aria-selected={tab === value} aria-controls={`panel-${value}`} onClick={() => setTab(value)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === value ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="size-4" />{label}{((value === "escalation" && !capabilities.escalationManage) || (value === "audit" && !capabilities.auditManage) || (value === "dead" && !capabilities.deadManage)) && <span className="text-[11px] font-normal opacity-75">Read-only</span>}</button>)}</div>
-    <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>{tab === "whatsapp" && capabilities.integrations && <><WhatsAppWhitelistWizard data={wa} members={members} clients={clients} session={session} setSession={setSession} selected={selectedConnection} selectedClientId={selectedClientId} onClientChange={setSelectedClientId} qrUrl={qrUrl} busy={busy} groupId={groupId} setGroupId={setGroupId} providerGroupId={providerGroupId} setProviderGroupId={setProviderGroupId} groupName={groupName} setGroupName={setGroupName} participantId={participantId} setParticipantId={setParticipantId} participantName={participantName} setParticipantName={setParticipantName} participantProfile={participantProfile} setParticipantProfile={setParticipantProfile} discoveredGroups={discoveredGroups} discoveredParticipants={discoveredParticipants} onDiscoverGroups={discoverGroups} onDiscoverParticipants={discoverParticipants} onCreate={createConnection} onSelect={(id) => { setSelectedConnection(id); setDiscoveredGroups([]); setDiscoveredParticipants([]); }} onQr={showQr} onQrClose={closeQr} onHealth={(id) => action(`health-${id}`, () => fetch(`/api/admin/whatsapp?action=status&id=${id}`), "Status koneksi diperbarui.")} onStart={(id) => action(`start-${id}`, () => fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", id }) }), "Session WAHA dimulai. Silakan cek status koneksi.")} onStop={(id) => action(`stop-${id}`, () => fetch("/api/admin/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "stop", id }) }), "Koneksi WhatsApp berhasil diputuskan.")} onRetire={setRetirementTarget} onArchive={archiveConnection} onAddGroup={createGroup} onAddMapping={createMapping} onDeactivateGroup={deactivateGroup} onActivateGroup={activateGroup} onUnverifyMapping={unverifyMapping} onVerifyMapping={verifyMapping} onDone={() => notify("success", "Konfigurasi WhatsApp selesai dan siap digunakan.")} /><WhatsAppOperationalPanel data={waInbox} groups={wa.groups} connections={wa.connections} /></>}{tab === "escalation" && capabilities.escalations && <div className="space-y-5"><EscalationOperationsPanel items={escalations} clients={clients} canManage={capabilities.escalationManage} busy={busy} onResolve={(id) => action(`resolve-escalation-${id}`, () => fetch("/api/admin/escalations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resolve", id }) }), "Eskalasi diselesaikan.")} /><EscalationPolicyPanel value={policyName} setValue={setPolicyName} policies={policies} busy={busy === "policy-escalation"} clients={clients} roles={roles} canManage={capabilities.escalationManage} editing={editingPolicy} onEdit={setEditingPolicy} onSave={(policy) => void savePolicy("escalation", policy)} onDelete={deleteEscalationPolicy} /></div>}{tab === "ai" && capabilities.ai && <AiPolicyPanel policies={aiPolicies} busy={busy === "policy-ai"} clients={clients} onSave={(policy) => void savePolicy("ai", policy)} />}{tab === "audit" && capabilities.audit && <AuditPanel audits={audits} busy={busy} canManage={capabilities.auditManage} workItems={workItems} members={members} clients={clients} onSample={(payload) => void action("sample", () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }), "Sampel audit berhasil dibuat.")} onFinding={(payload) => void action("finding", () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }), "Finding berhasil dibuat.")} onStatus={(id, status, resolution) => void action(`finding-${id}`, () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_finding", id, status, resolution }) }), "Status finding diperbarui.")} />}{tab === "dead" && capabilities.dead && <DeadPanel items={deadLetters} total={deadLetterTotal} busy={busy} canManage={capabilities.deadManage} onRetry={(id) => action(`retry-${id}`, () => fetch("/api/admin/dead-letters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }), "Event dimasukkan kembali ke antrean. Hasil akan terlihat setelah worker memprosesnya.")} onRetryAll={retryAllDeadLetters} />}{tab === "health" && capabilities.health && <HealthPanel items={jobHealth} />}</div>
+    <div role="tablist" aria-label="Bagian administrasi" className="flex max-w-full gap-2 overflow-x-auto border-b border-slate-200 pb-2">
+      {tabs.filter(([,, , perm]) => has(perm)).map(([value, label, Icon, perm]) => (
+        <button
+          key={value}
+          id={`tab-${value}`}
+          role="tab"
+          aria-selected={tab === value}
+          aria-controls={`panel-${value}`}
+          onClick={() => setTab(value)}
+          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+            tab === value ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          <Icon className="size-4" />
+          {label}
+          {((value === "escalation" && !has("escalations.manage")) ||
+            (value === "audit" && !has("audit.manage")) ||
+            (value === "dead" && !has("dead_letters.manage"))) && (
+            <span className="text-[11px] font-normal opacity-75">Read-only</span>
+          )}
+        </button>
+      ))}
+    </div>
+    <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      {tab === "whatsapp" && has("integrations.manage") && (
+        <>
+          <WhatsAppWhitelistWizard
+            data={wa}
+            members={members}
+            clients={clients}
+            session={session}
+            setSession={setSession}
+            selected={selectedConnection}
+            selectedClientId={selectedClientId}
+            onClientChange={setSelectedClientId}
+            qrUrl={qrUrl}
+            busy={busy}
+            groupId={groupId}
+            setGroupId={setGroupId}
+            providerGroupId={providerGroupId}
+            setProviderGroupId={setProviderGroupId}
+            groupName={groupName}
+            setGroupName={setGroupName}
+            participantId={participantId}
+            setParticipantId={setParticipantId}
+            participantName={participantName}
+            setParticipantName={setParticipantName}
+            participantProfile={participantProfile}
+            setParticipantProfile={setParticipantProfile}
+            discoveredGroups={discoveredGroups}
+            discoveredParticipants={discoveredParticipants}
+            onDiscoverGroups={discoverGroups}
+            onDiscoverParticipants={discoverParticipants}
+            onCreate={createConnection}
+            onSelect={(id) => {
+              setSelectedConnection(id);
+              setDiscoveredGroups([]);
+              setDiscoveredParticipants([]);
+            }}
+            onQr={showQr}
+            onQrClose={closeQr}
+            onHealth={(id) => action(`health-${id}`, () => fetch(`/api/admin/whatsapp?action=status&id=${id}`), "Status koneksi diperbarui.")}
+            onStart={(id) =>
+              action(
+                `start-${id}`,
+                () =>
+                  fetch("/api/admin/whatsapp", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "start", id }),
+                  }),
+                "Session WAHA dimulai. Silakan cek status koneksi."
+              )
+            }
+            onStop={(id) =>
+              action(
+                `stop-${id}`,
+                () =>
+                  fetch("/api/admin/whatsapp", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "stop", id }),
+                  }),
+                "Koneksi WhatsApp berhasil diputuskan."
+              )
+            }
+            onRetire={setRetirementTarget}
+            onArchive={archiveConnection}
+            onAddGroup={createGroup}
+            onAddMapping={createMapping}
+            onDeactivateGroup={deactivateGroup}
+            onActivateGroup={activateGroup}
+            onUnverifyMapping={unverifyMapping}
+            onVerifyMapping={verifyMapping}
+            onDone={() => notify("success", "Konfigurasi WhatsApp selesai dan siap digunakan.")}
+          />
+          <WhatsAppOperationalPanel data={waInbox} groups={wa.groups} connections={wa.connections} />
+        </>
+      )}
+      {tab === "escalation" && has("escalations.view") && (
+        <div className="space-y-5">
+          <EscalationOperationsPanel
+            items={escalations}
+            clients={clients}
+            canManage={has("escalations.manage")}
+            busy={busy}
+            onResolve={(id) =>
+              action(
+                `resolve-escalation-${id}`,
+                () =>
+                  fetch("/api/admin/escalations", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "resolve", id }),
+                  }),
+                "Eskalasi diselesaikan."
+              )
+            }
+          />
+          <EscalationPolicyPanel
+            value={policyName}
+            setValue={setPolicyName}
+            policies={policies}
+            busy={busy === "policy-escalation"}
+            clients={clients}
+            roles={roles}
+            canManage={has("escalations.manage")}
+            editing={editingPolicy}
+            onEdit={setEditingPolicy}
+            onSave={(policy) => void savePolicy("escalation", policy)}
+            onDelete={deleteEscalationPolicy}
+          />
+        </div>
+      )}
+      {tab === "ai" && has("integrations.manage") && (
+        <AiPolicyPanel policies={aiPolicies} busy={busy === "policy-ai"} clients={clients} canManage={has("integrations.manage")} onSave={(policy) => void savePolicy("ai", policy)} />
+      )}
+      {tab === "audit" && has("audit.view") && (
+        <AuditPanel
+          audits={audits}
+          busy={busy}
+          canManage={has("audit.manage")}
+          workItems={workItems}
+          members={members}
+          clients={clients}
+          onSample={(payload) =>
+            void action(
+              "sample",
+              () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+              "Sampel audit berhasil dibuat."
+            )
+          }
+          onFinding={(payload) =>
+            void action(
+              "finding",
+              () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+              "Finding berhasil dibuat."
+            )
+          }
+          onStatus={(id, status, resolution) =>
+            void action(
+              `finding-${id}`,
+              () => fetch("/api/admin/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_finding", id, status, resolution }) }),
+              "Status finding diperbarui."
+            )
+          }
+        />
+      )}
+      {tab === "dead" && has("dead_letters.view") && (
+        <DeadPanel
+          items={deadLetters}
+          total={deadLetterTotal}
+          busy={busy}
+          canManage={has("dead_letters.manage")}
+          onRetry={(id) =>
+            action(
+              `retry-${id}`,
+              () => fetch("/api/admin/dead-letters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }),
+              "Event dimasukkan kembali ke antrean. Hasil akan terlihat setelah worker memprosesnya."
+            )
+          }
+          onRetryAll={retryAllDeadLetters}
+        />
+      )}
+      {tab === "health" && has("job_health.view") && <HealthPanel items={jobHealth} />}
+    </div>
        <Dialog open={retirementTarget !== null} onOpenChange={(open) => { if (!open) setRetirementTarget(null); }}><DialogContent><DialogHeader><DialogTitle>Hapus session WhatsApp?</DialogTitle><DialogDescription>Session {retirementTarget?.session_id || "ini"} akan dihapus dari WAHA dan tidak dapat diaktifkan kembali dari aplikasi. Semua grup whitelist terkait ikut dinonaktifkan.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRetirementTarget(null)}>Batal</Button><Button variant="destructive" onClick={() => void retireConnection()} disabled={busy === `retire-${retirementTarget?.id}`}><XCircle className="size-4" />{busy === `retire-${retirementTarget?.id}` ? "Menghapus..." : "Hapus session"}</Button></DialogFooter></DialogContent></Dialog>
   </div></main>;
 }
@@ -322,11 +517,11 @@ function EscalationPolicyPanel({ value, setValue, policies, busy, clients, roles
   const save = () => { onSave(draft); closeDialog(); };
   return <Panel title="Kebijakan eskalasi" description="Tentukan kapan pekerjaan melewati deadline harus dieskalasi, kepada siapa, dan dengan prioritas apa." action={<ShieldCheck className="size-5 text-blue-600" />}>
     <div className="flex justify-end"><Button className="cta-primary" disabled={!canManage} onClick={openCreate}><Plus className="size-4" />Buat kebijakan</Button></div>
-    <div className="mt-4 divide-y divide-slate-100">{policies.length ? policies.map((item) => { const hasRules = Boolean(item.rules?.length); return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-semibold">{item.name}</p><p className="text-xs text-slate-500">{item.client_id ? clients.find((client) => client.id === item.client_id)?.name ?? "Client" : "Semua client dalam organisasi"} · {item.rules?.length ?? 0} aturan</p></div><div className="flex flex-wrap items-center gap-2"><Status value={item.is_active ? (hasRules ? "active" : "Belum dikonfigurasi") : "inactive"} />{canManage && <><Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => onSave({ ...item, is_active: !item.is_active })}>{item.is_active ? "Nonaktifkan" : "Aktifkan"}</Button><Button size="sm" variant="destructive" disabled={busy} onClick={() => onDelete(item)}>Hapus</Button></>}</div></div>; }) : <Empty icon={ShieldCheck} text="Belum ada kebijakan eskalasi." />}</div>
-    <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{draft.id ? "Edit kebijakan eskalasi" : "Buat kebijakan eskalasi"}</DialogTitle><DialogDescription>Atur cakupan client dan seluruh tingkat eskalasi dalam satu kebijakan.</DialogDescription></DialogHeader><div className="grid gap-4 py-2"><label className="text-sm font-semibold text-slate-700">Nama kebijakan<Input className="mt-1.5" aria-label="Nama kebijakan eskalasi" placeholder="Nama kebijakan" value={draft.name} onChange={(event) => update({ name: event.target.value })} /></label><label className="text-sm font-semibold text-slate-700">Berlaku untuk client<select aria-label="Berlaku untuk client" className="mt-1.5 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm font-normal" value={draft.client_id ?? ""} onChange={(event) => update({ client_id: event.target.value || null })}>{clientOptions(clients)}</select></label><div><p className="text-sm font-bold text-slate-950">Aturan eskalasi</p><p className="mt-1 text-xs text-slate-500">Atur threshold, jenjang, prioritas, dan role penerima notifikasi.</p><div className="mt-3 space-y-3">{rules.map((rule, index) => <div key={index} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-5"><label className="text-xs font-semibold text-slate-600">Threshold (jam)<Input aria-label={`Threshold jam setelah deadline aturan ${index + 1}`} type="number" min="1" value={rule.threshold_hours} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, threshold_hours: Number(event.target.value) } : item) })} /></label><label className="text-xs font-semibold text-slate-600">Level<select aria-label={`Level eskalasi aturan ${index + 1}`} className="mt-1 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm" value={rule.level} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, level: event.target.value as EscalationRule["level"] } : item) })}><option value="maker">Maker</option><option value="team_lead">Team lead</option><option value="accounting_manager">Accounting manager</option><option value="owner">Owner</option></select></label><label className="text-xs font-semibold text-slate-600">Prioritas<select aria-label={`Prioritas pekerjaan aturan ${index + 1}`} className="mt-1 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm" value={rule.priority} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, priority: event.target.value as EscalationRule["priority"] } : item) })}><option value="low">Rendah</option><option value="medium">Sedang</option><option value="high">Tinggi</option><option value="critical">Kritis</option></select></label><label className="text-xs font-semibold text-slate-600">Role penerima<select multiple aria-label={`Role penerima notifikasi aturan ${index + 1}`} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-white px-2 py-1 text-sm" value={rule.recipient_roles ?? []} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, recipient_roles: Array.from(event.target.selectedOptions, (option) => option.value) } : item) })}>{roles.length ? roles.map((role) => <option key={role.id} value={role.role_key}>{role.name}</option>) : <option disabled>Role aktif belum tersedia</option>}</select></label><Button variant="outline" onClick={() => update({ rules: rules.filter((_, itemIndex) => itemIndex !== index) })} disabled={rules.length === 1}>Hapus</Button></div>)}</div><Button className="mt-3" variant="outline" onClick={() => update({ rules: [...rules, { threshold_hours: (rules.at(-1)?.threshold_hours ?? 0) + 24, level: "owner", priority: "critical", recipient_roles: [] }] })}>Tambah tingkat eskalasi</Button></div></div><DialogFooter><Button variant="outline" onClick={closeDialog}>Batal</Button><Button className="cta-primary" disabled={busy} onClick={save}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{draft.id ? "Simpan perubahan" : "Buat kebijakan"}</Button></DialogFooter></DialogContent></Dialog>
+    <div className="mt-4 divide-y divide-slate-100">{policies.length ? policies.map((item) => { const hasRules = Boolean(item.rules?.length); return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-semibold">{item.name}</p><p className="text-xs text-slate-500">{item.client_id ? clients.find((client) => client.id === item.client_id)?.name ?? "Client" : "Semua client dalam organisasi"} · {item.rules?.length ?? 0} aturan</p></div><div className="flex flex-wrap items-center gap-2"><Status value={item.is_active ? (hasRules ? "active" : "Belum dikonfigurasi") : "inactive"} />{canManage && <div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => onSave({ ...item, is_active: !item.is_active })}>{item.is_active ? "Nonaktifkan" : "Aktifkan"}</Button><Button size="sm" variant="destructive" disabled={busy} onClick={() => onDelete(item)}>Hapus</Button></div>}</div></div>; }) : <Empty icon={ShieldCheck} text="Belum ada kebijakan eskalasi." />}</div>
+    <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{draft.id ? "Edit kebijakan eskalasi" : "Buat kebijakan eskalasi"}</DialogTitle><DialogDescription>Atur cakupan client dan seluruh tingkat eskalasi dalam satu kebijakan.</DialogDescription></DialogHeader><div className="grid gap-4 py-2"><label className="text-sm font-semibold text-slate-700">Nama kebijakan<Input className="mt-1.5" aria-label="Nama kebijakan eskalasi" placeholder="Nama kebijakan" value={draft.name} onChange={(event) => update({ name: event.target.value })} /></label><label className="text-sm font-semibold text-slate-700">Berlaku untuk client<select aria-label="Berlaku untuk client" className="mt-1.5 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm font-normal" value={draft.client_id ?? ""} onChange={(event) => update({ client_id: event.target.value || null })}>{clientOptions(clients)}</select></label><div><p className="text-sm font-bold text-slate-950">Aturan eskalasi</p><p className="mt-1 text-xs text-slate-500">Atur threshold, jenjang, prioritas, dan role penerima notifikasi.</p><div className="mt-3 space-y-3">{rules.map((rule, index) => <div key={index} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-5"><label className="text-xs font-semibold text-slate-600">Threshold (jam)<Input aria-label={`Threshold jam setelah deadline aturan ${index + 1}`} type="number" min="1" value={rule.threshold_hours} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, threshold_hours: Number(event.target.value) } : item) })} /></label><label className="text-xs font-semibold text-slate-600">Level<select aria-label={`Level eskalasi aturan ${index + 1}`} className="mt-1 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm" value={rule.level} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, level: event.target.value as EscalationRule["level"] } : item) })}><option value="maker">Maker</option><option value="team_leader">Team leader</option><option value="administrator">Administrator</option><option value="owner">Owner</option></select></label><label className="text-xs font-semibold text-slate-600">Prioritas<select aria-label={`Prioritas pekerjaan aturan ${index + 1}`} className="mt-1 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm" value={rule.priority} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, priority: event.target.value as EscalationRule["priority"] } : item) })}><option value="low">Rendah</option><option value="medium">Sedang</option><option value="high">Tinggi</option><option value="critical">Kritis</option></select></label><label className="text-xs font-semibold text-slate-600">Role penerima<select multiple aria-label={`Role penerima notifikasi aturan ${index + 1}`} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-white px-2 py-1 text-sm" value={rule.recipient_roles ?? []} onChange={(event) => update({ rules: rules.map((item, itemIndex) => itemIndex === index ? { ...item, recipient_roles: Array.from(event.target.selectedOptions, (option) => option.value) } : item) })}>{roles.length ? roles.map((role) => <option key={role.id} value={role.role_key}>{role.name}</option>) : <option disabled>Role aktif belum tersedia</option>}</select></label><Button variant="outline" onClick={() => update({ rules: rules.filter((_, itemIndex) => itemIndex !== index) })} disabled={rules.length === 1}>Hapus</Button></div>)}</div><Button className="mt-3" variant="outline" onClick={() => update({ rules: [...rules, { threshold_hours: (rules.at(-1)?.threshold_hours ?? 0) + 24, level: "owner", priority: "critical", recipient_roles: [] }] })}>Tambah tingkat eskalasi</Button></div></div><DialogFooter><Button variant="outline" onClick={closeDialog}>Batal</Button><Button className="cta-primary" disabled={busy} onClick={save}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{draft.id ? "Simpan perubahan" : "Buat kebijakan"}</Button></DialogFooter></DialogContent></Dialog>
   </Panel>;
 }
-function AiPolicyPanel({ policies, busy, clients, onSave }: { policies: AiPolicy[]; busy: boolean; clients: Client[]; onSave: (policy: AiPolicy) => void }) {
+function AiPolicyPanel({ policies, busy, clients, canManage, onSave }: { policies: AiPolicy[]; busy: boolean; clients: Client[]; canManage: boolean; onSave: (policy: AiPolicy) => void }) {
   const emptyDraft: AiPolicy = { id: "", name: "", description: null, client_id: null, is_active: true, provider: "openrouter", model: "", retention_days: 90, require_human_confirmation: true, allow_sensitive_data: false, no_training_required: true };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<AiPolicy>(emptyDraft);
@@ -336,8 +531,8 @@ function AiPolicyPanel({ policies, busy, clients, onSave }: { policies: AiPolicy
   function closeDialog() { setDialogOpen(false); setDraft({ ...emptyDraft }); }
   function submit() { onSave(draft); closeDialog(); }
   return <Panel title="Pengaturan penggunaan AI" description="Atur cakupan dan keamanan penggunaan AI untuk setiap client." action={<Cpu className="size-5 text-purple-600" />}>
-    <div className="mt-7 flex justify-end"><Button className="cta-primary" onClick={openCreate}><Plus className="size-4" />Buat kebijakan</Button></div>
-    {policies.length > 0 && <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="divide-y divide-slate-100">{policies.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3.5"><div><p className="font-semibold">{item.name}</p><p className="mt-0.5 text-xs text-slate-500">{item.client_id ? clients.find((client) => client.id === item.client_id)?.name ?? "Client" : "Semua client dalam organisasi"} · Data disimpan {item.retention_days} hari</p></div><div className="flex items-center gap-2"><Status value={item.is_active ? "active" : "inactive"} /><Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => onSave({ ...item, is_active: !item.is_active })}>{item.is_active ? "Nonaktifkan" : "Aktifkan"}</Button></div></div>)}</div></div>}
+    <div className="mt-7 flex justify-end"><Button className="cta-primary" disabled={!canManage} onClick={openCreate}><Plus className="size-4" />Buat kebijakan</Button></div>
+    {policies.length > 0 && <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="divide-y divide-slate-100">{policies.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3.5"><div><p className="font-semibold">{item.name}</p><p className="mt-0.5 text-xs text-slate-500">{item.client_id ? clients.find((client) => client.id === item.client_id)?.name ?? "Client" : "Semua client dalam organisasi"} · Data disimpan {item.retention_days} hari</p></div><div className="flex items-center gap-2"><Status value={item.is_active ? "active" : "inactive"} />{canManage && <div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => onSave({ ...item, is_active: !item.is_active })}>{item.is_active ? "Nonaktifkan" : "Aktifkan"}</Button></div>}</div></div>)}</div></div>}
     <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{draft.id ? "Edit kebijakan AI" : "Buat kebijakan AI"}</DialogTitle><DialogDescription>Atur nama, cakupan client, retensi data, dan aturan keamanan kebijakan ini.</DialogDescription></DialogHeader><div className="grid gap-4 py-2"><label className="text-sm font-semibold text-slate-700">Nama kebijakan<Input className="mt-1.5" aria-label="Nama kebijakan AI" placeholder="Contoh: Kebijakan AI standar" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label className="text-sm font-semibold text-slate-700">Berlaku untuk<select aria-label="Berlaku untuk client" className="mt-1.5 h-9 w-full rounded-lg border border-input bg-white px-2 text-sm font-normal" value={draft.client_id ?? ""} onChange={(event) => setDraft({ ...draft, client_id: event.target.value || null })}>{clientOptions(clients)}</select></label><label className="text-sm font-semibold text-slate-700">Simpan data selama<Input className="mt-1.5" aria-label="Lama penyimpanan data AI dalam hari" type="number" min="1" max="3650" value={draft.retention_days} onChange={(event) => setDraft({ ...draft, retention_days: Number(event.target.value) })} /><span className="mt-1 block text-xs font-normal text-slate-500">hari</span></label><div><h3 className="font-bold text-slate-950">Aturan keamanan</h3><div className="mt-3 grid gap-3">{fields.map(([key, label, help]) => <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm transition-colors ${draft[key] ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white hover:bg-slate-50"}`}><input className="mt-0.5 size-4 accent-blue-600" type="checkbox" checked={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.checked })} /><span><span className="block font-semibold text-slate-900">{label}</span><span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{help}</span></span></label>)}</div></div></div><DialogFooter><Button variant="outline" onClick={closeDialog}>Batal</Button><Button className="cta-primary" disabled={busy} onClick={submit}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{draft.id ? "Simpan perubahan" : "Buat kebijakan"}</Button></DialogFooter></DialogContent></Dialog>
   </Panel>;
 }

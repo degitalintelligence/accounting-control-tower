@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET() {
-  const auth = await getAuthContext(); if (auth.response) return auth.response;
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "approval_policies.view");
+  if (denied) return denied;
   const { admin, organizationId } = auth.context;
   const result = await admin.from("approval_policies").select("id, client_id, entity_id, name, version, is_active, effective_from, effective_until, default_currency_code, created_at, updated_at").eq("organization_id", organizationId).order("created_at", { ascending: false });
   if (result.error) return NextResponse.json({ error: "Policy approval gagal dimuat." }, { status: 500 });

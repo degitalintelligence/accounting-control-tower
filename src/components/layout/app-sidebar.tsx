@@ -10,8 +10,9 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/actions/auth";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { isNavigationItemActive, navigationItems } from "@/lib/navigation";
+import { isNavigationItemActive, navigationItems, canAccess } from "@/lib/navigation";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface AppSidebarProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const [switching, setSwitching] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const { t } = useI18n();
+  const { has } = usePermissions();
 
   const initials = user?.name
     ? user.name
@@ -87,17 +89,17 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         {/* Navigation */}
         {user?.organization_id ? (
           <nav className="scrollbar-subtle flex flex-1 flex-col gap-0.5 overflow-y-auto">
-            {navigationItems.filter((item) => item.section === "main").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
+            {navigationItems.filter((item) => item.section === "main" && canAccess(item.href, has)).map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
 
             <div className="px-2.5 pb-1.5 pt-[18px] text-[10px] font-bold tracking-[.14em] text-slate-400">
               {t("nav.control")}
             </div>
-            {navigationItems.filter((item) => item.section === "control").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
+            {navigationItems.filter((item) => item.section === "control" && canAccess(item.href, has)).map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
 
             <div className="px-2.5 pb-1.5 pt-[18px] text-[10px] font-bold tracking-[.14em] text-slate-400">
               {t("nav.manage")}
             </div>
-            {navigationItems.filter((item) => item.section === "manage").map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
+            {navigationItems.filter((item) => item.section === "manage" && canAccess(item.href, has)).map((item) => <NavLink key={item.href} item={item} active={isNavigationItemActive(pathname, searchParams.toString(), item.href)} onClick={onClose} />)}
           </nav>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center">

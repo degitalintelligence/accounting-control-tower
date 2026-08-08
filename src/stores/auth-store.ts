@@ -10,6 +10,7 @@ export interface AuthUser {
   organization_id: string;
   organization_name: string;
   organizations: Array<{ id: string; name: string; slug: string; is_active: boolean }>;
+  permissions: string[]; // RBAC permission keys for the active organization
   locale: AppLocale;
 }
 

@@ -45,7 +45,7 @@ vi.mock("@/lib/work-engine/status-machine", async () => {
 import { POST as transitionPost } from "@/app/api/work-items/[id]/transition/route";
 import { POST as reviewPost } from "@/app/api/work-items/[id]/reviews/route";
 
-const membership = [{ organization_id: TEST_ORGANIZATION_ID, client_id: null, role: "manager", role_id: null }];
+const membership = [{ organization_id: TEST_ORGANIZATION_ID, client_id: null, role: "administrator", role_id: null }];
 const transitionItem = {
   id: TEST_WORK_ITEM_ID,
   organization_id: TEST_ORGANIZATION_ID,
@@ -65,7 +65,7 @@ function setupTransition(overrides: Record<string, unknown> = {}) {
 
 function setupReview(role: string, membershipOrganizationId = TEST_ORGANIZATION_ID, itemOrganizationId = membershipOrganizationId) {
   mocks.admin = createAdminMock({
-    memberships: { data: [{ organization_id: membershipOrganizationId, client_id: null, role: "manager", role_id: null }], error: null },
+    memberships: { data: [{ organization_id: membershipOrganizationId, client_id: null, role: "administrator", role_id: null }], error: null },
     organizations: { data: [{ id: membershipOrganizationId }], error: null },
     work_items: {
       data: membershipOrganizationId === itemOrganizationId ? {

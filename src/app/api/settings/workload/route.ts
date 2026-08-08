@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/authorization";
+import { getAuthContext, requirePermission } from "@/lib/authorization";
 
 export async function GET(request: NextRequest) {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "planned_leaves.view");
+  if (denied) return denied;
   const { admin, organizationId, isOrgWide, clientIds } = auth.context;
   const clientId = request.nextUrl.searchParams.get("client_id");
   if (clientId && !isOrgWide && !clientIds.includes(clientId)) return NextResponse.json({ error: "Client tidak berada dalam scope akses user." }, { status: 403 });

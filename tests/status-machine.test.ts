@@ -3,7 +3,7 @@ import { canTransition, getAvailableTransitions, transitionWorkItem } from '@/li
 
 describe('status machine', () => {
   it('allows the normal maker-to-checker flow', () => {
-    expect(canTransition('draft', 'assigned', 'admin')).toBe(true);
+    expect(canTransition('draft', 'assigned', 'administrator')).toBe(true);
     expect(canTransition('assigned', 'in_progress', 'maker')).toBe(true);
     expect(canTransition('in_progress', 'submitted', 'maker')).toBe(true);
     expect(canTransition('submitted', 'under_review', 'checker')).toBe(true);

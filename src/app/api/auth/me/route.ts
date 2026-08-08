@@ -66,6 +66,36 @@ export async function GET() {
   if (!activeMembership || !activeOrganization) return NextResponse.json({ error: "Organisasi aktif tidak ditemukan." }, { status: 403 });
   const organizationSettings = (activeOrganization as { settings?: { locale?: string } } | undefined)?.settings;
 
+  // Resolve permission keys for the active organization (used to gate UI client-side).
+  const { data: roleRows } = (await admin
+    .from("memberships")
+    .select("role_id, organization_roles!inner(organization_id, is_active, deleted_at)")
+    .eq("profile_id", user.id)
+    .eq("organization_id", activeOrganizationId)
+    .eq("is_active", true)
+    .eq("organization_roles.organization_id", activeOrganizationId)
+    .eq("organization_roles.is_active", true)
+    .is("organization_roles.deleted_at", null)) as unknown as {
+    data: Array<{ role_id: string | null }> | null;
+  };
+  const roleIds = (roleRows ?? [])
+    .map((row) => row.role_id)
+    .filter((id): id is string => Boolean(id));
+  const permissions: string[] = [];
+  if (roleIds.length) {
+    const { data: permRows } = (await admin
+      .from("role_permissions")
+      .select("permission_catalog!inner(permission_key)")
+      .in("role_id", roleIds)) as unknown as {
+      data: Array<{ permission_catalog: { permission_key: string } | null }> | null;
+    };
+    const keys = new Set<string>();
+    for (const row of permRows ?? []) {
+      if (row.permission_catalog?.permission_key) keys.add(row.permission_catalog.permission_key);
+    }
+    permissions.push(...keys);
+  }
+
   return NextResponse.json({
     id: user.id,
     email: user.email ?? "",
@@ -75,6 +105,7 @@ export async function GET() {
     organization_id: activeMembership.organization_id,
     organization_name: activeOrganization?.name ?? "",
     organizations: (organizations ?? []).map((organization) => ({ ...organization, is_active: organization.id === activeOrganizationId })),
+    permissions,
     locale: organizationSettings?.locale === "en-US" ? "en-US" : "id-ID",
   });
 }

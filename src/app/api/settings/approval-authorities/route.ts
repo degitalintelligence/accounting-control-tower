@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, requirePermission } from "@/lib/authorization";
 
-export async function GET() { const auth = await getAuthContext(); if (auth.response) return auth.response; const result = await auth.context.admin.from("approval_authorities").select("id, profile_id, client_id, entity_id, role, max_amount, currency_code, max_risk_level, approval_level, effective_from, effective_until, is_active, reason").eq("organization_id", auth.context.organizationId).order("effective_from", { ascending: false }); if (result.error) return NextResponse.json({ error: "Authority gagal dimuat." }, { status: 500 }); return NextResponse.json({ data: result.data ?? [] }); }
+export async function GET() {
+  const auth = await getAuthContext();
+  if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "approval_authorities.view");
+  if (denied) return denied;
+  const result = await auth.context.admin.from("approval_authorities").select("id, profile_id, client_id, entity_id, role, max_amount, currency_code, max_risk_level, approval_level, effective_from, effective_until, is_active, reason").eq("organization_id", auth.context.organizationId).order("effective_from", { ascending: false });
+  if (result.error) return NextResponse.json({ error: "Authority gagal dimuat." }, { status: 500 });
+  return NextResponse.json({ data: result.data ?? [] });
+}
 export async function POST(request: NextRequest) { const auth = await getAuthContext(); if (auth.response) return auth.response; const denied = await requirePermission(auth.context, "approval_authorities.manage"); if (denied) return denied; const body = await request.json(); if (!body.profile_id || typeof body.max_amount !== "number" || !body.reason) return NextResponse.json({ error: "Profile, batas amount, dan alasan wajib diisi." }, { status: 400 }); const result = await auth.context.admin.from("approval_authorities").insert({ organization_id: auth.context.organizationId, profile_id: body.profile_id, client_id: body.client_id ?? null, entity_id: body.entity_id ?? null, role: body.role ?? "approver", max_amount: body.max_amount, currency_code: body.currency_code ?? "IDR", max_risk_level: body.max_risk_level ?? "low", approval_level: body.approval_level ?? 0, effective_from: body.effective_from ?? new Date().toISOString(), effective_until: body.effective_until ?? null, reason: body.reason, created_by: auth.context.userId } as never).select("id, profile_id, client_id, entity_id, role, max_amount, currency_code, max_risk_level, approval_level, effective_from, effective_until, is_active, reason").single(); if (result.error) return NextResponse.json({ error: "Authority gagal dibuat." }, { status: 500 }); return NextResponse.json({ data: result.data }, { status: 201 }); }

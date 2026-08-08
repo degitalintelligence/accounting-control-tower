@@ -71,7 +71,7 @@ export async function createLiveFixture(): Promise<LiveFixture> {
   if (profile.error) throw profile.error;
   const client = await admin.from('clients').insert({ organization_id: organization.data.id, name: `Live Client ${suffix}`, slug: `live-client-${suffix}` }).select('id').single();
   if (client.error) throw client.error;
-  const membership = await admin.from('memberships').insert({ profile_id: user.data.user.id, organization_id: organization.data.id, role: 'admin', is_active: true }).select('id').single();
+  const membership = await admin.from('memberships').insert({ profile_id: user.data.user.id, organization_id: organization.data.id, role: 'administrator', is_active: true }).select('id').single();
   if (membership.error) throw membership.error;
   const intake = await admin.from('ai_intake_items').insert({ organization_id: organization.data.id, client_id: client.data.id, created_by: user.data.user.id, source_text: 'integration fixture', source_kind: 'text' }).select('id').single();
   if (intake.error) throw intake.error;

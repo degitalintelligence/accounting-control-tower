@@ -24,9 +24,9 @@ function RegisterContent() {
   const [saving, setSaving] = useState(false);
   const { t } = useI18n();
 
-  const [registerState, registerAction, isRegisterPending] = useActionState(requestRegisterOtp, null);
+  const [signUpState, signUpAction, isSignUpPending] = useActionState(requestRegisterOtp, null);
   const [verifyState, verifyAction, isVerifyPending] = useActionState(verifyEmailOtp, null);
-  const otpSent = Boolean(registerState?.email);
+  const otpSent = Boolean(signUpState?.email);
 
   useEffect(() => {
     const supabase = createClient();
@@ -182,10 +182,10 @@ function RegisterContent() {
               )}
               <p className="text-sm text-slate-600">
                 Masukkan kode 6 digit yang dikirim ke{" "}
-                <strong className="text-slate-900">{registerState!.email}</strong> untuk membuat akun Anda.
+                <strong className="text-slate-900">{signUpState!.email}</strong> untuk membuat akun Anda.
               </p>
               <form action={verifyAction} className="space-y-4">
-                <input type="hidden" name="email" value={registerState!.email} />
+                <input type="hidden" name="email" value={signUpState!.email} />
                 <input type="hidden" name="next" value="/onboarding/organization" />
                 <div className="space-y-2">
                   <Label htmlFor="token">Kode OTP</Label>
@@ -217,7 +217,7 @@ function RegisterContent() {
               </div>
             </div>
           ) : (
-            <form action={registerAction} className="space-y-4">
+            <form action={signUpAction} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">{t("auth.fullName")}</Label>
                 <Input
@@ -226,7 +226,7 @@ function RegisterContent() {
                   type="text"
                   placeholder={t("auth.fullNamePlaceholder")}
                   required
-                  disabled={isRegisterPending}
+                  disabled={isSignUpPending}
                 />
               </div>
               <div className="space-y-2">
@@ -237,22 +237,22 @@ function RegisterContent() {
                   type="email"
                   placeholder="nama@perusahaan.com"
                   required
-                  disabled={isRegisterPending}
+                  disabled={isSignUpPending}
                 />
               </div>
 
-              {registerState?.error && (
+              {signUpState?.error && (
                 <p className="text-sm text-destructive bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {registerState.error}
+                  {signUpState.error}
                 </p>
               )}
 
               <Button
                 type="submit"
                 className="w-full bg-blue-600 font-bold text-white hover:bg-blue-700"
-                disabled={isRegisterPending}
+                disabled={isSignUpPending}
               >
-                {isRegisterPending ? t("auth.saving") : "Kirim Kode Verifikasi"}
+                {isSignUpPending ? t("auth.saving") : "Kirim Kode Verifikasi"}
               </Button>
             </form>
           )}

@@ -1,4 +1,4 @@
-export const escalationLevels = ["maker", "team_leader", "owner"] as const;
+export const escalationLevels = ["maker", "team_leader", "administrator", "owner"] as const;
 export const escalationPriorities = ["low", "medium", "high", "critical"] as const;
 
 type EscalationLevel = (typeof escalationLevels)[number];
@@ -14,12 +14,13 @@ export type EscalationRuleInput = {
 const levelRank: Record<EscalationLevel, number> = {
   maker: 0,
   team_leader: 1,
-  owner: 2,
+  administrator: 2,
+  owner: 3,
 };
 
 function normalizeLevel(value: string): EscalationLevel | null {
-  if (value === "maker" || value === "team_leader" || value === "owner") return value;
-  if (["team_lead", "manager", "finance_manager", "accounting_manager"].includes(value)) return "team_leader";
+  if (value === "maker" || value === "team_leader" || value === "administrator" || value === "owner") return value;
+  if (value === "admin") return "administrator";
   return null;
 }
 

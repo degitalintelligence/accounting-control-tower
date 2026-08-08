@@ -23,7 +23,7 @@ async function authorize(id: string) {
 
   const assignment = item.data.assignments.find((entry) => entry.profile_id === userId && !entry.unassigned_at);
   const activeMembership = authContext.context.memberships.find((m) => m.client_id === null || m.client_id === item.data!.client_id);
-  const role = assignment?.role ?? (activeMembership?.role === "admin" ? "admin" : null);
+  const role = assignment?.role ?? (["owner", "administrator"].includes(activeMembership?.role ?? "") ? "administrator" : null);
   return { admin, userId, organizationId, item: item.data, role };
 }
 

@@ -15,7 +15,7 @@ const TRANSITIONS: StatusTransition[] = [
   {
     from: 'draft',
     to: 'assigned',
-    allowedRoles: ['system', 'admin'],
+    allowedRoles: ['system', 'administrator'],
   },
 
   // Assigned → In Progress (maker)
@@ -95,7 +95,7 @@ const TRANSITIONS: StatusTransition[] = [
   {
     from: 'approved',
     to: 'completed',
-    allowedRoles: ['system', 'admin'],
+    allowedRoles: ['system', 'administrator'],
   },
 
   // Approved → Awaiting Approval (system, high-risk flow)
@@ -139,7 +139,7 @@ const ACTIVE_STATUSES: WorkItemStatus[] = [
 const CANCEL_TRANSITIONS: StatusTransition[] = ACTIVE_STATUSES.map((from) => ({
   from,
   to: 'cancelled' as WorkItemStatus,
-  allowedRoles: ['admin'],
+  allowedRoles: ['administrator'],
   requiresReason: true,
 }));
 
@@ -151,7 +151,7 @@ const ALL_TRANSITIONS = [...TRANSITIONS, ...CANCEL_TRANSITIONS];
 export function canTransition(
   from: WorkItemStatus,
   to: WorkItemStatus,
-  userRole: AssignmentRole | 'system' | 'admin'
+  userRole: AssignmentRole | 'system' | 'administrator'
 ): boolean {
   const transition = ALL_TRANSITIONS.find((t) => t.from === from && t.to === to);
   if (!transition) return false;
@@ -163,7 +163,7 @@ export function canTransition(
  */
 export function getAvailableTransitions(
   currentStatus: WorkItemStatus,
-  userRole: AssignmentRole | 'system' | 'admin'
+  userRole: AssignmentRole | 'system' | 'administrator'
 ): StatusTransition[] {
   return ALL_TRANSITIONS.filter(
     (t) => t.from === currentStatus && t.allowedRoles.includes(userRole)
@@ -192,7 +192,7 @@ export function getTransition(
 export function transitionWorkItem(
   item: { status: WorkItemStatus; risk_level?: string; priority?: string },
   newStatus: WorkItemStatus,
-  userRole: AssignmentRole | 'system' | 'admin',
+  userRole: AssignmentRole | 'system' | 'administrator',
   reason?: string
 ): TransitionResult {
   // Transisi ke status yang sama = no-op

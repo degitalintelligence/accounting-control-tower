@@ -131,10 +131,6 @@ export async function getActiveMembership(admin: AdminClient, userId: string) {
   return data.data;
 }
 
-export function canManageOrganization(role: string | null | undefined) {
-  return ["owner", "administrator", "team_leader"].includes(role ?? "");
-}
-
 export async function hasPermission(context: AuthContext, permissionKey: string) {
   let contextCache = permissionCache.get(context);
   if (!contextCache) {

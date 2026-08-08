@@ -136,7 +136,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const userRoles = (assignments.data ?? []).map((a) => a.role as AssignmentRole | "system" | "admin");
+    const userRoles = (assignments.data ?? []).map((a) => a.role as AssignmentRole | "system" | "administrator");
+    
+    // Tambahkan membership role jika user adalah administrator atau owner
+    const membershipRole = authContext.context.memberships.find(m => m.organization_id === organizationId)?.role;
+    if (membershipRole === "owner" || membershipRole === "administrator") {
+      userRoles.push("administrator");
+    }
 
     // Cek apakah user punya role yang diizinkan
     const hasRequiredRole = userRoles.some((role) =>

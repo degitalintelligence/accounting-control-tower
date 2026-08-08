@@ -62,6 +62,38 @@ export const settingsTabs = [
   { label: "Notifikasi", labelKey: "settings.notifications", href: "/settings/notifications", icon: Bell },
 ];
 
+/**
+ * Permission gating untuk navigasi. Nilai = daftar permission key;
+ * item/tab tampil jika user memiliki SALAH SATU dari daftar (OR).
+ * Absen / kosong => visible untuk semua role (masih di-enforce server-side).
+ */
+export const navigationPermissions: Record<string, string[]> = {
+  "/settings/members": ["members.view"],
+  "/settings/roles": ["roles.view"],
+  "/settings/clients": ["clients.view"],
+  "/settings/administration": [
+    "integrations.manage",
+    "escalations.view",
+    "audit.view",
+    "dead_letters.view",
+    "job_health.view",
+  ],
+};
+
+export const settingsTabPermissions: Record<string, string[]> = {
+  "/settings": ["organization.manage"],
+  "/settings/members": ["members.view"],
+  "/settings/roles": ["roles.view"],
+  "/settings/clients": ["clients.view"],
+};
+
+/** Bila `permissionMap[href]` terdefinisi, user wajib punya minimal satu permission terkait. */
+export function canAccess(href: string, has: (permission: string) => boolean): boolean {
+  const required = navigationPermissions[href] ?? settingsTabPermissions[href];
+  if (!required || required.length === 0) return true;
+  return required.some((permission) => has(permission));
+}
+
 export function isNavigationItemActive(pathname: string, search: string, href: string) {
   const target = new URL(href, "http://localhost");
   const pathMatches = pathname === target.pathname || pathname.startsWith(`${target.pathname}/`);

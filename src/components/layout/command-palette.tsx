@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { navigationItems, quickActions, type NavigationIcon } from "@/lib/navigation";
+import { navigationItems, quickActions, canAccess, type NavigationIcon } from "@/lib/navigation";
 import { useI18n } from "@/components/i18n-provider";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -34,14 +35,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const { t } = useI18n();
+  const { has } = usePermissions();
+  const allowedCommands = commands.filter((command) => canAccess(command.href, has));
 
   const filteredCommands = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return commands;
-    return commands.filter((command) =>
+    if (!normalizedQuery) return allowedCommands;
+    return allowedCommands.filter((command) =>
       `${command.label} ${command.description}`.toLowerCase().includes(normalizedQuery)
     );
-  }, [query]);
+  }, [query, allowedCommands]);
 
   useEffect(() => {
     if (!open) return;

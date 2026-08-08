@@ -12,6 +12,8 @@ const ACTIVE_ORGANIZATION_COOKIE = "acct_ctrl_active_organization";
 export async function GET() {
   const auth = await getAuthContext();
   if (auth.response) return auth.response;
+  const denied = await requirePermission(auth.context, "workspace.view");
+  if (denied) return denied;
   const { data, error } = await auth.context.admin.from("organizations").select("id, name, slug, settings, updated_at").eq("id", auth.context.organizationId).maybeSingle();
   if (error || !data) return NextResponse.json({ error: "Pengaturan organisasi gagal dimuat." }, { status: 500 });
   return NextResponse.json({ data });

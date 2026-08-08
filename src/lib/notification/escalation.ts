@@ -6,7 +6,7 @@ type AnyClient = Pick<SupabaseClient, "from">;
 
 type EscalationRule = {
   threshold_hours: number;
-  level: "maker" | "team_leader" | "owner";
+  level: "maker" | "team_leader" | "administrator" | "owner";
   priority: "low" | "medium" | "high" | "critical";
   recipient_roles?: string[];
 };
@@ -56,7 +56,8 @@ const defaultRules: EscalationRule[] = [
 const levelRank: Record<EscalationRule["level"], number> = {
   maker: 0,
   team_leader: 1,
-  owner: 2,
+  administrator: 2,
+  owner: 3,
 };
 
 const priorityRank: Record<string, number> = {
@@ -67,8 +68,8 @@ const priorityRank: Record<string, number> = {
 };
 
 function normalizeLevel(level: string): EscalationRule["level"] | null {
-  if (level === "maker" || level === "team_leader" || level === "owner") return level;
-  if (["team_lead", "manager", "finance_manager", "accounting_manager"].includes(level)) return "team_leader";
+  if (level === "maker" || level === "team_leader" || level === "administrator" || level === "owner") return level;
+  if (level === "admin") return "administrator";
   return null;
 }
 
@@ -105,8 +106,7 @@ function parseRules(value: unknown): EscalationRule[] {
 }
 
 function normalizeRole(role: string): string {
-  if (["team_lead", "team_leader", "manager", "finance_manager", "accounting_manager"].includes(role)) return "team_leader";
-  if (role === "admin") return "administrator";
+  if (role === "admin" || role === "administrator") return "administrator";
   return role;
 }
 
