@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { consumeRateLimit, getClientAddress } from "@/lib/rate-limit";
+import { ensureProfileExists } from "@/lib/authorization";
 
 export type AuthActionState = {
   error?: string;
@@ -27,7 +28,6 @@ function getAppUrl(path: string) {
 }
 
 async function hasActiveMembership(userId: string) {
-  const { createServiceRoleClient } = await import("@/lib/supabase/server");
   const admin = createServiceRoleClient();
   const result = await admin
     .from("memberships")
@@ -63,8 +63,18 @@ export async function login(formData: FormData) {
     return { error: "Email atau password salah." };
   }
 
-  const signedInUser = (await supabase.auth.getUser()).data.user;
-  if (!(await hasActiveMembership(signedInUser?.id ?? ""))) redirect("/onboarding/organization");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const admin = createServiceRoleClient();
+    await ensureProfileExists(
+      admin,
+      user.id,
+      user.email,
+      user.user_metadata?.full_name || user.user_metadata?.name
+    );
+  }
+
+  if (!(await hasActiveMembership(user?.id ?? ""))) redirect("/onboarding/organization");
 
   revalidatePath("/", "layout");
   redirect("/dashboard");
@@ -142,6 +152,15 @@ export async function verifyEmailOtp(_previousState: AuthActionState, formData: 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
   if (error || !data.user) return { error: GENERIC_AUTH_ERROR, email };
+
+  const admin = createServiceRoleClient();
+  await ensureProfileExists(
+    admin,
+    data.user.id,
+    data.user.email,
+    data.user.user_metadata?.full_name || data.user.user_metadata?.name
+  );
+
   if (!(await hasActiveMembership(data.user.id))) redirect("/onboarding/organization");
 
   revalidatePath("/", "layout");

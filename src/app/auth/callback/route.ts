@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { ensureProfileExists } from "@/lib/authorization";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -14,6 +15,16 @@ export async function GET(request: NextRequest) {
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser();
       const admin = createServiceRoleClient();
+      
+      if (user) {
+        await ensureProfileExists(
+          admin, 
+          user.id, 
+          user.email, 
+          user.user_metadata?.full_name || user.user_metadata?.name
+        );
+      }
+
       const membership = user
         ? await admin.from("memberships").select("id, organizations!inner(id)").eq("profile_id", user.id).eq("is_active", true).is("organizations.deleted_at", null).limit(1)
         : { data: [], error: null };

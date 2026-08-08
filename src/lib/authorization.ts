@@ -31,6 +31,23 @@ export type AuthContext = {
   locale: AppLocale;
 };
 
+export async function ensureProfileExists(admin: AdminClient, userId: string, email: string | null | undefined, displayName?: string | null) {
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profile) {
+    const name = displayName || email?.split("@")[0] || "User";
+    await admin.from("profiles").insert({
+      id: userId,
+      display_name: name,
+      email: email || null,
+    } as never);
+  }
+}
+
 export async function getAuthContext(): Promise<
   | { context: AuthContext; response?: never }
   | { context?: never; response: NextResponse }
