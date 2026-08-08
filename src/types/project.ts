@@ -38,6 +38,7 @@ export interface ProjectWithDetails extends Project {
   status?: string;
   organization_id?: string;
   client_id?: string;
+  client_name?: string;
   // Milestones
   milestones?: Milestone[];
   // Child work items (yang link ke project ini)

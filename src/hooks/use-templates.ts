@@ -5,6 +5,7 @@ import type { TaskTemplate, TemplateVersion } from "@/types/template";
 
 interface TemplateListItem extends TaskTemplate {
   latest_version: TemplateVersion | null;
+  client_name?: string;
 }
 
 interface TemplateFilter {

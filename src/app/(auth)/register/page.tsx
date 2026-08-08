@@ -160,10 +160,10 @@ function RegisterContent() {
                     Keluar Sekarang
                   </Button>
                   <Button 
-                    asChild
+                    render={<Link href="/dashboard" />}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
                   >
-                    <Link href="/dashboard">Lanjut ke Dashboard</Link>
+                    Lanjut ke Dashboard
                   </Button>
                 </div>
               )}
